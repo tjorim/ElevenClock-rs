@@ -152,6 +152,104 @@ fn long_format_reports_width_overflow_instead_of_truncating() {
     }
 }
 #[test]
+fn iso_week_apply_and_transient_region_overflow_recover_on_the_same_surface() {
+    use windows::Win32::UI::WindowsAndMessaging::{SWP_NOMOVE, SWP_NOZORDER, SetWindowPos};
+    let renderer = Renderer::new().unwrap();
+    let default = case(&Preferences::default().format);
+    let iso = case("%g%V.%u");
+    for dpi in [96, 120, 144, 192] {
+        let (width, height) = region(dpi);
+        let host = Host::new(width, height);
+        let mut surface = renderer.create_surface(host.0);
+        assert_eq!(
+            surface
+                .paint(&renderer, &request(&default, dpi, 9))
+                .unwrap(),
+            PaintOutcome::Painted
+        );
+        assert_eq!(
+            surface.paint(&renderer, &request(&iso, dpi, 9)).unwrap(),
+            PaintOutcome::Painted
+        );
+        // Cache a real worst-case overflow, then restore the region without
+        // replacing the surface or changing preferences.
+        // SAFETY: resizes the hidden window owned by this test thread.
+        unsafe { SetWindowPos(host.0, None, 0, 0, 1, height, SWP_NOMOVE | SWP_NOZORDER) }.unwrap();
+        assert!(matches!(
+            surface.paint(&renderer, &request(&iso, dpi, 9)).unwrap(),
+            PaintOutcome::Overflow(_)
+        ));
+        // SAFETY: restores that same owned window's original size.
+        unsafe { SetWindowPos(host.0, None, 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER) }
+            .unwrap();
+        assert_eq!(
+            surface.paint(&renderer, &request(&iso, dpi, 9)).unwrap(),
+            PaintOutcome::Painted
+        );
+        // A genuine long-format overflow must not stick to the short format.
+        let long = case("%A %d %B %Y");
+        assert!(matches!(
+            surface.paint(&renderer, &request(&long, dpi, 9)).unwrap(),
+            PaintOutcome::Overflow(_)
+        ));
+        assert_eq!(
+            surface.paint(&renderer, &request(&iso, dpi, 9)).unwrap(),
+            PaintOutcome::Painted
+        );
+    }
+}
+
+#[test]
+fn iso_week_fit_is_a_subset_of_the_default_fit_for_all_supported_fonts_and_dpis() {
+    let renderer = Renderer::new().unwrap();
+    let default = case(&Preferences::default().format);
+    let iso = case("%g%V.%u");
+    let roomy = PixelSize {
+        width: 1000,
+        height: 1000,
+    };
+    for dpi in [96, 120, 144, 192] {
+        for font_pt in 6..=24 {
+            let Fit::Fits(default_layout) = renderer
+                .plan_fit(&default.text, &default.worst_case, roomy, dpi, font_pt)
+                .unwrap()
+            else {
+                panic!("default must fit roomy slot");
+            };
+            let Fit::Fits(iso_layout) = renderer
+                .plan_fit(&iso.text, &iso.worst_case, roomy, dpi, font_pt)
+                .unwrap()
+            else {
+                panic!("ISO must fit roomy slot");
+            };
+            assert!(iso_layout.required.width <= default_layout.required.width);
+            assert!(iso_layout.required.height <= default_layout.required.height);
+            // Paint in the smallest integer-pixel region that preflight accepts
+            // for the default, exercising the final exact-layout guard as well.
+            let host = Host::new(
+                default_layout.required.width,
+                default_layout.required.height,
+            );
+            let mut surface = renderer.create_surface(host.0);
+            assert_eq!(
+                surface
+                    .paint(&renderer, &request(&default, dpi, font_pt))
+                    .unwrap(),
+                PaintOutcome::Painted,
+                "default at {dpi} DPI, {font_pt}pt"
+            );
+            assert_eq!(
+                surface
+                    .paint(&renderer, &request(&iso, dpi, font_pt))
+                    .unwrap(),
+                PaintOutcome::Painted,
+                "ISO at {dpi} DPI, {font_pt}pt"
+            );
+        }
+    }
+}
+
+#[test]
 fn future_month_names_overflow_even_when_today_fits() {
     let renderer = Renderer::new().unwrap();
     let prefs = Preferences {

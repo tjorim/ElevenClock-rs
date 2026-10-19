@@ -1105,6 +1105,121 @@ fn overflow_and_render_failure_hide_only_the_affected_overlay_with_a_reason() {
 }
 
 #[test]
+fn transient_overflow_recovers_without_a_text_change_or_another_apply() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
+    let overflow = Overflow {
+        required: PixelSize {
+            width: 70,
+            height: 16,
+        },
+        available: PixelSize {
+            width: 1,
+            height: 48,
+        },
+    };
+    runtime
+        .platform
+        .paint_result
+        .insert(1, PaintResult::Overflow(overflow));
+    runtime.handle(Input::Preferences(
+        Preferences {
+            format: "%g%V.%u".into(),
+            monitors: Monitors::All,
+            ..Preferences::default()
+        }
+        .validate()
+        .unwrap(),
+    ));
+    assert_eq!(
+        runtime.diagnostics().taskbars[0].reason,
+        Some(Reason::Overflow(overflow))
+    );
+    take(&mut runtime);
+    runtime.platform.paint_result.clear();
+    // ISO week text stays identical across ticks and rediscovery. Neither
+    // causes the reducer to repaint a frame it already considers painted.
+    runtime.handle(Input::Timer);
+    assert_eq!(paints(&take(&mut runtime)), 0);
+    advance(&mut runtime, RECOVERY_POLL);
+    let calls = take(&mut runtime);
+    assert_eq!(paints(&calls), 1, "retry only the affected taskbar");
+    assert!(
+        calls
+            .iter()
+            .any(|call| matches!(call, Call::Paint(k, _) if *k == key(0, 1)))
+    );
+    assert!(
+        runtime
+            .diagnostics()
+            .taskbars
+            .iter()
+            .all(|bar| bar.reason.is_none())
+    );
+}
+
+#[test]
+fn persistent_overflow_retries_are_bounded_and_respect_visibility() {
+    for hidden in [
+        Event::SetPaused(true),
+        Event::SessionLocked,
+        Event::FullscreenChanged {
+            key: key(0, 1),
+            fullscreen: true,
+        },
+        Event::VisibilityChanged {
+            key: key(0, 1),
+            visibility: TaskbarVisibility::Hidden,
+        },
+        Event::VisibilityChanged {
+            key: key(0, 1),
+            visibility: TaskbarVisibility::Unknown,
+        },
+    ] {
+        let mut runtime = runtime(Monitors::All);
+        runtime.platform.paint_result.insert(
+            1,
+            PaintResult::Overflow(Overflow {
+                required: PixelSize {
+                    width: 140,
+                    height: 16,
+                },
+                available: PixelSize {
+                    width: 100,
+                    height: 48,
+                },
+            }),
+        );
+        discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+        take(&mut runtime);
+        advance(&mut runtime, RECOVERY_POLL);
+        assert_eq!(paints(&take(&mut runtime)), 1);
+        advance(&mut runtime, Duration::from_millis(100));
+        assert_eq!(paints(&take(&mut runtime)), 0, "fast transition poll");
+        advance(&mut runtime, RECOVERY_POLL);
+        assert_eq!(
+            paints(&take(&mut runtime)),
+            1,
+            "persistent overflow is retried"
+        );
+        assert!(matches!(
+            runtime.diagnostics().taskbars[0].reason,
+            Some(Reason::Overflow(_))
+        ));
+        runtime.dispatch(hidden);
+        take(&mut runtime);
+        // Exercise the retry independently of observation, which would replace
+        // a directly scripted visibility event with the fake's live values.
+        runtime.retry_overflow(runtime.platform.mono + RECOVERY_POLL);
+        assert_eq!(
+            paints(&take(&mut runtime)),
+            0,
+            "ineligible clock stays hidden"
+        );
+    }
+}
+
+#[test]
 fn overlay_creation_failure_is_reported_and_hides_the_overlay() {
     let mut runtime = runtime(Monitors::All);
     runtime.platform.create_error = true;
@@ -1604,6 +1719,47 @@ fn refresh_is_a_no_op_when_discovery_is_off_or_the_app_is_finished() {
     take(&mut runtime);
     runtime.refresh_status();
     assert!(take(&mut runtime).is_empty());
+}
+
+#[test]
+fn overflow_transition_logs_dimensions_once_without_clock_text() {
+    let mut runtime = runtime(Monitors::Primary);
+    runtime.platform.paint_result.insert(
+        1,
+        PaintResult::Overflow(Overflow {
+            required: PixelSize {
+                width: 70,
+                height: 16,
+            },
+            available: PixelSize {
+                width: 1,
+                height: 48,
+            },
+        }),
+    );
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    let lines = runtime.transition_lines();
+    assert_eq!(lines.len(), 2);
+    assert_eq!(
+        lines[1],
+        "taskbar 1 overflow: required=70x16px, available=1x48px, discovered slot=100x48px, DPI=96, font=9pt"
+    );
+    assert!(
+        !lines
+            .iter()
+            .any(|line| line.contains("12:00") || line.contains("%g"))
+    );
+    advance(&mut runtime, RECOVERY_POLL);
+    assert!(
+        runtime.transition_lines().is_empty(),
+        "persistent retries stay quiet"
+    );
+    runtime.platform.paint_result.clear();
+    advance(&mut runtime, RECOVERY_POLL);
+    assert_eq!(
+        runtime.transition_lines(),
+        vec!["primary taskbar 1: clock replaced"]
+    );
 }
 
 #[test]
