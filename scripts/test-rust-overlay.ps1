@@ -2,7 +2,8 @@
 param(
     [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/debug/clock-overlay-spike.exe',
     [string]$OutputDirectory = 'native-evidence/r03',
-    [string]$ProbeTarget = 'x86_64-pc-windows-msvc'
+    [string]$ProbeTarget = 'x86_64-pc-windows-msvc',
+    [ValidateRange(1,5)][int]$DpiCycles = 3
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms, UIAutomationClient, UIAutomationTypes, WindowsBase
@@ -27,6 +28,7 @@ public static class OverlayEvidence {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window,out Rect rect);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern int GetWindowLongW(IntPtr window,int index);
@@ -108,7 +110,14 @@ function Capture-Overlay([string]$name) {
 function Overlay { [OverlayEvidence]::FindOverlay() }
 function Wait-Overlay([bool]$visible, [int]$seconds=20) {
     $end=[DateTime]::UtcNow.AddSeconds($seconds)
-    do { [Windows.Forms.Application]::DoEvents();$h=Overlay;if ($h -ne [IntPtr]::Zero -and [OverlayEvidence]::IsWindowVisible($h) -eq $visible) { return $h };Start-Sleep -Milliseconds 25 } while ([DateTime]::UtcNow -lt $end)
+    do {
+        [Windows.Forms.Application]::DoEvents();$h=Overlay
+        # Destruction is already a successful hidden observation. Waiting until
+        # the deadline can miss it if Explorer and the overlay recover quickly.
+        if (!$visible -and $h -eq [IntPtr]::Zero) {return [IntPtr]::Zero}
+        if ($h -ne [IntPtr]::Zero -and [OverlayEvidence]::IsWindowVisible($h) -eq $visible) {return $h}
+        Start-Sleep -Milliseconds 25
+    } while ([DateTime]::UtcNow -lt $end)
     if (!$visible -and (Overlay) -eq [IntPtr]::Zero) { return [IntPtr]::Zero }
     Capture 'wait-failed'; throw "Overlay visible=$visible not observed"
 }
@@ -280,43 +289,83 @@ try {
     Stop-Spike $p;$p=$null
     # Use the actual Settings selector for a single-display DPI transition.
     # This is not the missing mixed-DPI topology evidence in #21.
-    Stop-Spike $p;$p=$null
-    Start-Process 'ms-settings:display'
-    $deadline=[DateTime]::UtcNow.AddSeconds(20);$scale=$null
-    do {
-        $settings=[Windows.Automation.AutomationElement]::RootElement.FindFirst([Windows.Automation.TreeScope]::Children,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,'Settings'))
-        if ($settings) {
-            $combos=$settings.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::ComboBox))
-            $scale=$combos|Where-Object {$_.Current.Name -match 'Scale|size of text' -or $_.Current.AutomationId -match 'Scale|Dpi'}|Select-Object -First 1
+    $context.results.dpiCycles=@()
+    for ($cycle=1; $cycle -le $DpiCycles; $cycle++) {
+        # Reopen Settings and start fresh processes each cycle, including closing
+        # Settings before the restored-DPI launch that regressed in #40.
+        $suffix=if ($cycle -eq 1) {''} else {"-$cycle"}
+        Stop-Spike $p;$p=$null
+        Start-Process 'ms-settings:display'
+        $deadline=[DateTime]::UtcNow.AddSeconds(20);$scale=$null
+        do {
+            $settings=[Windows.Automation.AutomationElement]::RootElement.FindFirst([Windows.Automation.TreeScope]::Children,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,'Settings'))
+            if ($settings) {
+                $combos=$settings.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::ComboBox))
+                $scale=$combos|Where-Object {$_.Current.Name -match 'Scale|size of text' -or $_.Current.AutomationId -match 'Scale|Dpi'}|Select-Object -First 1
+            }
+            if (!$scale) {Start-Sleep -Milliseconds 250}
+        } while (!$scale -and [DateTime]::UtcNow -lt $deadline)
+        if (!$scale) {throw 'Display Scale selector unavailable'}
+        $selected=$scale.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
+        if ($selected.Count -ne 1) {throw 'Cannot record initial scale'}
+        $originalScale=$selected[0].Current.Name;$script:scaleId=$scale.Current.AutomationId
+        $originalDpi=[OverlayEvidence]::GetDpiForWindow([OverlayEvidence]::FindWindowW('Shell_TrayWnd',$null))
+        if (!$originalDpi) {throw 'Cannot record initial taskbar DPI'}
+        Set-Scale '100%'
+        [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
+        $p=Start-Spike "dpi-transition$suffix" 'primary-win-n'
+        $h=Wait-Overlay $true
+        $beforeDpi=[OverlayEvidence]::GetDpiForWindow($h)
+        Set-Scale '125%'
+        [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
+        $deadline=[DateTime]::UtcNow.AddSeconds(20)
+        do {$h=Wait-Overlay $true 20;$afterDpi=[OverlayEvidence]::GetDpiForWindow($h);if ($afterDpi -eq 120) {break};Start-Sleep -Milliseconds 50} while ([DateTime]::UtcNow -lt $deadline)
+        if ($beforeDpi -ne 96 -or $afterDpi -ne 120) {throw "DPI transition not observed: $beforeDpi -> $afterDpi"}
+        Capture-Overlay "dpi-125$suffix";$context.results.dpiChange=[ordered]@{before=$beforeDpi;after=$afterDpi;actualSettingsSelection=$true;mixedDpi=$false}
+        Set-Scale $originalScale;$originalScale=$null
+        $deadline=[DateTime]::UtcNow.AddSeconds(20)
+        do {
+            $nativeBar=[OverlayEvidence]::FindWindowW('Shell_TrayWnd',$null)
+            if ($nativeBar -ne [IntPtr]::Zero -and [OverlayEvidence]::GetDpiForWindow($nativeBar) -eq $originalDpi) {break}
+            Start-Sleep -Milliseconds 100
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($nativeBar -eq [IntPtr]::Zero -or [OverlayEvidence]::GetDpiForWindow($nativeBar) -ne $originalDpi) {throw 'Native taskbar DPI restore did not complete'}
+        $settingsHandle=[IntPtr]$settings.Current.NativeWindowHandle
+        $settings.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern).Close();$settings=$null
+        # UIA Close returns before the closing animation and HWND teardown.
+        # Establish the fixture only after that window has actually disappeared.
+        $deadline=[DateTime]::UtcNow.AddSeconds(5)
+        while ([OverlayEvidence]::IsWindow($settingsHandle) -and [DateTime]::UtcNow -lt $deadline) {
+            [Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 25
         }
-        if (!$scale) {Start-Sleep -Milliseconds 250}
-    } while (!$scale -and [DateTime]::UtcNow -lt $deadline)
-    if (!$scale) {throw 'Display Scale selector unavailable'}
-    $selected=$scale.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
-    if ($selected.Count -ne 1) {throw 'Cannot record initial scale'}
-    $originalScale=$selected[0].Current.Name;$script:scaleId=$scale.Current.AutomationId
-    Set-Scale '100%'
-    [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
-    $p=Start-Spike 'dpi-transition' 'primary-win-n'
-    $h=Wait-Overlay $true
-    $beforeDpi=[OverlayEvidence]::GetDpiForWindow($h)
-    Set-Scale '125%'
-    [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
-    $deadline=[DateTime]::UtcNow.AddSeconds(20)
-    do {$h=Wait-Overlay $true 20;$afterDpi=[OverlayEvidence]::GetDpiForWindow($h);if ($afterDpi -eq 120) {break};Start-Sleep -Milliseconds 50} while ([DateTime]::UtcNow -lt $deadline)
-    if ($beforeDpi -ne 96 -or $afterDpi -ne 120) {throw "DPI transition not observed: $beforeDpi -> $afterDpi"}
-    Capture-Overlay 'dpi-125';$context.results.dpiChange=[ordered]@{before=$beforeDpi;after=$afterDpi;actualSettingsSelection=$true;mixedDpi=$false}
-    Set-Scale $originalScale;$originalScale=$null
-    $deadline=[DateTime]::UtcNow.AddSeconds(20)
-    do {
-        $nativeBar=[OverlayEvidence]::FindWindowW('Shell_TrayWnd',$null)
-        if ($nativeBar -ne [IntPtr]::Zero -and [OverlayEvidence]::GetDpiForWindow($nativeBar) -eq 96) {break}
-        Start-Sleep -Milliseconds 100
-    } while ([DateTime]::UtcNow -lt $deadline)
-    if ($nativeBar -eq [IntPtr]::Zero -or [OverlayEvidence]::GetDpiForWindow($nativeBar) -ne 96) {throw 'Native taskbar DPI restore did not complete'}
-    $settings.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern).Close();$settings=$null
-    Stop-Spike $p;$p=$null
-    $p=Start-Spike 'all-after-dpi' 'all-win-n';Wait-Overlay $true|Out-Null;Capture-Overlay 'dpi-restored'
+        if ([OverlayEvidence]::IsWindow($settingsHandle)) {throw 'Display Settings did not finish closing'}
+        Stop-Spike $p;$p=$null
+        # Closing Settings can leave GetForegroundWindow null on hosted ARM.
+        # Unknown foreground correctly hides coverage. Reestablish the same
+        # ordinary fixture used for the initial nonactivation test.
+        $fixture.WindowState='Normal';$fixture.Bounds=New-Object Drawing.Rectangle(100,100,480,320)
+        $fixture.Show();[Windows.Forms.Application]::DoEvents()
+        [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
+        [OverlayEvidence]::Click(150,115);[Windows.Forms.Application]::DoEvents()
+        $deadline=[DateTime]::UtcNow.AddSeconds(5)
+        do {
+            $foreground=[OverlayEvidence]::GetForegroundWindow();$foregroundRect=New-Object OverlayEvidence+Rect
+            $foregroundKnown=$foreground -ne [IntPtr]::Zero -and [OverlayEvidence]::GetWindowRect($foreground,[ref]$foregroundRect) -and $foregroundRect.Right -gt $foregroundRect.Left -and $foregroundRect.Bottom -gt $foregroundRect.Top
+            if ($foregroundKnown) {break}
+            [Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 25
+        } while ([DateTime]::UtcNow -lt $deadline)
+        # A hosted OS dialog can retain activation. Its known geometry is just
+        # as usable as the fixture's; only the initial nonactivation test needs
+        # a specific foreground HWND. Never turn unknown foreground into a pass.
+        if (!$foregroundKnown) {throw 'No measurable foreground window after DPI restore'}
+        $p=Start-Spike "all-after-dpi$suffix" 'all-win-n';$h=Wait-Overlay $true
+        $restoredDpi=[OverlayEvidence]::GetDpiForWindow($h)
+        if ($restoredDpi -ne $originalDpi) {throw "Overlay DPI restore not observed: $restoredDpi, expected $originalDpi"}
+        Capture-Overlay "dpi-restored$suffix"
+        $context.results.dpiCycles+=[ordered]@{cycle=$cycle;before=$beforeDpi;after=$afterDpi;restored=$restoredDpi;freshProcessAfterSettingsClosed=$true;foregroundKnownBeforeFreshLaunch=$true;foregroundWasFixture=($foreground -eq $fixture.Handle)}
+        Save-Context
+        Stop-Spike $p;$p=$null
+    }
     if ($context.results.failedCriteria.Count) {
         $context.status='measured_no_go';throw ('R03 NO-GO: '+($context.results.failedCriteria -join ', '))
     }

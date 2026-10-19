@@ -1,0 +1,44 @@
+{
+  "run": "https://github.com/tjorim/ElevenClock-rs/actions/runs/38956972500",
+  "source": "a0fb5f90c7d806fc34d4bb87cb321cfc962cf764",
+  "architecture": "x86_64",
+  "build": "26100",
+  "ubr": 33438,
+  "firstRejectedHit": {
+    "result": {
+      "failed": "R03 clock hit at (910, 720): Clock hit ancestry [\"SystemTray.OmniButtonRight: Ok(RECT { left: 882, top: 720, right: 910, bottom: 768 })\", \"Windows.UI.Input.InputSite.WindowClass: Ok(RECT { left: 0, top: 720, right: 1024, bottom: 768 })\", \"Windows.UI.Composition.DesktopWindowContentBridge: Ok(RECT { left: 0, top: 720, right: 1024, bottom: 768 })\", \"Shell_TrayWnd: Ok(RECT { left: 0, top: 720, right: 1024, bottom: 768 })\", \"#32769: Ok(RECT { left: 0, top: 0, right: 1024, bottom: 768 })\"]; parent unavailable: T (0x80004005)"
+    },
+    "sequence": 1
+  },
+  "firstAcceptedSlots": {
+    "result": {
+      "slots": [
+        {
+          "clock": [
+            910,
+            720,
+            74,
+            48
+          ],
+          "dpi": 96,
+          "monitor": [
+            0,
+            0,
+            1024,
+            768
+          ],
+          "primary": true,
+          "shell_pid": 7568,
+          "shell_started": 134366535946459487,
+          "taskbar": [
+            0,
+            720,
+            1024,
+            48
+          ]
+        }
+      ]
+    },
+    "sequence": 12
+  }
+}
