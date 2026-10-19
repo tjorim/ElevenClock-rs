@@ -8,11 +8,19 @@ No command parser, async runtime or web UI runtime is required.
 
 Commit Cargo.lock and use --locked for all checks/builds. New dependencies must
 explain product need, maintenance, feature selection and license impact.
-Update in a dedicated PR targeting rust-rewrite; run the Linux and Windows
+Until the rewrite lands in main, update in a dedicated PR targeting rust-rewrite;
+afterwards, target the default branch. Run the Linux and Windows
 jobs and the advisory/license inventory checks. Do not raise the declared
 `rust-version` merely to absorb an update; record the justification if it changes.
 Transitive updates need the same checks. No audit failure is silently suppressed;
 any exception needs a reviewed, dated rationale and remediation issue.
+
+Dependabot's configuration is prepared for the merge to main: both GitHub Actions
+and the `/rust` Cargo workspace follow the default branch. It takes effect when
+this configuration lands on that branch. Routine updates are checked on Mondays
+at 06:00 Europe/Brussels and grouped into one version-update PR per ecosystem,
+including major upgrades. Each ecosystem permits one open version-update PR.
+Separate security-update groups do not wait for the weekly version-update schedule.
 
 CI cargo-audit denies warnings; unavailable advisory data is a failure. License
 checks fail on terms outside the explicit reviewed set or with missing original
