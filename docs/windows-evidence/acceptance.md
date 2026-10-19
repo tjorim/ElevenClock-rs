@@ -4,6 +4,21 @@ Status: **started, not passed.** One partial session on one machine. The release
 stays **open**: most of the matrix, both performance runs and the soak have not been run.
 Nothing below is inferred from CI, simulation or another build.
 
+Follow-up for [#41](https://github.com/tjorim/ElevenClock-rs/issues/41): the
+secondary-clock discovery failure in finding 3 was fixed in
+[PR #50](https://github.com/tjorim/ElevenClock-rs/pull/50) (`fc2434a`). The
+[captured UIA inventory and fix record](issue34-26300/README.md) show that this
+build's split secondary clock has a separate bell but no Show Desktop button.
+Discovery now requires Show Desktop only on primary taskbars; split clocks still
+require the bell, shell ownership, an unambiguous candidate and validated geometry.
+With **All displays** selected in Appearance, both clocks were located and replaced.
+The [independent follow-up](issue34-26300/follow-up/README.md) records settled
+visual coverage, native pointer ownership and secondary auto-hide reveal on the
+same two-display, 96-DPI guest configuration. It also records failed Explorer
+restart recovery checks. This resolves the recorded selector failure, without
+passing the broader support or release gates. The original observations and
+matrix below remain a historical record of `940634a252c1`.
+
 ## Environment actually used
 
 | What | Value |
@@ -132,6 +147,7 @@ Checked boxes mean actually executed here. Everything else is **not run**.
 
 ## Handoff
 
-Do not close #14. Supported builds: **none yet**. Next: reproduce finding 2, decide
-finding 3, then run the matrix on this VM at mixed DPI and on a second build, then the
+Do not close #14. Supported builds: **none yet**. Finding 3's selector failure is
+resolved by the follow-up above; Explorer recovery remains open. Next: reproduce
+finding 2, then run the matrix on this VM at mixed DPI and on a second build, then the
 three ten-minute runs and the eight-hour soak with the script above.
