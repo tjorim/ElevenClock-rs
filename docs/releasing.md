@@ -40,6 +40,12 @@ The PR/manual `rust-release.yml` workflow uploads these development artifacts:
 | Separate symbols artifact | Matching PDB, provenance and its own checksums |
 | Packaging evidence | Actual installer/lifecycle/Settings logs and environment limitations |
 
+Formatting, linting, unit tests and portable script regressions run in
+`rust-ci.yml`; the packaging workflow only builds and validates the candidate.
+For manual validation, run both workflows against the same ref. The packaging
+build remains separate because it links the static runtime. New runs cancel
+superseded packaging runs on the same ref.
+
 Keep matching source and binary artifacts together. Modified development checkouts
 are recorded honestly: source includes actual tracked and nonignored untracked
 working files, omitting tracked deletions. Keep unrelated nonignored files out of

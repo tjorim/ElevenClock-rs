@@ -21,13 +21,29 @@ CI layout (`rust-ci.yml`): the Linux `core` job runs fmt, Clippy for the host an
 executed) and the portable `clock-core` tests. The `windows` job only runs what needs
 Windows: the full test suite including Windows-only tests, the release build with its
 native resources, and the desktop smoke checks. Both jobs use a cargo cache.
+Portable packaging-script and overlay-harness regression checks run once on Linux;
+the dependency job owns the advisory audit and license checks, with a cached,
+version-checked advisory tool. Core tests retain Linux and Windows coverage; the
+Linux test command already includes doctests.
+
+The [desktop workflow](../.github/workflows/runtime-lifecycle.yml) shares one
+runner per architecture/target between R02 taskbar, R08 lifecycle/UIA and R03
+overlay evidence. All three combinations (native x64, native ARM64 and x64 on
+ARM64) remain covered. R03 runs last because it changes display scaling; its
+evidence is included in the existing `r08-lifecycle-*` artifacts. Packaging keeps
+its separate static-runtime build and installer checks, without repeating the
+foundation checks. Run the foundation workflow as well when manually validating
+a packaging candidate.
+
+Every workflow cancels superseded runs on the same ref. Documentation-only
+changes do not start builds (dependency notices still do); packaging runs for its
+source, assets, scripts and packaging inputs, rather than unrelated test harnesses.
 Windows development requires the MSVC toolchain and
 Windows SDK resource compiler; users do not need these developer tools.
 
 ```sh
 cargo fmt --manifest-path rust/Cargo.toml --all --check
 cargo test --manifest-path rust/Cargo.toml -p clock-core --locked
-cargo test --manifest-path rust/Cargo.toml -p clock-core --doc --locked
 cargo clippy --manifest-path rust/Cargo.toml -p clock-core --all-targets --locked -- -D warnings
 ```
 

@@ -1,7 +1,7 @@
-name: R08 hosted runtime lifecycle (includes the R02 desktop evidence)
+name: R08 hosted runtime lifecycle (includes R02 and R03 desktop evidence)
 on:
   pull_request:
-    paths: ['rust/**', 'scripts/test-rust-lifecycle.ps1', 'scripts/test-rust-taskbar.ps1', '.github/workflows/runtime-lifecycle.yml']
+    paths: ['rust/**', 'assets/**', 'scripts/test-rust-lifecycle.ps1', 'scripts/test-rust-taskbar.ps1', 'scripts/test-rust-overlay*.ps1', '.github/workflows/runtime-lifecycle.yml']
   workflow_dispatch:
 concurrency:
   group: r08-lifecycle-${{ github.ref }}
@@ -21,14 +21,20 @@ jobs:
           - runner: windows-11-arm
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - run: cargo +stable build --manifest-path rust/Cargo.toml -p clock-app --target ${{ matrix.target }} --locked
-      - run: cargo +stable build --manifest-path rust/Cargo.toml -p clock-windows --example taskbar_probe --target ${{ matrix.target }} --locked
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: desktop-${{ matrix.runner }}-${{ matrix.target }}
+      # Share the probe build and desktop preparation for R02/R03/R08. Build the
+      # spike separately so its optional features do not affect the app binary.
+      - run: cargo +stable build --manifest-path rust/Cargo.toml -p clock-app -p clock-windows --bins --example taskbar_probe --target ${{ matrix.target }} --locked
+      - run: cargo +stable build --manifest-path rust/Cargo.toml -p clock-overlay-spike --target ${{ matrix.target }} --locked
       # R02 evidence (formerly its own workflow): prepares the hosted desktop, then
       # real shell discovery, screenshots, Explorer restart and helper lifetime.
       - name: R02 actual shell discovery, screenshots, restart and helper lifetime
@@ -48,7 +54,13 @@ jobs:
           ELEVENCLOCK_RS_UIA_EXPLORER: '1'
           ELEVENCLOCK_RS_EVIDENCE_DIR: native-evidence/uia
         run: cargo +stable test --manifest-path rust/Cargo.toml -p clock-windows --test uia_lifetime --target ${{ matrix.target }} --locked
-      - uses: actions/upload-artifact@v4
+      # Run last because the overlay harness changes display scaling. Still collect
+      # R03 evidence if an earlier desktop check fails; the job remains failed.
+      - name: R03 overlay, hit targets, calendar, visibility and recovery
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./scripts/test-rust-overlay.ps1 -ProbeTarget '${{ matrix.target }}' -Executable 'rust/target/${{ matrix.target }}/debug/clock-overlay-spike.exe'
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: r08-lifecycle-${{ matrix.runner }}-${{ matrix.target }}
