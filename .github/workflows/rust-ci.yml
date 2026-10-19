@@ -2,10 +2,13 @@ name: Rust foundation
 on:
   push:
     branches: [main, rust-rewrite]
-    paths: ['rust/**', 'assets/**', '.github/workflows/rust-ci.yml', 'docs/contributing.md', 'docs/dependencies.md', 'docs/design/**', 'docs/windows-evidence/**', 'scripts/*rust*']
+    paths: ['rust/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
   pull_request:
-    paths: ['rust/**', 'assets/**', '.github/workflows/rust-ci.yml', 'docs/contributing.md', 'docs/dependencies.md', 'docs/design/**', 'docs/windows-evidence/**', 'scripts/*rust*']
+    paths: ['rust/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
   workflow_dispatch:
+concurrency:
+  group: rust-foundation-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -14,7 +17,7 @@ jobs:
   core:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -26,14 +29,18 @@ jobs:
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
       - run: cargo test --manifest-path rust/Cargo.toml -p clock-core --locked
-      - run: cargo test --manifest-path rust/Cargo.toml -p clock-core --doc --locked
+      - name: Packaging script regression checks
+        run: python3 scripts/test-rust-release.py
+      - name: Overlay harness wait regression checks
+        shell: pwsh
+        run: ./scripts/test-rust-overlay-harness.ps1
   # Only what needs Windows: executing the Windows-only tests, the release build with its
   # native resources, and the desktop smoke checks.
   windows:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -68,13 +75,13 @@ jobs:
         run: ./scripts/test-rust-ui-environment.ps1
       # A build you can run. The overlay is live (work in progress, P1 still
       # NO-GO, see #23), so expect rough edges. x64 only; not a release package.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: elevenclock-rs-dev-x64
           retention-days: 30
           path: rust/target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           # Evidence only (Settings/UI smoke captures).
@@ -85,9 +92,17 @@ jobs:
   dependencies:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo install cargo-audit --locked --version 0.22.2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: cargo-audit-0.22.2
+      - name: Install pinned advisory checker if not cached
+        run: |
+          if [ "$(cargo audit --version 2>/dev/null)" != "cargo-audit 0.22.2" ]; then
+            cargo install cargo-audit --locked --version 0.22.2
+          fi
       - name: Advisory audit (failures are never ignored)
         working-directory: rust
         run: cargo audit --deny warnings
