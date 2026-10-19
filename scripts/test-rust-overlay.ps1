@@ -348,15 +348,21 @@ try {
         [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
         [OverlayEvidence]::Click(150,115);[Windows.Forms.Application]::DoEvents()
         $deadline=[DateTime]::UtcNow.AddSeconds(5)
-        while ([OverlayEvidence]::GetForegroundWindow() -ne $fixture.Handle -and [DateTime]::UtcNow -lt $deadline) {
+        do {
+            $foreground=[OverlayEvidence]::GetForegroundWindow();$foregroundRect=New-Object OverlayEvidence+Rect
+            $foregroundKnown=$foreground -ne [IntPtr]::Zero -and [OverlayEvidence]::GetWindowRect($foreground,[ref]$foregroundRect) -and $foregroundRect.Right -gt $foregroundRect.Left -and $foregroundRect.Bottom -gt $foregroundRect.Top
+            if ($foregroundKnown) {break}
             [Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 25
-        }
-        if ([OverlayEvidence]::GetForegroundWindow() -ne $fixture.Handle) {throw 'Could not establish foreground fixture after DPI restore'}
+        } while ([DateTime]::UtcNow -lt $deadline)
+        # A hosted OS dialog can retain activation. Its known geometry is just
+        # as usable as the fixture's; only the initial nonactivation test needs
+        # a specific foreground HWND. Never turn unknown foreground into a pass.
+        if (!$foregroundKnown) {throw 'No measurable foreground window after DPI restore'}
         $p=Start-Spike "all-after-dpi$suffix" 'all-win-n';$h=Wait-Overlay $true
         $restoredDpi=[OverlayEvidence]::GetDpiForWindow($h)
         if ($restoredDpi -ne $originalDpi) {throw "Overlay DPI restore not observed: $restoredDpi, expected $originalDpi"}
         Capture-Overlay "dpi-restored$suffix"
-        $context.results.dpiCycles+=[ordered]@{cycle=$cycle;before=$beforeDpi;after=$afterDpi;restored=$restoredDpi;freshProcessAfterSettingsClosed=$true;foregroundFixtureBeforeFreshLaunch=$true}
+        $context.results.dpiCycles+=[ordered]@{cycle=$cycle;before=$beforeDpi;after=$afterDpi;restored=$restoredDpi;freshProcessAfterSettingsClosed=$true;foregroundKnownBeforeFreshLaunch=$true;foregroundWasFixture=($foreground -eq $fixture.Handle)}
         Save-Context
         Stop-Spike $p;$p=$null
     }
