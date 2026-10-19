@@ -303,6 +303,7 @@ pub struct Runtime<P: Platform> {
     transition: TransitionPoll,
     poll_due: Option<Duration>,
     refresh_not_before: Duration,
+    overflow_retry_not_before: Duration,
     retry: Retry,
     unverified_retry: Retry,
     discovery_completed: u64,
@@ -334,6 +335,7 @@ impl<P: Platform> Runtime<P> {
             transition: TransitionPoll::default(),
             poll_due: None,
             refresh_not_before: Duration::ZERO,
+            overflow_retry_not_before: Duration::ZERO,
             retry: Retry::default(),
             unverified_retry: Retry::default(),
             discovery_completed: 0,
@@ -430,6 +432,24 @@ impl<P: Platform> Runtime<P> {
                     if bar.primary { "primary" } else { "secondary" },
                     bar.key.id.0,
                 ));
+                if let Some(Reason::Overflow(overflow)) = &bar.reason {
+                    // Record measurements only on entry to the fault, never on
+                    // retries. No user format, rendered text or window title.
+                    let slot = self.snapshots.get(&bar.key.id.0).and_then(|s| s.clock_rect);
+                    lines.push(format!(
+                        "taskbar {} overflow: required={}x{}px, available={}x{}px, \
+                         discovered slot={}x{}px, DPI={}, font={}pt",
+                        bar.key.id.0,
+                        overflow.required.width,
+                        overflow.required.height,
+                        overflow.available.width,
+                        overflow.available.height,
+                        slot.map_or(0, |r| r.width()),
+                        slot.map_or(0, |r| r.height()),
+                        bar.dpi,
+                        self.state().preferences().font_size_pt(),
+                    ));
+                }
             }
             seen.insert(bar.key.id.0, summary);
         }
@@ -660,8 +680,37 @@ impl<P: Platform> Runtime<P> {
             self.dispatch(Event::TopologyChanged);
         }
         let changed = self.observe_all();
+        self.retry_overflow(now);
         if self.transition.active() {
             self.transition.observed(changed);
+        }
+    }
+
+    /// The reducer remembers the requested frame even when painting fails. A
+    /// date-only format may not change for a day, so ticks alone cannot recover
+    /// a transient overflow. Retry eligible clocks on the slow recovery cadence.
+    fn retry_overflow(&mut self, now: Duration) {
+        if now < self.overflow_retry_not_before {
+            return;
+        }
+        let keys: Vec<_> = self
+            .faults
+            .iter()
+            .filter_map(|(key, reason)| {
+                (matches!(reason, Reason::Overflow(_))
+                    && self.state().overlay_state(*key) == OverlayState::Visible)
+                    .then_some(*key)
+            })
+            .collect();
+        if keys.is_empty() {
+            return;
+        }
+        self.overflow_retry_not_before = now + RECOVERY_POLL;
+        let wall = self.platform.local_now();
+        if let Ok(text) = self.state().preferences().format().render(wall) {
+            for key in keys {
+                self.paint(key, &text);
+            }
         }
     }
 

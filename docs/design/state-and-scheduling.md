@@ -52,6 +52,10 @@ those drafts, so no second preferences schema is introduced.
 - Paint: draw supplied text with current committed font/theme/resolved appearance
   and show that eligible window. Showing a previously hidden window requires Paint
   even when text is unchanged. Hide retains the window and its last paint.
+  The reducer records the requested frame without a native success acknowledgement.
+  The runtime therefore retries overflow faults for reducer-visible clocks on its
+  two-second recovery poll, with fresh local time, even when formatted text has not
+  changed. Hidden, unavailable and stale-generation clocks are never retried.
 - ArmTimer: replace the outstanding one-shot monotonic wait. The timer callback
   reads a fresh OS-local snapshot once and dispatches Tick. Time-change/resume
   notifications read a fresh snapshot and dispatch TimeChanged; unlock also needs

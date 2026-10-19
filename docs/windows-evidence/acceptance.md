@@ -19,6 +19,14 @@ restart recovery checks. This resolves the recorded selector failure, without
 passing the broader support or release gates. The original observations and
 matrix below remain a historical record of `940634a252c1`.
 
+Follow-up for [#42](https://github.com/tjorim/ElevenClock-rs/issues/42): a
+[deterministic reproduction and recovery fix](issue42-overflow.md) demonstrate
+that a transient overflow can stay latched while ISO week text remains unchanged.
+The runtime now retries eligible overflowed clocks on its bounded recovery poll.
+Native renderer tests pass for default → ISO week Apply and recovery after a
+temporary small region. The original first-Apply overflow trigger remains unknown;
+this does not turn the original observation into a reproduced desktop failure.
+
 ## Environment actually used
 
 | What | Value |
