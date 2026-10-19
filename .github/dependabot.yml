@@ -4,31 +4,9 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Europe/Brussels"
-    open-pull-requests-limit: 1
-    groups:
-      github-actions:
-        applies-to: "version-updates"
-        patterns: ["*"]
-      github-actions-security:
-        applies-to: "security-updates"
-        patterns: ["*"]
+      interval: "daily"
 
   - package-ecosystem: "cargo"
     directory: "/rust"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Europe/Brussels"
-    open-pull-requests-limit: 1
-    groups:
-      rust-dependencies:
-        applies-to: "version-updates"
-        patterns: ["*"]
-      rust-dependencies-security:
-        applies-to: "security-updates"
-        patterns: ["*"]

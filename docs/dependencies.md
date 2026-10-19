@@ -17,10 +17,9 @@ any exception needs a reviewed, dated rationale and remediation issue.
 
 Dependabot's configuration is prepared for the merge to main: both GitHub Actions
 and the `/rust` Cargo workspace follow the default branch. It takes effect when
-this configuration lands on that branch. Routine updates are checked on Mondays
-at 06:00 Europe/Brussels and grouped into one version-update PR per ecosystem,
-including major upgrades. Each ecosystem permits one open version-update PR.
-Separate security-update groups do not wait for the weekly version-update schedule.
+this configuration lands on that branch. GitHub Actions updates are checked daily
+and Cargo updates weekly, with separate dependency PRs and the default open-PR
+limit.
 
 CI cargo-audit denies warnings; unavailable advisory data is a failure. License
 checks fail on terms outside the explicit reviewed set or with missing original
