@@ -8,6 +8,81 @@ hosted rerun where every R03 criterion passes on all three profiles. R02's
 unavailable stock native-x64 and mixed-DPI variants (#21) still block a GO. No
 supported production selector, clock rectangle or app overlay is enabled.
 
+## #40 DPI restore follow-up
+
+[#40](https://github.com/tjorim/ElevenClock-rs/issues/40) recurred after the
+#23 follow-up. In [diagnostic run 38956045798](https://github.com/tjorim/ElevenClock-rs/actions/runs/38956045798),
+Server's native inventory succeeded, but all 17 discovery attempts failed their
+first independent clock point check at `(910, 720)` after restoring 100% scale.
+There were no accepted slots or native overlay observations.
+
+[The ancestry trace from run 38956972500](overlay-dpi-restore-hosted/rejected-hit.json)
+identifies the hit as `SystemTray.OmniButtonRight`, with bounds
+`[882, 720, 910, 768]`, while the clock begins at `x=910`. UIA assigns this
+shared integer boundary to the neighbor after the fractional DPI transition.
+That run recovered on sequence 12 without a behavioral change; the earlier run
+never recovered within the bound. Walking the mismatched hit up to the desktop
+and asking for its parent produced the misleading `0x00000000` error.
+
+The spike now samples strictly **inside** the clock rectangle on a four-pixel
+grid, including the last interior row and column. For this clock the first
+sample is `(911, 721)` and the last is `(983, 767)`. Full clock bounds still
+undergo geometry and exclusion validation, and each sampled hit must match the
+clock's exact identity and bounds. Neighbor-center hits, native overlay hit
+ownership and opaque-corner captures remain required. Rectangles too small to
+sample internally are rejected. The existing 20-second overlay deadline and
+production selector remain unchanged.
+
+The harness defaults to three complete DPI round trips. Each closes Settings
+before launching a fresh `all-after-dpi` process and records restored overlay
+DPI and coverage separately. `-DpiCycles 1` runs one cycle for diagnosis.
+
+The first fix validation, [run 38957770207](https://github.com/tjorim/ElevenClock-rs/actions/runs/38957770207),
+exposed two harness races. Server stopped at the Explorer-loss hidden wait:
+`Wait-Overlay $false` previously ignored a missing HWND until the deadline,
+potentially missing destruction followed by rapid recreation. It now accepts
+destruction immediately. Five isolated tests exercise the actual wait function
+with absent, hidden, appearing, destroyed/recreated and always-visible windows.
+The emulated x64 profile passed all three DPI cycles. Native ARM accepted slots
+on all seven post-restore discovery attempts, but stayed hidden because closing
+Settings left foreground geometry unknown (`foreground=None`). The harness now
+restores its ordinary fixture and requires measurable foreground geometry before
+the fresh launch; the spike still hides coverage when foreground state is unknown.
+
+Server and native ARM passed three cycles each in
+[run 38959336425](https://github.com/tjorim/ElevenClock-rs/actions/runs/38959336425).
+The emulated runner exposed an overly strict fixture-activation check: its hosted
+System Properties paging-file dialog retained foreground activation. The restore
+step now permits any foreground window with measurable bounds, matching the
+spike's existing visibility contract. Only the initial nonactivation test requires
+the fixture's exact HWND. Closing Settings and restoring measurable foreground
+state each have a five-second bound; the fixture receives one physical click.
+
+**Final validation:** [run 39317645970](https://github.com/tjorim/ElevenClock-rs/actions/runs/39317645970)
+tested commit `2b0f3757ed81bf9745d667654956a96be4b127af`. All three R03 jobs
+passed with no failed criteria. Server and native ARM passed on attempt 1. The
+emulated job's first attempt timed out in R02's `desktop-ready-1` supervisor,
+before running R03; retrying only that job passed on attempt 2 without a code change.
+
+| Hosted profile | Build | DPI round trips | Post-restore discovery |
+| --- | --- | --- | --- |
+| [Server x64](overlay-dpi-restore-hosted/server-x64/context.json) | 26100.33438 | Three 96 → 120 → 96 | First attempt in every fresh process; zero failures |
+| [Windows 11 ARM64, native](overlay-dpi-restore-hosted/windows11-arm-native/context.json) | 26200.9457 | Three 96 → 120 → 96 | First attempt in every fresh process; zero failures |
+| [Windows 11 ARM64, emulated x64](overlay-dpi-restore-hosted/windows11-arm-x64-emulated/context.json) | 26200.9457 | Three 96 → 120 → 96 | First attempt in every fresh process; zero failures |
+
+All nine restored coverage captures passed the native center-hit ownership and
+four opaque-corner checks. Each context and all three fresh-process reports are
+retained beside representative third-cycle captures, inspected for visible
+coverage: [Server](overlay-dpi-restore-hosted/server-x64/dpi-restored-3.png),
+[native ARM](overlay-dpi-restore-hosted/windows11-arm-native/dpi-restored-3.png),
+and [emulated x64](overlay-dpi-restore-hosted/windows11-arm-x64-emulated/dpi-restored-3.png).
+The complete run artifacts retain the other captures for 14 days.
+
+Local workspace all-target tests, formatting, warnings-denied Clippy and the
+five harness regression cases passed. Two new portable tests cover interior
+sampling, the recorded shared boundary, spacing, negative coordinates and
+unprovable sizes. These checks do not change P1's stock-x64/mixed-DPI gate in #21.
+
 ## #23 recovery follow-up
 
 [R03 run 38856440637](https://github.com/tjorim/ElevenClock-rs/actions/runs/38856440637)
@@ -68,11 +143,11 @@ are original captures.
 
 **Limitations of this follow-up.**
 
-- Server DPI restoration was not diagnosed. Its original failure was repeated
+- At the time of #23, Server DPI restoration was not diagnosed. Its original failure was repeated
   discovery errors with no Win32 error code (`0x00000000`) after returning to 96 DPI. It
   did not recur in run 38839269799 (before this fix) or in this run. That is two
   clean runs, not a root cause; a recurrence should be treated as a regression of
-  this criterion.
+  this criterion. The [#40 follow-up](#40-dpi-restore-follow-up) diagnoses the recurrence.
 - Explorer was restarted on a local stock x64 desktop with the runtime app, and
   both taskbars recovered. The unfixed build also recovered there, so the local
   restart did not reproduce the failure. The hosted run is the restart evidence.

@@ -1,7 +1,7 @@
 name: R03 hosted overlay evidence
 on:
   pull_request:
-    paths: ['rust/**', 'scripts/test-rust-overlay.ps1', '.github/workflows/overlay-spike.yml']
+    paths: ['rust/**', 'scripts/test-rust-overlay*.ps1', '.github/workflows/overlay-spike.yml']
   workflow_dispatch:
 concurrency:
   group: r03-overlay-${{ github.ref }}
@@ -24,6 +24,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Overlay harness wait regression checks
+        shell: pwsh
+        run: ./scripts/test-rust-overlay-harness.ps1
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}

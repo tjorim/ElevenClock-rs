@@ -38,8 +38,10 @@ unsafe fn clock_at(
     unsafe {
         let walker = automation.RawViewWalker()?;
         let mut node = automation.ElementFromPoint(point)?;
+        let mut ancestry = Vec::new();
         for _ in 0..16 {
-            if CLOCK_CLASSES.contains(&node.CurrentClassName()?.to_string().as_str())
+            let class = node.CurrentClassName()?.to_string();
+            if CLOCK_CLASSES.contains(&class.as_str())
                 && node.CurrentControlType()? == UIA_ButtonControlTypeId
                 && node.CurrentProcessId()? as u32 == slot.shell_pid
                 && !node.CurrentIsOffscreen()?.as_bool()
@@ -47,7 +49,13 @@ unsafe fn clock_at(
             {
                 return Ok(node);
             }
-            node = walker.GetParentElement(&node)?;
+            ancestry.push(format!("{class}: {:?}", node.CurrentBoundingRectangle()));
+            node = walker.GetParentElement(&node).map_err(|error| {
+                windows::core::Error::new(
+                    windows::core::HRESULT(0x80004005u32 as i32),
+                    format!("Clock hit ancestry {ancestry:?}; parent unavailable: {error}"),
+                )
+            })?;
         }
     }
     Err(rejected())
@@ -56,7 +64,12 @@ unsafe fn clock_at(
 /// Dense independent UIA hit sampling is experimental evidence on this exact
 /// desktop, not authorization for R02's production selector.
 pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
-    let records = probe::collect(ShellGeneration(generation))?;
+    let records = probe::collect(ShellGeneration(generation)).map_err(|error| {
+        windows::core::Error::new(
+            windows::core::HRESULT(0x80004005u32 as i32),
+            format!("R03 native/UIA inventory: {error}"),
+        )
+    })?;
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
     }
@@ -129,22 +142,16 @@ pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
             shell_started: record.shell_started,
             primary: s.primary,
         };
-        // Interior points on a four-pixel grid and final edges are checked. A bounded process
-        // deadline handles an unexpectedly expensive or blocked provider.
-        if clock.width() > 512 || clock.height() > 256 {
-            return Err(rejected());
-        }
-        for y in (clock.top()..clock.bottom())
-            .step_by(4)
-            .chain([clock.bottom() - 1])
-        {
-            for x in (clock.left()..clock.right())
-                .step_by(4)
-                .chain([clock.right() - 1])
-            {
-                unsafe {
-                    clock_at(&automation, POINT { x, y }, &slot)?;
-                }
+        // Four-pixel interior grid, including the last interior row/column.
+        // A bounded process deadline handles an expensive or blocked provider.
+        for (x, y) in crate::overlay::clock_hit_points(clock).ok_or_else(rejected)? {
+            unsafe {
+                clock_at(&automation, POINT { x, y }, &slot).map_err(|error| {
+                    windows::core::Error::new(
+                        windows::core::HRESULT(0x80004005u32 as i32),
+                        format!("R03 clock hit at ({x}, {y}): {error}"),
+                    )
+                })?;
             }
         }
         // Independent neighbor center hits must resolve to that exact control.
