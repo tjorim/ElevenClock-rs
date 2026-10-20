@@ -10,6 +10,12 @@ fn main() {
     println!("cargo:rerun-if-changed=resources/settings.rc");
     println!("cargo:rerun-if-changed=resources/app.manifest");
     println!("cargo:rerun-if-changed=../../../assets/icon.ico");
+    // Development examples need the same DPI/security manifest; these resources
+    // are linked into examples separately and never add examples to app payloads.
+    #[cfg(windows)]
+    embed_resource::compile_for_examples("resources/settings.rc", embed_resource::NONE)
+        .manifest_required()
+        .expect("Development example DPI manifest must be linked");
     #[cfg(windows)]
     embed_resource::compile("resources/settings.rc", embed_resource::NONE)
         .manifest_required()

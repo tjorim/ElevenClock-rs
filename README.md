@@ -24,7 +24,7 @@ by the original ElevenClock project is not claimed. The Python app it replaces l
 
 | Path | What it is |
 | --- | --- |
-| [`rust/`](rust) | The Cargo workspace: `clock-core` (portable logic), `clock-windows` (Win32 adapter), `clock-app` (the executable, `elevenclock-rs.exe`), `clock-overlay-spike` (development-only prototype) |
+| [`rust/`](rust) | The Cargo workspace: `clock-core` (portable logic), `clock-windows` (Win32 adapter), `clock-app` (the executable, `elevenclock-rs.exe`); development harnesses are examples within these three crates |
 | [`docs/`](docs) | Plan, contracts, architecture decisions and per-issue Windows evidence |
 | [`scripts/`](scripts) | Hosted-desktop test harnesses and the dependency-license check |
 | [`assets/`](assets) | Original icon source and generated Windows icons |

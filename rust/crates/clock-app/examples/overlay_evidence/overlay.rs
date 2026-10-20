@@ -1,9 +1,9 @@
-use super::{BandAction, band_action, may_show};
-use crate::{
+use clock_core::{ClockText, PhysicalRect, Theme};
+use clock_windows::overlay::{BandAction, band_action, may_show};
+use clock_windows::{
     render::{ClockSurface, PaintOutcome, PaintRequest, RenderError, Renderer, WorstCase},
     theme::{AppearanceTracker, Palette, Rgb, is_appearance_message, resolve, system_appearance},
 };
-use clock_core::{ClockText, PhysicalRect, Theme};
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -99,7 +99,7 @@ fn bounds(hwnd: HWND) -> Option<PhysicalRect> {
     unsafe {
         GetWindowRect(hwnd, &mut r).ok()?;
     }
-    crate::taskbar::probe::physical_rect(r)
+    clock_windows::taskbar::probe::physical_rect(r)
 }
 fn topmost(hwnd: HWND) -> bool {
     unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0 }
@@ -181,7 +181,7 @@ pub(crate) fn check_slot(slot: &ExperimentSlot) -> Result<()> {
         if GetDpiForWindow(hwnd) != slot.dpi
             || !IsWindowVisible(hwnd).as_bool()
             || !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL), &mut info).as_bool()
-            || crate::taskbar::probe::physical_rect(info.rcMonitor) != Some(slot.monitor)
+            || clock_windows::taskbar::probe::physical_rect(info.rcMonitor) != Some(slot.monitor)
         {
             return Err(windows::core::Error::new(
                 windows::core::HRESULT(0x80004005u32 as i32),

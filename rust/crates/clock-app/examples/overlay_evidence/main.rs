@@ -1,12 +1,19 @@
 //! Private development harness. Never included in the installed clock-app.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 #[cfg(any(windows, test))]
-#[path = "../../clock-windows/examples/taskbar_probe/isolation.rs"]
+#[path = "../../../clock-windows/examples/taskbar_probe/isolation.rs"]
 mod isolation;
+
+#[cfg(windows)]
+mod interaction;
+#[cfg(windows)]
+mod overlay;
+#[cfg(any(windows, test))]
+mod sampling;
 
 #[cfg(not(windows))]
 fn main() {
-    eprintln!("overlay_spike requires Windows");
+    eprintln!("overlay_evidence requires Windows");
     std::process::exit(1);
 }
 #[cfg(windows)]
@@ -26,11 +33,11 @@ fn main() {
 #[cfg(windows)]
 mod experiment {
     use super::isolation::{Completion, HelperJob, supervise};
-    use clock_core::PhysicalRect;
-    use clock_windows::{
+    use crate::{
+        interaction,
         overlay::{self, ExperimentSlot, Update},
-        prototype_interaction,
     };
+    use clock_core::PhysicalRect;
     use serde_json::{Value, json};
     use std::{
         fs::{self, OpenOptions},
@@ -149,12 +156,12 @@ mod experiment {
             let action = (|| -> Result<Value, Error> {
                 if request["action"] == "invoke" {
                     let slot = decode(&request["slot"])?;
-                    Ok(json!({"action": prototype_interaction::invoke(&slot, request["fallback"].as_bool().unwrap_or(false), request["keyboard_only"].as_bool().unwrap_or(false))?}))
+                    Ok(json!({"action": interaction::invoke(&slot, request["fallback"].as_bool().unwrap_or(false), request["keyboard_only"].as_bool().unwrap_or(false))?}))
                 } else {
                     if request["reject"].as_bool().unwrap_or(false) || std::env::var_os("ELEVENCLOCK_RS_R03_REJECT_DISCOVERY").is_some() {
                         return Err("Injected unsupported-discovery result; no geometry accepted".into());
                     }
-                    Ok(json!({"slots": prototype_interaction::discover(sequence, request["all"].as_bool().unwrap_or(false))?.iter().map(encode).collect::<Vec<_>>()}))
+                    Ok(json!({"slots": interaction::discover(sequence, request["all"].as_bool().unwrap_or(false))?.iter().map(encode).collect::<Vec<_>>()}))
                 }
             })().unwrap_or_else(|error| json!({"failed":error.to_string()}));
             serde_json::to_writer(
@@ -184,7 +191,7 @@ mod experiment {
                     | "primary-reject"
             )
         {
-            return Err("Development usage: overlay_spike evidence.json seconds primary|all|primary-win-n|all-win-n|primary-keyboard|all-keyboard|primary-reject".into());
+            return Err("Development usage: overlay_evidence evidence.json seconds primary|all|primary-win-n|all-win-n|primary-keyboard|all-keyboard|primary-reject".into());
         }
         let duration: u64 = args[1].parse()?;
         if !(1..=300).contains(&duration) {

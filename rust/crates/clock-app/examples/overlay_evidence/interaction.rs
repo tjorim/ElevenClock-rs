@@ -1,11 +1,11 @@
 //! R03 helper-only UIA experiment. No COM object or HWND leaves this process.
 use crate::overlay::ExperimentSlot;
-use crate::taskbar::{
+use clock_core::ShellGeneration;
+use clock_windows::taskbar::{
     candidate::{self, CandidateElement},
     geometry::validate_candidate,
     probe,
 };
-use clock_core::ShellGeneration;
 use windows::{
     Win32::{Foundation::POINT, System::Com::*, UI::Accessibility::*},
     core::{Interface, Result},
@@ -144,7 +144,7 @@ pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
         };
         // Four-pixel interior grid, including the last interior row/column.
         // A bounded process deadline handles an expensive or blocked provider.
-        for (x, y) in crate::overlay::clock_hit_points(clock).ok_or_else(rejected)? {
+        for (x, y) in crate::sampling::clock_hit_points(clock).ok_or_else(rejected)? {
             unsafe {
                 clock_at(&automation, POINT { x, y }, &slot).map_err(|error| {
                     windows::core::Error::new(
