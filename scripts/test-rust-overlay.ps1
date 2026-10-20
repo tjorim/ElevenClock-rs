@@ -345,10 +345,23 @@ try {
         # ordinary fixture used for the initial nonactivation test.
         $fixture.WindowState='Normal';$fixture.Bounds=New-Object Drawing.Rectangle(100,100,480,320)
         $fixture.Show();[Windows.Forms.Application]::DoEvents()
-        [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
-        [OverlayEvidence]::Click(150,115);[Windows.Forms.Application]::DoEvents()
         $deadline=[DateTime]::UtcNow.AddSeconds(5)
+        $nextActivation=[DateTime]::MinValue
+        $activationAttempts=@()
         do {
+            [Windows.Forms.Application]::DoEvents()
+            # Settings teardown and hosted OS dialogs can consume the first
+            # activation. Retry only fixture setup, never a calendar gesture.
+            # Use the measured client interior, not a hard-coded title-bar point
+            # that can move with DPI or turn repeated clicks into maximize.
+            if ([DateTime]::UtcNow -ge $nextActivation) {
+                $accepted=[OverlayEvidence]::SetForegroundWindow($fixture.Handle)
+                $clientPoint=$fixture.PointToScreen([Drawing.Point]::new(60,80))
+                [OverlayEvidence]::Click($clientPoint.X,$clientPoint.Y)
+                [Windows.Forms.Application]::DoEvents()
+                $activationAttempts+= [ordered]@{setForegroundAccepted=$accepted;point=@($clientPoint.X,$clientPoint.Y);observedHandle=([OverlayEvidence]::GetForegroundWindow()).ToInt64()}
+                $nextActivation=[DateTime]::UtcNow.AddMilliseconds(750)
+            }
             $foreground=[OverlayEvidence]::GetForegroundWindow();$foregroundRect=New-Object OverlayEvidence+Rect
             $foregroundKnown=$foreground -ne [IntPtr]::Zero -and [OverlayEvidence]::GetWindowRect($foreground,[ref]$foregroundRect) -and $foregroundRect.Right -gt $foregroundRect.Left -and $foregroundRect.Bottom -gt $foregroundRect.Top
             if ($foregroundKnown) {break}
@@ -357,12 +370,14 @@ try {
         # A hosted OS dialog can retain activation. Its known geometry is just
         # as usable as the fixture's; only the initial nonactivation test needs
         # a specific foreground HWND. Never turn unknown foreground into a pass.
+        $context.results.dpiRestoreForeground=[ordered]@{cycle=$cycle;known=$foregroundKnown;attempts=$activationAttempts}
+        Save-Context
         if (!$foregroundKnown) {throw 'No measurable foreground window after DPI restore'}
         $p=Start-Evidence "all-after-dpi$suffix" 'all-win-n';$h=Wait-Overlay $true
         $restoredDpi=[OverlayEvidence]::GetDpiForWindow($h)
         if ($restoredDpi -ne $originalDpi) {throw "Overlay DPI restore not observed: $restoredDpi, expected $originalDpi"}
         Capture-Overlay "dpi-restored$suffix"
-        $context.results.dpiCycles+=[ordered]@{cycle=$cycle;before=$beforeDpi;after=$afterDpi;restored=$restoredDpi;freshProcessAfterSettingsClosed=$true;foregroundKnownBeforeFreshLaunch=$true;foregroundWasFixture=($foreground -eq $fixture.Handle)}
+        $context.results.dpiCycles+=[ordered]@{cycle=$cycle;before=$beforeDpi;after=$afterDpi;restored=$restoredDpi;freshProcessAfterSettingsClosed=$true;foregroundKnownBeforeFreshLaunch=$true;foregroundWasFixture=($foreground -eq $fixture.Handle);activationAttempts=$activationAttempts}
         Save-Context
         Stop-Evidence $p;$p=$null
     }

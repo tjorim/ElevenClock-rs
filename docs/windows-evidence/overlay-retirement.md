@@ -60,3 +60,20 @@ Linux cross-target Clippy is only type/lint validation.
 Historical R03 commands, captures and tested revisions remain in
 [overlay-spike.md](overlay-spike.md) and its linked evidence directories. They
 refer to the former executable intentionally. No release gate changes here.
+
+### First replacement hosted run
+
+[Run 39394979728](https://github.com/tjorim/ElevenClock-rs/actions/runs/39394979728)
+on PR head `d7815557333a8e8cff8c54c98121ad33324e813f` (tested merge revision
+`537e29590229d2f80a9b9793492bfd0dee89e705`) passed Server x64 and native ARM64.
+Emulated x64 passed through the 125% transition but failed its foreground setup
+before the first fresh restored-DPI process launch. The artifact's `failure.png`
+shows the foreground fixture and a hosted Windows paging-file warning;
+`context.json` records `No measurable foreground window after DPI restore`.
+This is not evidence of a failed replacement overlay launch or a production fix.
+
+The follow-up keeps the five-second setup deadline and measurable-foreground
+requirement, retries fixture activation at 750 ms intervals, clicks its measured
+client interior rather than a fixed title-bar coordinate, and records activation
+attempts on success and failure. No calendar input is retried. A new complete
+three-target run and screenshot review remain required.
