@@ -94,7 +94,7 @@
     "before": "`__init__.py:988 loadTimeFormat`, `:1314 updateTextLoop`; `tools.py:153–190` uses Python strftime plus an arithmetic/time-offset DSL.",
     "scope": [
       "Implement CompiledFormat::parse/render/cadence using owned tokens and chrono, consuming one DateTime<FixedOffset> snapshot.",
-      "Allow exactly the directives in the plan, Unicode literals, %% and one newline. Normalize CRLF; at most two nonempty lines, 256 input Unicode scalars and 512 rendered scalars; reject other controls, modifiers and unlisted directives with indexed errors.",
+      "Allow exactly the directives in the plan, Unicode literals, %% and newlines. Normalize CRLF; multiple nonempty lines, 256 input Unicode scalars and 512 rendered scalars; reject other controls, modifiers and unlisted directives with indexed errors.",
       "Add ISO `%g%V.%u`, calendar-year `%y%V.%u`, and `%H:%M\\n%g%V.%u` presets with explicit names. No expression/offset compatibility layer.",
       "Classify seconds-containing formats as Second cadence; all others as Minute. Render once for all lines; English weekday/month names initially.",
       "Provide preview helpers usable by settings and developer tests without shell dependencies."
@@ -179,14 +179,14 @@
     "files": "`clock-windows/src/{render,theme,overlay}.rs`; replace prototype drawing while preserving proven R03 shell behavior.",
     "before": "Qt Label/stylesheet rendering, `checkAndUpdateBackground` at `__init__.py:1120` samples screen pixels; clock and cover widgets manage separate visual state.",
     "scope": [
-      "Render R04 ClockText via DirectWrite/Direct2D in the verified clock region with system font, configured point size and one/two-line layout.",
+      "Render R04 ClockText via DirectWrite/Direct2D in the verified clock region with system font, configured maximum point size and multiline layout.",
       "Implement DPI conversion at explicit boundaries, preserving signed physical coordinates. UI thread owns graphics resources and HWNDs.",
       "Use system/light/dark/high-contrast palettes with opaque coverage. Respect high-contrast over cosmetic theme choices; no screen capture.",
-      "Measure layout before painting/apply. If current/future text does not fit, report overflow and hide that monitor's overlay; never widen over bell/tray or silently truncate.",
+      "Measure layout before painting/apply. Shrink current/future text from the configured maximum to 6 pt; if it still does not fit, report overflow and hide that monitor's overlay; never widen over bell/tray or silently truncate.",
       "Cache text layouts/brushes appropriately, repaint only on dirty state and recover from device loss without leaked handles."
     ],
     "accept": [
-      "Crisp readable text at 100/125/150/200% including mixed DPI; both supported line counts fit or yield explicit overflow.",
+      "Crisp readable text at 100/125/150/200% including mixed DPI; multiple lines shrink to fit or yield explicit overflow at 6 pt.",
       "No native text shows through; adjacent control targets remain unchanged.",
       "Theme/high-contrast switch takes effect without restarting process.",
       "Longer month/day/year-boundary output cannot overlap tray controls; device-loss path recreates resources."

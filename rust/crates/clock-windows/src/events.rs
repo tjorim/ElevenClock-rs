@@ -25,6 +25,7 @@ pub mod raw {
     pub const WM_POWERBROADCAST: u32 = 0x0218;
     pub const WM_DPICHANGED: u32 = 0x02E0;
     pub const WM_THEMECHANGED: u32 = 0x031A;
+    pub const WM_DWMCOLORIZATIONCOLORCHANGED: u32 = 0x0320;
     pub const WM_WTSSESSION_CHANGE: u32 = 0x02B1;
     pub const PBT_APMSUSPEND: usize = 0x0004;
     pub const PBT_APMRESUMESUSPEND: usize = 0x0007;
@@ -81,7 +82,9 @@ pub fn signal_for_message(
         m if taskbar_created != 0 && m == taskbar_created => Some(Signal::TaskbarCreated),
         WM_DISPLAYCHANGE | WM_DPICHANGED => Some(Signal::TopologyChanged),
         WM_TIMECHANGE => Some(Signal::TimeChanged),
-        WM_THEMECHANGED | WM_SYSCOLORCHANGE => Some(Signal::AppearanceMaybeChanged),
+        WM_THEMECHANGED | WM_SYSCOLORCHANGE | WM_DWMCOLORIZATIONCOLORCHANGED => {
+            Some(Signal::AppearanceMaybeChanged)
+        }
         WM_SETTINGCHANGE => match setting {
             // Windows posts this when taskbar auto-hide, size or alignment change.
             Some("TraySettings") => Some(Signal::TopologyChanged),
@@ -255,6 +258,10 @@ mod tests {
         );
         assert_eq!(map(WM_DPICHANGED, 0, None), Some(Signal::TopologyChanged));
         assert_eq!(map(WM_TIMECHANGE, 0, None), Some(Signal::TimeChanged));
+        assert_eq!(
+            map(WM_DWMCOLORIZATIONCOLORCHANGED, 0, None),
+            Some(Signal::AppearanceMaybeChanged)
+        );
         assert_eq!(
             map(WM_THEMECHANGED, 0, None),
             Some(Signal::AppearanceMaybeChanged)

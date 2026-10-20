@@ -234,6 +234,10 @@ mod tests {
         assert_eq!(WM_POWERBROADCAST, w::WM_POWERBROADCAST);
         assert_eq!(WM_DPICHANGED, w::WM_DPICHANGED);
         assert_eq!(WM_THEMECHANGED, w::WM_THEMECHANGED);
+        assert_eq!(
+            WM_DWMCOLORIZATIONCOLORCHANGED,
+            w::WM_DWMCOLORIZATIONCOLORCHANGED
+        );
         assert_eq!(WM_WTSSESSION_CHANGE, w::WM_WTSSESSION_CHANGE);
         assert_eq!(PBT_APMSUSPEND, w::PBT_APMSUSPEND as usize);
         assert_eq!(PBT_APMRESUMESUSPEND, w::PBT_APMRESUMESUSPEND as usize);

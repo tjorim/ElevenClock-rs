@@ -53,7 +53,7 @@ BEGIN
     GROUPBOX "Show the clock on", -1, 4, 4, 316, 44
     AUTORADIOBUTTON "&Primary display only", 1301, 12, 17, 300, 12, WS_GROUP | WS_TABSTOP
     AUTORADIOBUTTON "A&ll displays", 1302, 12, 31, 300, 12
-    LTEXT "Font &size (pt):", -1, 4, 58, 62, 10, WS_GROUP
+    LTEXT "Max &size (pt):", -1, 4, 58, 62, 10, WS_GROUP
     EDITTEXT 1303, 68, 56, 36, 14, ES_NUMBER | ES_AUTOHSCROLL
     CONTROL "", 1304, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 104, 56, 10, 14
     LTEXT "6 to 24 pt", -1, 120, 58, 80, 10

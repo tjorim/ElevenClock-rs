@@ -115,6 +115,24 @@ pub enum Fit {
     Overflow(Overflow),
 }
 
+/// Try the configured maximum first, then smaller whole-point sizes down to
+/// 6 pt. Each candidate is measured anew; glyph metrics need not scale linearly.
+pub fn auto_fit(
+    maximum_pt: u8,
+    mut measure: impl FnMut(u8) -> Result<Fit, RenderError>,
+) -> Result<Fit, RenderError> {
+    if maximum_pt < 6 {
+        return Err(RenderError::InvalidScale);
+    }
+    for size in (6..=maximum_pt).rev() {
+        let fit = measure(size)?;
+        if matches!(fit, Fit::Fits(_)) || size == 6 {
+            return Ok(fit);
+        }
+    }
+    unreachable!("nonempty font size range")
+}
+
 /// Every distinct line the format can produce over a window of dates and times
 /// that includes month/day/year boundaries, a leap day and ISO week 53. Fit is
 /// decided against all of them so a format that is fine today cannot spill over
@@ -303,6 +321,67 @@ mod tests {
             12.0,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn auto_fit_selects_largest_size_for_width_and_multiline_height() {
+        struct Scaled(u8);
+        impl TextMeasurer for Scaled {
+            fn measure_line(&mut self, line: &str) -> Result<Extent, RenderError> {
+                Ok(Extent {
+                    width: line.len() as f32 * self.0 as f32,
+                    height: self.0 as f32 * 2.0,
+                })
+            }
+        }
+        for (width, height, expected) in [(100, 60, 10), (48, 100, 8), (100, 42, 7)] {
+            let result = auto_fit(10, |size| {
+                plan_fit(
+                    &mut Scaled(size),
+                    &text(&["abc", "def", "ghi"]),
+                    &WorstCase::from_lines([["12345".into()], ["def".into()], ["ghi".into()]]),
+                    PixelSize { width, height },
+                    4,
+                    size as f32,
+                )
+            })
+            .unwrap();
+            let Fit::Fits(layout) = result else {
+                panic!("should fit")
+            };
+            assert_eq!(layout.font_px, expected as f32);
+        }
+    }
+    #[test]
+    fn auto_fit_stops_at_floor_and_propagates_errors() {
+        let mut attempts = Vec::new();
+        let overflow = Fit::Overflow(Overflow {
+            required: PixelSize {
+                width: 100,
+                height: 50,
+            },
+            available: PixelSize {
+                width: 20,
+                height: 20,
+            },
+        });
+        assert_eq!(
+            auto_fit(9, |size| {
+                attempts.push(size);
+                Ok(overflow)
+            })
+            .unwrap(),
+            overflow
+        );
+        assert_eq!(attempts, [9, 8, 7, 6]);
+        assert_eq!(
+            auto_fit(5, |_| panic!("invalid size")),
+            Err(RenderError::InvalidScale)
+        );
+        assert_eq!(
+            auto_fit(9, |_| Err(RenderError::InvalidMeasurement)),
+            Err(RenderError::InvalidMeasurement)
+        );
     }
 
     #[test]

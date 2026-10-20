@@ -580,7 +580,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         let spin = control(dialog, PAGE_APPEARANCE, ID_FONT_SPIN);
         send(spin, UDM_SETBUDDY, font.0 as usize, 0);
         // The arrows are a separate accessible object; give them a name of their own.
-        set_text(spin, "Change font size");
+        set_text(spin, "Change maximum font size");
         send(
             spin,
             UDM_SETRANGE32,
@@ -692,8 +692,8 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             .iter()
             .any(|bar| matches!(bar.reason, Some(Reason::Overflow(_))))
         {
-            "The clock is hidden on a taskbar because the current text does not fit. Use a \
-             shorter format or a smaller font size."
+            "The clock is hidden on a taskbar because the text does not fit even at 6 pt. Use a \
+             shorter format or fewer lines."
                 .to_owned()
         } else {
             String::new()

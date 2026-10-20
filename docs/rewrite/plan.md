@@ -64,7 +64,7 @@ These are planning defaults, open to adjustment before implementation.
 | --- | --- | --- |
 | Platform | Stock Windows 11, x64; publish exact tested builds | Windows 10, ARM64, Insider builds, ExplorerPatcher/StartAllBack, vertical taskbars |
 | Placement | Bottom taskbar; primary or all monitors; one clock per taskbar | Arbitrary desktop placement, multiple clocks per monitor |
-| Display | One or two lines, configurable format, font size, light/dark/high-contrast colors | HTML, animations, gradients, pixel-perfect translucent taskbar matching |
+| Display | Multiple lines, configurable format, automatic font fitting, light/dark/high-contrast colors | HTML, animations, gradients, pixel-perfect translucent taskbar matching |
 | Formatting | Local system time, ISO week date preset, ordinary date/time tokens, preview | Arithmetic expressions, offsets, extra time zones, internet time service |
 | Shell behavior | DPI changes, auto-hide, fullscreen hiding, Explorer restart recovery | Reproducing notification counts, focus-assist indicators, Copilot controls |
 | Interaction | Native calendar/notifications access, context menu, tray icon, settings, exit | User scripts, arbitrary commands, configurable gestures |
@@ -104,7 +104,7 @@ rights**. A system-wide install is out of scope for v1.
 
 Use `chrono` with a documented, validated subset of its strftime syntax. Parse
 once when settings change, keep the compiled token representation, and render
-from a single local-time snapshot so two lines cannot disagree at midnight.
+from a single local-time snapshot so lines cannot disagree at midnight.
 
 Recommended preset: `%g%V.%u`. `%g` is the two-digit **ISO week-year**, `%V` the
 zero-padded ISO week (01–53), and `%u` the ISO weekday (Monday = 1, Sunday = 7).
@@ -124,14 +124,14 @@ the Rust implementation must reproduce them in unit tests. Do not silently use
 
 Initial supported tokens: `%Y`, `%y`, `%G`, `%g`, `%m`, `%d`, `%H`, `%I`, `%M`,
 `%S`, `%p`, `%V`, `%u`, `%a`, `%A`, `%b`, `%B`, `%%`, plus literal Unicode and
-one newline. Names are English initially. Reject unknown directives with a
+newlines. Names are English initially. Reject unknown directives with a
 specific error and retain the last valid configuration. Bound input length
-(e.g. 256 characters) and output size; reject more than two display lines.
+(e.g. 256 characters) and output size; allow multiple nonempty display lines.
 
 Default display: first line `%H:%M`, second line `%g%V.%u`. A single-line
 `%g%V.%u` preset is equally supported. Preview includes today and a year-boundary
-example. Measure rendered text against the clock slot and show a settings error
-for overflow; do not silently obscure adjacent tray icons or truncate dates.
+example. Measure current and future date samples against each clock slot; shrink
+from the configured maximum font size to 6 pt before reporting overflow; do not silently obscure adjacent tray icons or truncate dates.
 
 ## Native architecture
 

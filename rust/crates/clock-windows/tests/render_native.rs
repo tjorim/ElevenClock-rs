@@ -298,16 +298,16 @@ fn future_month_names_overflow_even_when_today_fits() {
     assert!(found, "no region up to 200 px fit \"May\"");
 }
 #[test]
-fn two_large_lines_overflow_the_height() {
+fn two_large_lines_shrink_to_fit_the_height() {
     let renderer = Renderer::new().unwrap();
     let case = case("%H:%M\n%G-W%V");
     let (width, height) = region(96);
     let host = Host::new(width * 4, height);
     let mut surface = renderer.create_surface(host.0);
-    match surface.paint(&renderer, &request(&case, 96, 24)).unwrap() {
-        PaintOutcome::Overflow(overflow) => assert!(overflow.height_exceeded()),
-        other => panic!("expected height overflow, got {other:?}"),
-    }
+    assert_eq!(
+        surface.paint(&renderer, &request(&case, 96, 24)).unwrap(),
+        PaintOutcome::Painted
+    );
 }
 #[test]
 fn invalid_scale_is_an_error() {
@@ -401,4 +401,37 @@ fn fit_is_exposed_for_layout_planning() {
         },
     });
     assert!(matches!(fit, Fit::Overflow(o) if o.width_exceeded() && o.height_exceeded()));
+}
+
+#[test]
+fn multiline_large_font_shrinks_and_paints_at_all_scales() {
+    let renderer = Renderer::new().unwrap();
+    let case = case("%H:%M\n%a\n%g%V.%u");
+    for dpi in [96, 120, 144, 192] {
+        let (width, height) = region(dpi);
+        let fit = renderer
+            .plan_fit(
+                &case.text,
+                &case.worst_case,
+                clock_windows::render::PixelSize { width, height },
+                dpi,
+                24,
+            )
+            .unwrap();
+        let clock_windows::render::Fit::Fits(layout) = fit else {
+            panic!("must shrink to fit")
+        };
+        assert!(layout.font_px < clock_windows::render::font_size_px(24, dpi).unwrap());
+        assert!(layout.font_px >= clock_windows::render::font_size_px(6, dpi).unwrap());
+        let host = Host::new(width, height);
+        let mut surface = renderer.create_surface(host.0);
+        assert_eq!(
+            surface.paint(&renderer, &request(&case, dpi, 24)).unwrap(),
+            PaintOutcome::Painted
+        );
+        assert_eq!(
+            surface.paint(&renderer, &request(&case, dpi, 24)).unwrap(),
+            PaintOutcome::Unchanged
+        );
+    }
 }
