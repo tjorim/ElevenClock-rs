@@ -191,6 +191,8 @@ dependencies = [
  "clock-core",
  "clock-windows",
  "embed-resource",
+ "serde_json",
+ "windows",
 ]
 
 [[package]]
@@ -200,17 +202,6 @@ dependencies = [
  "chrono",
  "criterion",
  "proptest",
-]
-
-[[package]]
-name = "clock-overlay-spike"
-version = "0.1.0"
-dependencies = [
- "clock-core",
- "clock-windows",
- "embed-resource",
- "serde_json",
- "windows",
 ]
 
 [[package]]

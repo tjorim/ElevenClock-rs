@@ -159,12 +159,13 @@ to hosted CI when feasible; do not defer the entire issue or block unrelated wor
 
 ## R03 overlay development
 
-`clock-overlay-spike` is a separate development GUI binary, never an installed
-app artifact. It opts into `clock-windows/overlay-spike`; a normal `-p clock-app`
-release build does not enable experimental overlay/interaction FFI. Core models
-and the R02 production-selector gate remain unchanged. Build/run parameters,
-actual hosted results and the P1 no-go are in
-[overlay evidence](windows-evidence/overlay-spike.md). The hosted workflow uses
+`overlay_evidence` is a development-only example in `clock-app`, never an installed
+app artifact. Its experimental overlay/interaction FFI is private to the example;
+a normal `-p clock-app` release build does not compile it. Build it with
+`cargo build --manifest-path rust/Cargo.toml -p clock-app --example overlay_evidence`.
+See the [coverage migration](windows-evidence/overlay-retirement.md). Core models
+and the R02 production-selector gate remain unchanged. Historical hosted results
+and the P1 no-go are in [overlay evidence](windows-evidence/overlay-spike.md). The hosted workflow uses
 real native/UIA hits, screenshots, input and shell/display transitions; positive
 window flags alone do not prove opaque coverage or calendar access. #23 fixed the
 R03 recovery failure (overlays are created in the taskbar's band) and settled

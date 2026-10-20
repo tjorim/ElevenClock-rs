@@ -1,6 +1,6 @@
 # R03 development-only evidence on an ephemeral Windows desktop. Not installed.
 param(
-    [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/debug/clock-overlay-spike.exe',
+    [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/debug/examples/overlay_evidence.exe',
     [string]$OutputDirectory = 'native-evidence/r03',
     [string]$ProbeTarget = 'x86_64-pc-windows-msvc',
     [ValidateRange(1,5)][int]$DpiCycles = 3
@@ -161,15 +161,15 @@ function Set-Scale([string]$label) {
     $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Seconds 1
 }
-function Start-Spike([string]$name,[string]$selection) {
+function Start-Evidence([string]$name,[string]$selection) {
     $report=Join-Path $output "$name.json"
     Start-Process $exe -ArgumentList @($report,'180',$selection) -PassThru
 }
-function Stop-Spike($p) {
+function Stop-Evidence($p) {
     if ($p -and !$p.HasExited) { $p.Kill();if (!$p.WaitForExit(3000)) {throw 'Prototype did not terminate'} }
     $deadline=[DateTime]::UtcNow.AddSeconds(3)
     do {
-        $left=@(Get-CimInstance Win32_Process -Filter "Name = 'clock-overlay-spike.exe'" | Where-Object {$_.ExecutablePath -eq $exe})
+        $left=@(Get-CimInstance Win32_Process -Filter "Name = 'overlay_evidence.exe'" | Where-Object {$_.ExecutablePath -eq $exe})
         if (!$left.Count) {break};Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
     if ($left.Count) {throw 'Helper survived prototype termination'}
@@ -190,7 +190,7 @@ try {
     # menu's bounds. SetForegroundWindow can be denied by the foreground lock.
     [OverlayEvidence]::Click(150,115);[Windows.Forms.Application]::DoEvents()
     if ([OverlayEvidence]::GetForegroundWindow() -ne $fixture.Handle) {throw 'Could not establish foreground fixture before prototype launch'}
-    $p=Start-Spike 'primary' 'primary-win-n'
+    $p=Start-Evidence 'primary' 'primary-win-n'
     $h=Wait-Overlay $true
     $point=Clock-Point $h
     $ex=[OverlayEvidence]::GetWindowLongW($h,-20)
@@ -212,7 +212,7 @@ try {
     if ($actions.Count -ne 1) {throw "Expected exactly one calendar action, observed $($actions.Count)"}
     foreach ($key in @(0x5b,0x5c,0x4e)) {if ([OverlayEvidence]::GetAsyncKeyState($key) -lt 0) {throw 'Injected shortcut left a key down'}}
     $context.results.calendar=[ordered]@{actions=$actions; oneAction=$true; noStuckKeys=$true; visualAcceptance='Pending screenshot inspection'}
-    Stop-Spike $p;$p=$null;Capture 'forced-termination-native'
+    Stop-Evidence $p;$p=$null;Capture 'forced-termination-native'
     $native=[Windows.Automation.AutomationElement]::FromPoint(([System.Windows.Point]::new($point[0],$point[1])))
     $context.results.forcedTermination=[ordered]@{noRemainingProcesses=$true;nativeHitClass=$native.Current.ClassName;nativeHitProcess=$native.Current.ProcessId}
     if ($native.Current.ProcessId -eq $PID) {throw 'Native clock not restored'}
@@ -221,7 +221,7 @@ try {
     # Test a separate deliberate keyboard strategy: never retry an ambiguous
     # UIA invoke with keyboard input on the same click.
     [OverlayEvidence]::Click(150,115)
-    $p=Start-Spike 'keyboard-calendar' 'primary-keyboard';$h=Wait-Overlay $true
+    $p=Start-Evidence 'keyboard-calendar' 'primary-keyboard';$h=Wait-Overlay $true
     $keyboardPoint=Clock-Point $h
     Click-Overlay $p $keyboardPoint;$keyboardReport=Wait-Action 'keyboard-calendar';Start-Sleep -Seconds 1
     Capture 'calendar-keyboard' 
@@ -229,9 +229,9 @@ try {
     if ($keyboardActions.Count -ne 1 -or $keyboardActions[0] -ne 'win_n_once') {throw 'Separate deliberate keyboard click did not produce exactly one Win+N'}
     foreach ($key in @(0x5b,0x5c,0x4e)) {if ([OverlayEvidence]::GetAsyncKeyState($key) -lt 0) {throw 'Keyboard strategy left a key down'}}
     $context.results.keyboardCalendar=[ordered]@{actions=$keyboardActions;oneAction=$true;noStuckKeys=$true;separateClickFromUia=$true;visualAcceptance='Pending screenshot inspection'}
-    Stop-Spike $p;$p=$null
+    Stop-Evidence $p;$p=$null
     [OverlayEvidence]::Click(150,115)
-    $p=Start-Spike 'all' 'all-win-n';$h=Wait-Overlay $true;Capture-Overlay 'all-visible'
+    $p=Start-Evidence 'all' 'all-win-n';$h=Wait-Overlay $true;Capture-Overlay 'all-visible'
     $context.results.allDisplays=[ordered]@{availableDisplays=[Windows.Forms.Screen]::AllScreens.Count; claimedMixedDpi=$false}
     # Actual auto-hide state on an ephemeral hosted desktop, restored in finally.
     # ABS_ALWAYSONTOP is deprecated since Windows 7; set only the supported
@@ -249,22 +249,22 @@ try {
     if (([OverlayEvidence]::TaskbarState() -band 1) -ne 0) {throw 'Auto-hide setting was not restored'}
     # A live successful lease followed by a controlled rejection. This proves
     # dynamic removal, not only refusing an unsupported startup.
-    Stop-Spike $p;$p=$null
-    $p=Start-Spike 'unsupported' 'primary-reject';Wait-Overlay $true|Out-Null
+    Stop-Evidence $p;$p=$null
+    $p=Start-Evidence 'unsupported' 'primary-reject';Wait-Overlay $true|Out-Null
     Capture-Overlay 'before-unsupported'
     Wait-Overlay $false 4|Out-Null
     if ((Overlay) -ne [IntPtr]::Zero) {throw 'Rejected discovery retained an overlay'}
     $context.results.unsupported=[ordered]@{noOverlay=$true;removalAfterLiveCoverage=$true;nativeExplorerMutation=$false;injectedRejection=$true}
-    Capture 'unsupported-native';Stop-Spike $p;$p=$null
+    Capture 'unsupported-native';Stop-Evidence $p;$p=$null
     # Neighbor controls remain physically outside the opaque slot. Record fresh
     # UIA point targets and actual click screenshots, leaving visual semantics
     # for inspection instead of claiming them from API return codes.
-    Stop-Spike $p;$p=$null
+    Stop-Evidence $p;$p=$null
     $root=[Windows.Automation.AutomationElement]::FromHandle([OverlayEvidence]::FindWindowW('Shell_TrayWnd',$null))
     $nodes=$root.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.Condition]::TrueCondition)
     $neighbors=@($nodes|Where-Object {$_.Current.ClassName -in @('SystemTray.OmniButtonRight','SystemTray.ShowDesktopButton')})
     if (!($neighbors|Where-Object {$_.Current.ClassName -eq 'SystemTray.OmniButtonRight'}) -or !($neighbors|Where-Object {$_.Current.ClassName -eq 'SystemTray.ShowDesktopButton'})) {throw 'Incomplete neighboring controls'}
-    $p=Start-Spike 'neighbors' 'primary-win-n';Wait-Overlay $true|Out-Null
+    $p=Start-Evidence 'neighbors' 'primary-win-n';Wait-Overlay $true|Out-Null
     $context.results.neighbors=@()
     $neighborIndex=0
     foreach ($node in $neighbors) {
@@ -276,7 +276,7 @@ try {
         [OverlayEvidence]::Click($x,$y);Start-Sleep -Milliseconds 750;Capture "neighbor-$neighborIndex"
         [OverlayEvidence]::Click(200,200)
     }
-    # Restart only Explorer in this runner session while the spike is alive.
+    # Restart only Explorer in this runner session while the evidence example is alive.
     $session=(Get-Process -Id $PID).SessionId
     $old=@(Get-Process explorer|Where-Object {$_.SessionId -eq $session});$old|Stop-Process -Force
     Wait-Overlay $false 3|Out-Null;Capture 'explorer-loss'
@@ -286,7 +286,7 @@ try {
     try {Wait-Overlay $true 30|Out-Null;Capture-Overlay 'explorer-recovered';$recovered=$true}
     catch {$recoveryFailure=$_.Exception.Message;$context.results.failedCriteria+='Explorer restart visible coverage';Capture 'explorer-recovery-failure'}
     $context.results.explorerRestart=[ordered]@{oldPids=@($old.Id);newPids=@((Get-Process explorer|Where-Object {$_.SessionId -eq $session}).Id);lossHides=$true;recovered=$recovered;failure=$recoveryFailure}
-    Stop-Spike $p;$p=$null
+    Stop-Evidence $p;$p=$null
     # Use the actual Settings selector for a single-display DPI transition.
     # This is not the missing mixed-DPI topology evidence in #21.
     $context.results.dpiCycles=@()
@@ -294,7 +294,7 @@ try {
         # Reopen Settings and start fresh processes each cycle, including closing
         # Settings before the restored-DPI launch that regressed in #40.
         $suffix=if ($cycle -eq 1) {''} else {"-$cycle"}
-        Stop-Spike $p;$p=$null
+        Stop-Evidence $p;$p=$null
         Start-Process 'ms-settings:display'
         $deadline=[DateTime]::UtcNow.AddSeconds(20);$scale=$null
         do {
@@ -313,7 +313,7 @@ try {
         if (!$originalDpi) {throw 'Cannot record initial taskbar DPI'}
         Set-Scale '100%'
         [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
-        $p=Start-Spike "dpi-transition$suffix" 'primary-win-n'
+        $p=Start-Evidence "dpi-transition$suffix" 'primary-win-n'
         $h=Wait-Overlay $true
         $beforeDpi=[OverlayEvidence]::GetDpiForWindow($h)
         Set-Scale '125%'
@@ -339,16 +339,29 @@ try {
             [Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 25
         }
         if ([OverlayEvidence]::IsWindow($settingsHandle)) {throw 'Display Settings did not finish closing'}
-        Stop-Spike $p;$p=$null
+        Stop-Evidence $p;$p=$null
         # Closing Settings can leave GetForegroundWindow null on hosted ARM.
         # Unknown foreground correctly hides coverage. Reestablish the same
         # ordinary fixture used for the initial nonactivation test.
         $fixture.WindowState='Normal';$fixture.Bounds=New-Object Drawing.Rectangle(100,100,480,320)
         $fixture.Show();[Windows.Forms.Application]::DoEvents()
-        [OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
-        [OverlayEvidence]::Click(150,115);[Windows.Forms.Application]::DoEvents()
         $deadline=[DateTime]::UtcNow.AddSeconds(5)
+        $nextActivation=[DateTime]::MinValue
+        $activationAttempts=@()
         do {
+            [Windows.Forms.Application]::DoEvents()
+            # Settings teardown and hosted OS dialogs can consume the first
+            # activation. Retry only fixture setup, never a calendar gesture.
+            # Use the measured client interior, not a hard-coded title-bar point
+            # that can move with DPI or turn repeated clicks into maximize.
+            if ([DateTime]::UtcNow -ge $nextActivation) {
+                $accepted=[OverlayEvidence]::SetForegroundWindow($fixture.Handle)
+                $clientPoint=$fixture.PointToScreen([Drawing.Point]::new(60,80))
+                [OverlayEvidence]::Click($clientPoint.X,$clientPoint.Y)
+                [Windows.Forms.Application]::DoEvents()
+                $activationAttempts+= [ordered]@{setForegroundAccepted=$accepted;point=@($clientPoint.X,$clientPoint.Y);observedHandle=([OverlayEvidence]::GetForegroundWindow()).ToInt64()}
+                $nextActivation=[DateTime]::UtcNow.AddMilliseconds(750)
+            }
             $foreground=[OverlayEvidence]::GetForegroundWindow();$foregroundRect=New-Object OverlayEvidence+Rect
             $foregroundKnown=$foreground -ne [IntPtr]::Zero -and [OverlayEvidence]::GetWindowRect($foreground,[ref]$foregroundRect) -and $foregroundRect.Right -gt $foregroundRect.Left -and $foregroundRect.Bottom -gt $foregroundRect.Top
             if ($foregroundKnown) {break}
@@ -357,14 +370,16 @@ try {
         # A hosted OS dialog can retain activation. Its known geometry is just
         # as usable as the fixture's; only the initial nonactivation test needs
         # a specific foreground HWND. Never turn unknown foreground into a pass.
+        $context.results.dpiRestoreForeground=[ordered]@{cycle=$cycle;known=$foregroundKnown;attempts=$activationAttempts}
+        Save-Context
         if (!$foregroundKnown) {throw 'No measurable foreground window after DPI restore'}
-        $p=Start-Spike "all-after-dpi$suffix" 'all-win-n';$h=Wait-Overlay $true
+        $p=Start-Evidence "all-after-dpi$suffix" 'all-win-n';$h=Wait-Overlay $true
         $restoredDpi=[OverlayEvidence]::GetDpiForWindow($h)
         if ($restoredDpi -ne $originalDpi) {throw "Overlay DPI restore not observed: $restoredDpi, expected $originalDpi"}
         Capture-Overlay "dpi-restored$suffix"
-        $context.results.dpiCycles+=[ordered]@{cycle=$cycle;before=$beforeDpi;after=$afterDpi;restored=$restoredDpi;freshProcessAfterSettingsClosed=$true;foregroundKnownBeforeFreshLaunch=$true;foregroundWasFixture=($foreground -eq $fixture.Handle)}
+        $context.results.dpiCycles+=[ordered]@{cycle=$cycle;before=$beforeDpi;after=$afterDpi;restored=$restoredDpi;freshProcessAfterSettingsClosed=$true;foregroundKnownBeforeFreshLaunch=$true;foregroundWasFixture=($foreground -eq $fixture.Handle);activationAttempts=$activationAttempts}
         Save-Context
-        Stop-Spike $p;$p=$null
+        Stop-Evidence $p;$p=$null
     }
     if ($context.results.failedCriteria.Count) {
         $context.status='measured_no_go';throw ('R03 NO-GO: '+($context.results.failedCriteria -join ', '))
@@ -373,7 +388,7 @@ try {
 } catch {
     if ($context.status -ne 'measured_no_go') {$context.status='harness_failed'};$context.failure=$_.Exception.Message;Capture 'failure';throw
 } finally {
-    if ($p) {Stop-Spike $p}
+    if ($p) {Stop-Evidence $p}
     if ($originalScale) {Set-Scale $originalScale}
     if ($settings) {$settings.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern).Close()}
     [OverlayEvidence]::State($oldState)|Out-Null

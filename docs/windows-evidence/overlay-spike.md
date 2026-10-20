@@ -1,5 +1,9 @@
 # R03 non-activating overlay spike
 
+> Historical evidence: the standalone crate and feature have been retired.
+> Commands below describe the tested historical revisions, not current development
+> instructions. See [the replacement and scenario mapping](overlay-retirement.md).
+
 **P1 decision: still NO-GO for P3/production, now only because of
 [#21](https://github.com/tjorim/ElevenClock/issues/21).** The original R03 run
 below failed Explorer-restart recovery on every profile. The
