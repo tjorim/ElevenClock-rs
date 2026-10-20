@@ -3,7 +3,7 @@
 //! single-threaded Direct2D factory they are built from. Nothing here is shared
 //! with discovery or timer workers.
 use super::{
-    Extent, Fit, Overflow, PixelSize, RenderError, TextMeasurer, WorstCase, font_size_px,
+    Extent, Fit, Overflow, PixelSize, RenderError, TextMeasurer, WorstCase, auto_fit, font_size_px,
     padding_px, plan_fit,
 };
 use crate::theme::{Palette, Rgb};
@@ -160,21 +160,24 @@ impl Renderer {
         dpi: u32,
         font_pt: u8,
     ) -> Result<Fit, RenderError> {
-        let font_px = font_size_px(font_pt, dpi).ok_or(RenderError::InvalidScale)?;
-        let format = self.text_format(font_px)?;
-        let mut measurer = DirectWriteMeasurer {
-            renderer: self,
-            format: &format,
-        };
-        plan_fit(
-            &mut measurer,
-            current,
-            worst_case,
-            region,
-            padding_px(dpi),
-            font_px,
-        )
+        auto_fit(font_pt, |size| {
+            let font_px = font_size_px(size, dpi).ok_or(RenderError::InvalidScale)?;
+            let format = self.text_format(font_px)?;
+            let mut measurer = DirectWriteMeasurer {
+                renderer: self,
+                format: &format,
+            };
+            plan_fit(
+                &mut measurer,
+                current,
+                worst_case,
+                region,
+                padding_px(dpi),
+                font_px,
+            )
+        })
     }
+
     fn text_format(&self, font_px: f32) -> Result<IDWriteTextFormat, RenderError> {
         // SAFETY: `family_wide` is NUL-terminated and outlives the call.
         let format = unsafe {
@@ -290,7 +293,7 @@ pub struct ClockSurface {
     brush: Option<(Palette, ID2D1SolidColorBrush)>,
     format: Option<(u32, u64, IDWriteTextFormat)>,
     /// Worst-case measurement only changes with font, region or format.
-    verdict: Option<(VerdictKey, Option<Overflow>)>,
+    verdict: Option<(VerdictKey, Fit)>,
     painted: Option<PaintKey>,
     /// Identifies a render-target incarnation so a recreated device always repaints.
     device_generation: u64,
@@ -407,9 +410,8 @@ impl ClockSurface {
                 available: region,
             }));
         }
-        let format = self.text_format(renderer, font_px)?;
-
-        // Worst-case verdict is cached; the current text is always re-measured.
+        // Cache the fitted size for future date samples so ordinary ticks do
+        // not repeatedly search sizes or change the appearance.
         let key = VerdictKey {
             font_bits: font_px.to_bits(),
             region,
@@ -417,45 +419,61 @@ impl ClockSurface {
             worst_case: request.worst_case.fingerprint(),
             font_generation: renderer.font_generation,
         };
-        let mut measurer = DirectWriteMeasurer {
-            renderer,
-            format: &format,
-        };
         let future = match &self.verdict {
             Some((cached, verdict)) if *cached == key => *verdict,
             _ => {
-                let empty = ClockText { lines: Vec::new() };
-                let verdict = match plan_fit(
-                    &mut measurer,
-                    &empty,
+                let verdict = renderer.plan_fit(
+                    &ClockText { lines: Vec::new() },
                     request.worst_case,
                     region,
-                    padding,
-                    font_px,
-                )? {
-                    Fit::Fits(_) => None,
-                    Fit::Overflow(overflow) => Some(overflow),
-                };
+                    request.dpi,
+                    request.font_pt,
+                )?;
                 self.verdict = Some((key, verdict));
                 verdict
             }
         };
-        if let Some(overflow) = future {
-            self.painted = None;
-            return Ok(PaintOutcome::Overflow(overflow));
-        }
+        let mut layout = match future {
+            Fit::Fits(layout) => layout,
+            Fit::Overflow(overflow) => {
+                self.painted = None;
+                return Ok(PaintOutcome::Overflow(overflow));
+            }
+        };
+        let mut format = self.text_format(renderer, layout.font_px)?;
         let current = WorstCase::from_lines(Vec::<Vec<String>>::new());
-        if let Fit::Overflow(overflow) = plan_fit(
-            &mut measurer,
-            request.text,
-            &current,
-            region,
-            padding,
-            font_px,
-        )? {
-            self.painted = None;
-            return Ok(PaintOutcome::Overflow(overflow));
+        let mut measurer = DirectWriteMeasurer {
+            renderer,
+            format: &format,
+        };
+        if matches!(
+            plan_fit(
+                &mut measurer,
+                request.text,
+                &current,
+                region,
+                padding,
+                layout.font_px
+            )?,
+            Fit::Overflow(_)
+        ) {
+            // The date samples are finite: also fit any unseen current text.
+            match renderer.plan_fit(
+                request.text,
+                request.worst_case,
+                region,
+                request.dpi,
+                request.font_pt,
+            )? {
+                Fit::Fits(fitted) => layout = fitted,
+                Fit::Overflow(overflow) => {
+                    self.painted = None;
+                    return Ok(PaintOutcome::Overflow(overflow));
+                }
+            }
+            format = self.text_format(renderer, layout.font_px)?;
         }
+        let font_px = layout.font_px;
 
         let paint_key = PaintKey {
             lines: request.text.lines.clone(),

@@ -2,7 +2,8 @@
 //!
 //! The resolution rules are portable and unit tested. Only the system query at
 //! the bottom touches Win32. No screen pixels are ever sampled: opaque colors come
-//! from the documented per-user theme setting or the high-contrast system colors.
+//! from per-user shell settings or high-contrast system colors. The accent is
+//! an opaque approximation, not the taskbar's wallpaper/transparency composition.
 use clock_core::Theme;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -39,6 +40,7 @@ pub fn contrast_ratio(a: Rgb, b: Rgb) -> f64 {
 pub enum PaletteKind {
     Light,
     Dark,
+    Accent,
     HighContrast,
 }
 /// Fully opaque colors; there is no alpha channel by design.
@@ -74,7 +76,22 @@ impl Palette {
 pub enum SystemAppearance {
     Light,
     Dark,
+    Accent { background: Rgb },
     HighContrast { background: Rgb, foreground: Rgb },
+}
+
+/// The accent selection and the taskbar opt-in are separate Windows settings.
+/// Windows light mode does not display a taskbar accent. Unreadable/missing
+/// accent data falls back to the ordinary system palette.
+#[cfg(any(windows, test))]
+fn taskbar_appearance(light: bool, accent_enabled: bool, accent: Option<Rgb>) -> SystemAppearance {
+    if light {
+        SystemAppearance::Light
+    } else if accent_enabled && let Some(background) = accent {
+        SystemAppearance::Accent { background }
+    } else {
+        SystemAppearance::Dark
+    }
 }
 
 /// High contrast first, then an explicit Light/Dark choice, then the system.
@@ -91,6 +108,20 @@ pub fn resolve(preference: Theme, system: SystemAppearance) -> Palette {
             background,
             foreground,
         },
+        (SystemAppearance::Accent { background }, Theme::System) => {
+            let black = Rgb::new(0, 0, 0);
+            let white = Rgb::new(255, 255, 255);
+            Palette {
+                kind: PaletteKind::Accent,
+                background,
+                foreground: if contrast_ratio(background, black) > contrast_ratio(background, white)
+                {
+                    black
+                } else {
+                    white
+                },
+            }
+        }
         (_, Theme::Light) | (SystemAppearance::Light, Theme::System) => Palette::LIGHT,
         (_, Theme::Dark) | (SystemAppearance::Dark, Theme::System) => Palette::DARK,
     }
@@ -130,7 +161,7 @@ impl AppearanceTracker {
 
 #[cfg(windows)]
 mod native {
-    use super::{Rgb, SystemAppearance};
+    use super::{Rgb, SystemAppearance, taskbar_appearance};
     use windows::Win32::{
         Foundation::LPARAM,
         Graphics::Gdi::{COLOR_WINDOW, COLOR_WINDOWTEXT, GetSysColor},
@@ -138,8 +169,8 @@ mod native {
         UI::{
             Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
             WindowsAndMessaging::{
-                SPI_GETHIGHCONTRAST, SystemParametersInfoW, WM_SETTINGCHANGE, WM_SYSCOLORCHANGE,
-                WM_THEMECHANGED,
+                SPI_GETHIGHCONTRAST, SystemParametersInfoW, WM_DWMCOLORIZATIONCOLORCHANGED,
+                WM_SETTINGCHANGE, WM_SYSCOLORCHANGE, WM_THEMECHANGED,
             },
         },
     };
@@ -165,24 +196,22 @@ mod native {
         .is_ok()
             && info.dwFlags.contains(HCF_HIGHCONTRASTON)
     }
-    /// `SystemUsesLightTheme` governs the taskbar surface. A missing value is the
-    /// Windows default (light).
-    fn system_uses_light_theme() -> bool {
-        let mut data = 1u32;
+    fn read_dword(key: PCWSTR, value: PCWSTR) -> Option<u32> {
+        let mut data = 0u32;
         let mut size = std::mem::size_of::<u32>() as u32;
-        // SAFETY: the buffer and size describe `data`; the key/value are constants.
+        // SAFETY: the buffer and size describe `data`; callers pass static strings.
         let status = unsafe {
             RegGetValueW(
                 HKEY_CURRENT_USER,
-                w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"),
-                w!("SystemUsesLightTheme"),
+                key,
+                value,
                 RRF_RT_REG_DWORD,
                 None,
                 Some((&mut data as *mut u32).cast()),
                 Some(&mut size),
             )
         };
-        status.is_err() || data != 0
+        (status.is_ok() && size == 4).then_some(data)
     }
 
     /// Cheap enough for notification handlers; never call from a paint loop.
@@ -195,10 +224,26 @@ mod native {
                 background: colorref(background),
                 foreground: colorref(foreground),
             }
-        } else if system_uses_light_theme() {
-            SystemAppearance::Light
         } else {
-            SystemAppearance::Dark
+            let key = w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            let light = read_dword(key, w!("SystemUsesLightTheme")).unwrap_or(1) != 0;
+            // This is the Start/taskbar toggle, NOT DWM\ColorPrevalence
+            // (which applies to title bars and window borders).
+            let enabled = read_dword(key, w!("ColorPrevalence")) == Some(1);
+            // Explorer's resolved accent tracks manual and wallpaper-derived
+            // selection alike. This registry value is a shell compatibility
+            // detail, not a supported API for the final composited taskbar RGB.
+            // Its DWORD stores ABGR; use the low RGB bytes, ignoring alpha.
+            let accent = if !light && enabled {
+                read_dword(
+                    w!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent"),
+                    w!("AccentColorMenu"),
+                )
+                .map(colorref)
+            } else {
+                None
+            };
+            taskbar_appearance(light, enabled, accent)
         }
     }
 
@@ -206,7 +251,7 @@ mod native {
     /// feeds the result to `AppearanceTracker::observe`.
     pub fn is_appearance_message(message: u32, lparam: LPARAM) -> bool {
         match message {
-            WM_SYSCOLORCHANGE | WM_THEMECHANGED => true,
+            WM_SYSCOLORCHANGE | WM_THEMECHANGED | WM_DWMCOLORIZATIONCOLORCHANGED => true,
             WM_SETTINGCHANGE => {
                 if lparam.0 == 0 {
                     return true;
@@ -232,6 +277,58 @@ mod tests {
         background: Rgb::new(0, 0, 0),
         foreground: Rgb::new(255, 255, 255),
     };
+
+    #[test]
+    fn taskbar_accent_requires_its_own_toggle_and_dark_system_mode() {
+        let accent = Rgb::new(24, 80, 130);
+        assert_eq!(
+            taskbar_appearance(false, false, Some(accent)),
+            SystemAppearance::Dark
+        );
+        assert_eq!(
+            taskbar_appearance(true, true, Some(accent)),
+            SystemAppearance::Light
+        );
+        assert_eq!(
+            taskbar_appearance(false, true, None),
+            SystemAppearance::Dark
+        );
+        assert_eq!(
+            taskbar_appearance(false, true, Some(accent)),
+            SystemAppearance::Accent { background: accent }
+        );
+    }
+    #[test]
+    fn accent_palettes_have_readable_text_and_respect_explicit_choices() {
+        for background in [
+            Rgb::new(0, 0, 0),
+            Rgb::new(255, 255, 255),
+            Rgb::new(24, 80, 130),
+            Rgb::new(130, 100, 180),
+        ] {
+            let system = SystemAppearance::Accent { background };
+            let palette = resolve(Theme::System, system);
+            assert_eq!(palette.background, background);
+            assert_eq!(palette.kind, PaletteKind::Accent);
+            assert!(contrast_ratio(background, palette.foreground) >= 4.5);
+            assert_eq!(resolve(Theme::Light, system), Palette::LIGHT);
+            assert_eq!(resolve(Theme::Dark, system), Palette::DARK);
+        }
+    }
+    #[test]
+    fn automatic_accent_changes_advance_the_appearance_revision() {
+        let first = SystemAppearance::Accent {
+            background: Rgb::new(12, 34, 56),
+        };
+        let second = SystemAppearance::Accent {
+            background: Rgb::new(78, 90, 12),
+        };
+        let mut tracker = AppearanceTracker::new(first);
+        assert_eq!(tracker.observe(first), None);
+        assert_eq!(tracker.observe(second), Some(1));
+        assert_eq!(tracker.observe(second), None);
+        assert_eq!(tracker.observe(SystemAppearance::Dark), Some(2));
+    }
 
     #[test]
     fn explicit_theme_overrides_system_and_system_follows_it() {

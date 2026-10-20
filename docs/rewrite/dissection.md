@@ -182,7 +182,7 @@ silently converted to a plausible rectangle.
 ### Time and format contract
 
 Keep the overview's token allowlist. Limit input to 256 Unicode scalar values,
-at most two nonempty lines, and rendered output to 512 Unicode scalar values. Normalize
+allow multiple nonempty lines, and limit rendered output to 512 Unicode scalar values. Normalize
 CRLF once; permit newline but reject other control characters. No `%n`, padding
 modifiers, unlisted directives, HTML or arithmetic. Parse into owned tokens once.
 Report an offending token with a documented character-index span.
@@ -217,8 +217,9 @@ same directory and uses a tested Windows replacement operation. Failed save
 leaves disk and active preferences unchanged. Reject unsupported stored versions
 without destructive downgrade. Reset to defaults is an explicit UI draft.
 
-Validate layout on each selected active monitor before Apply; future text/DPI
-overflow hides that monitor's overlay and explains the problem in Settings
+Validate layout on each selected active monitor before Apply, automatically
+shrinking from the configured maximum font size down to 6 pt. Future text/DPI
+changes repeat fitting; overflow remaining at 6 pt hides that monitor's overlay and explains the problem in Settings
 instead of widening over tray controls. No watcher or legacy import in v1.
 
 ### Shell integration contract and experiments

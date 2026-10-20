@@ -37,7 +37,7 @@ Calendar year: %Y (2026)   %y (26)\n\
 ISO week-year: %G (2026)   %g (26). This is the year the ISO week belongs to, so it \
 differs from the calendar year around 1 January.\n\
 ISO week and weekday: %V week (01 to 53)   %u weekday (Monday = 1 to Sunday = 7)\n\
-%% shows a percent sign. Press Enter for a second line (two lines at most). Other \
+%% shows a percent sign. Press Enter for another line. Text automatically shrinks to fit, down to 6 pt. Other \
 text is shown as typed.";
 
 /// What the user is editing. Text fields stay text so that half-typed input can be
@@ -368,7 +368,6 @@ fn format_problem(text: &str, error: &FormatError) -> FormatProblem {
                 "Each line needs some content. Remove the empty line or add a token.".to_owned()
             }
         }
-        FormatErrorKind::TooManyLines => "Use at most two lines.".to_owned(),
         FormatErrorKind::ControlCharacter => {
             "Tabs and other control characters cannot be used.".to_owned()
         }
@@ -387,7 +386,6 @@ fn format_problem(text: &str, error: &FormatError) -> FormatProblem {
     let selection = matches!(
         error.kind,
         FormatErrorKind::EmptyLine
-            | FormatErrorKind::TooManyLines
             | FormatErrorKind::ControlCharacter
             | FormatErrorKind::IncompleteDirective
             | FormatErrorKind::UnsupportedDirective
@@ -440,7 +438,7 @@ fn fit_message(problems: &[FitProblem]) -> String {
         })
         .collect();
     format!(
-        "This does not fit the clock space on {}. Use a shorter format or a smaller font size.",
+        "This does not fit the clock space on {} even at 6 pt. Use a shorter format or fewer lines.",
         places.join(" and ")
     )
 }
@@ -618,6 +616,16 @@ mod tests {
     }
 
     #[test]
+    fn multiline_format_is_accepted_in_settings() {
+        let (mut c, _) = fresh();
+        c.set_format("%H:%M\r\n%a\r\n%g%V.%u");
+        let eval = c.evaluate(&mut FakeLayout::default(), now());
+        assert!(eval.preview.contains("09:15"));
+        assert!(eval.preview.contains("2642.2"));
+        assert_eq!(c.draft().format.lines().count(), 3);
+    }
+
+    #[test]
     fn invalid_formats_are_explained_beside_the_editor_and_located() {
         let (mut c, _) = fresh();
         let mut layout = FakeLayout::default();
@@ -630,7 +638,6 @@ mod tests {
             ("%H%", "A % must be followed by a token", Some(2..3)),
             ("", "Enter a format, or choose a preset.", Some(0..0)),
             ("%H\n", "Each line needs some content", Some(4..4)),
-            ("%H\n%M\n%S", "Use at most two lines.", Some(6..8)),
             ("a\tb", "Tabs and other control characters", Some(1..2)),
             (&"x".repeat(257), "at most 256 characters", None),
         ];
@@ -706,7 +713,8 @@ mod tests {
             fit.contains("needs 140 \u{d7} 32 px, 96 \u{d7} 40 px available"),
             "{fit}"
         );
-        assert!(fit.contains("shorter format or a smaller font size"));
+        assert!(fit.contains("even at 6 pt"));
+        assert!(fit.contains("shorter format or fewer lines"));
         assert_eq!(eval.problems.first(), Some(Field::Format));
         assert_eq!(c.apply(&mut layout, now(), false), ApplyOutcome::Invalid);
         assert!(
