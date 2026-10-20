@@ -25,12 +25,12 @@ structured `FormatError.kind` and `span`.
 | `%b`, `%B` | English abbreviated / full month |
 | `%%` | Literal percent |
 
-Literal Unicode is supported. One LF or CRLF separates two nonempty lines;
+Literal Unicode is supported. LF or CRLF separates nonempty lines; there is no fixed line-count cap.
 CRLF is normalized to LF. Other controls, empty input/lines, modifiers and every
 unlisted directive are rejected. Spaces are literal content, not trimmed.
 Input is at most 256 Unicode scalars **before** normalization. Output is at
 most 512 scalars **including** the normalized separator. A single checked
-formatting pass produces both lines from the supplied snapshot. Overflow
+formatting pass produces all lines from the supplied snapshot. Overflow
 returns an error, never truncated text. An offset that moves a chrono endpoint
 outside the representable local-date range returns `SnapshotOutOfRange`.
 

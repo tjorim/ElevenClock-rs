@@ -13,7 +13,6 @@ pub const DIRECTIVES: &str = "YyGgmdHIMSpVuaAbB%";
 pub enum FormatErrorKind {
     InputTooLong,
     EmptyLine,
-    TooManyLines,
     ControlCharacter,
     IncompleteDirective,
     UnsupportedDirective,
@@ -59,20 +58,15 @@ impl CompiledFormat {
         let mut i = 0;
         let mut line_start = 0;
         let mut has_content = false;
-        let mut newline_seen = false;
         while i < chars.len() {
             let c = chars[i];
             let crlf = c == '\r' && chars.get(i + 1) == Some(&'\n');
             if c == '\n' || crlf {
                 let end = i + if crlf { 2 } else { 1 };
-                if newline_seen {
-                    return Err(fail(FormatErrorKind::TooManyLines, i..end));
-                }
                 if !has_content {
                     return Err(fail(FormatErrorKind::EmptyLine, line_start..i));
                 }
                 items.push(Item::OwnedLiteral("\n".into()));
-                newline_seen = true;
                 has_content = false;
                 line_start = end;
                 i = end;
@@ -115,7 +109,7 @@ impl CompiledFormat {
         self.cadence
     }
 
-    /// Both lines use exactly this supplied snapshot. Output bounds include the
+    /// All lines use exactly this supplied snapshot. Output bounds include the
     /// normalized newline. Failure returns no partial/truncated clock text.
     pub fn render(&self, snapshot: DateTime<FixedOffset>) -> Result<ClockText, FormatError> {
         let fail = |kind| FormatError {

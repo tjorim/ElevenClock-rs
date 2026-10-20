@@ -1010,6 +1010,16 @@ fn appearance_changes_repaint_live_and_unrelated_setting_changes_do_not() {
     runtime.platform.appearance = SystemAppearance::Dark;
     runtime.handle(Input::Signal(Signal::AppearanceMaybeChanged));
     assert_eq!(paints(&take(&mut runtime)), 1);
+    for background in [
+        crate::theme::Rgb::new(12, 34, 56),
+        crate::theme::Rgb::new(78, 90, 12),
+    ] {
+        runtime.platform.appearance = SystemAppearance::Accent { background };
+        runtime.handle(Input::Signal(Signal::AppearanceMaybeChanged));
+        assert_eq!(paints(&take(&mut runtime)), 1, "accent change");
+        runtime.handle(Input::Signal(Signal::AppearanceMaybeChanged));
+        assert_eq!(paints(&take(&mut runtime)), 0, "unchanged accent");
+    }
     runtime.platform.font_changed = true;
     runtime.handle(Input::Signal(Signal::AppearanceMaybeChanged));
     assert_eq!(paints(&take(&mut runtime)), 1, "system font change");

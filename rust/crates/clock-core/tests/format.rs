@@ -82,7 +82,7 @@ fn malformed_formats_have_original_character_spans() {
         ("", FormatErrorKind::EmptyLine, 0..0),
         ("\nx", FormatErrorKind::EmptyLine, 0..0),
         ("x\n", FormatErrorKind::EmptyLine, 2..2),
-        ("x\n\ny", FormatErrorKind::TooManyLines, 2..3),
+        ("x\n\ny", FormatErrorKind::EmptyLine, 2..2),
         ("🕒\r\n%Q", FormatErrorKind::UnsupportedDirective, 3..5),
         ("🕒%", FormatErrorKind::IncompleteDirective, 1..2),
         ("x\r", FormatErrorKind::ControlCharacter, 1..2),
@@ -225,4 +225,12 @@ proptest! {
         }
         prop_assert_eq!(compiled.cadence(), if tokens.contains(&'S') { Cadence::Second } else { Cadence::Minute });
     }
+}
+
+#[test]
+fn multiple_lines_share_snapshot_and_normalize_crlf() {
+    assert_eq!(
+        render("%H:%M\r\n%A\n%g%V.%u", "2027-01-01T00:00:00+01:00"),
+        ["00:00", "Friday", "2653.5"]
+    );
 }
