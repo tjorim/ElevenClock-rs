@@ -195,7 +195,8 @@ proptest! {
         match CompiledFormat::parse(&input) {
             Ok(compiled) => {
                 if let Ok(text) = compiled.render(snapshot("2027-01-01T23:59:59+01:00")) {
-                    prop_assert!((1..=2).contains(&text.lines.len()));
+                    // Multiline formats are bounded by total rendered scalars, not two lines.
+                    prop_assert!(!text.lines.is_empty());
                     prop_assert!(text.lines.iter().all(|line| !line.is_empty()));
                     prop_assert!(text.lines.iter().map(|line| line.chars().count()).sum::<usize>() + text.lines.len() - 1 <= MAX_RENDERED_SCALARS);
                 }

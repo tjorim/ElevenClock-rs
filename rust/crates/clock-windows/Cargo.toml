@@ -7,10 +7,6 @@ publish.workspace = true
 license.workspace = true
 license-file.workspace = true
 
-[features]
-default = []
-overlay-spike = []
-
 [dependencies]
 chrono.workspace = true
 clock-core.workspace = true

@@ -32,9 +32,9 @@ jobs:
           workspaces: rust
           shared-key: desktop-${{ matrix.runner }}-${{ matrix.target }}
       # Share the probe build and desktop preparation for R02/R03/R08. Build the
-      # spike separately so its optional features do not affect the app binary.
+      # development example separately; experimental FFI is private to that target.
       - run: cargo +stable build --manifest-path rust/Cargo.toml -p clock-app -p clock-windows --bins --example taskbar_probe --target ${{ matrix.target }} --locked
-      - run: cargo +stable build --manifest-path rust/Cargo.toml -p clock-overlay-spike --target ${{ matrix.target }} --locked
+      - run: cargo +stable build --manifest-path rust/Cargo.toml -p clock-app --example overlay_evidence --target ${{ matrix.target }} --locked
       # R02 evidence (formerly its own workflow): prepares the hosted desktop, then
       # real shell discovery, screenshots, Explorer restart and helper lifetime.
       - name: R02 actual shell discovery, screenshots, restart and helper lifetime
@@ -59,7 +59,7 @@ jobs:
       - name: R03 overlay, hit targets, calendar, visibility and recovery
         if: ${{ !cancelled() }}
         shell: pwsh
-        run: ./scripts/test-rust-overlay.ps1 -ProbeTarget '${{ matrix.target }}' -Executable 'rust/target/${{ matrix.target }}/debug/clock-overlay-spike.exe'
+        run: ./scripts/test-rust-overlay.ps1 -ProbeTarget '${{ matrix.target }}' -Executable 'rust/target/${{ matrix.target }}/debug/examples/overlay_evidence.exe'
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -18,3 +18,15 @@ clock-windows.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3.0.6"
+
+[dev-dependencies]
+clock-core.workspace = true
+serde_json = "1.0"
+
+[target.'cfg(windows)'.dev-dependencies]
+windows.workspace = true
+
+[[example]]
+name = "overlay_evidence"
+path = "examples/overlay_evidence/main.rs"
+test = true
