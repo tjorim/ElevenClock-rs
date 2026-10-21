@@ -1,9 +1,10 @@
 # Windows acceptance gates (R13)
 
 Status: **started, not passed.** Partial sessions on one machine. The release gate
-stays **open**: most of the matrix and the eight-hour soak have not been run. The three
+stays **open** for the matrix gaps listed under [Matrix status](#matrix-status). The three
 ten-minute runs passed for candidate `246a5a4` on 2026-10-21
-([Performance](#performance)). The second Windows build is an
+([Performance](#performance)). The eight-hour soak is a maintainer-reported workday run
+on another laptop, without raw samples. The second Windows build is an
 [accepted assumption](#second-windows-build-maintainer-decision), not evidence.
 Nothing below is inferred from CI, simulation or another build.
 
@@ -290,11 +291,17 @@ single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/REA
 - [x] Explorer restart ×3; forced app kill reveals native clock; quiet `--startup` launch
 - [x] Repeated launch/Settings cycles (20/20, flat handles/GDI/USER); invalid stored
       preferences (7/7); overflow rejected in Settings *(4f586f5)*
-- [x] Reset/Cancel and Exit *(4f586f5)*; startup status detection only. The real login
-      entry was not toggled
+- [x] Reset/Cancel and Exit *(4f586f5)*; startup choice: repair, turn off and on, with
+      the registry checked after each step and the original entry restored. Actual
+      sign-in is owned by #15
 - [x] Ten minutes each: date-only, minutes, seconds, all pass at `246a5a4` on the
       single-display 125% reference (2026-10-21); timer/discovery rates not measured
-- [ ] Eight-hour soak
+- [x] Eight-hour soak: **maintainer-reported, no raw samples.** The maintainer ran the app
+      on another laptop for a full workday without issues (reported 2026-10-21; build,
+      format and display setup not recorded). The VM soak at `ef94dcfbc05f` was stopped
+      at the maintainer's request after 7.8 min (46 samples, `%H:%M:%S`, no growth: private
+      WS 3.34 → 2.45 MiB, handles 276 → 272, GDI 24, USER 21–22, 4 windows, mean CPU
+      0.0107%). That is not a soak and was not retained
 - [ ] The same walkthrough from the Start menu with an installed build, and a separate
       non-administrator account (owned by #15)
 - [x] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D
@@ -311,8 +318,8 @@ three ten-minute runs and the eight-hour soak with the script above.
 the second build and the final GO/NO-GO. Done so far: the sampler work, the three
 ten-minute runs at `246a5a4`, and fixes for the overflow-after-minimize and tray
 re-layout findings. The second build is settled as a maintainer-accepted assumption
-(above). Still open: the eight-hour soak (to be run on a build with both overlay
-fixes) and the matrix gaps. The release decision is still **NO-GO / not assessed**. Commands (choose each format through native Settings first,
+(above). The soak is covered by the maintainer's workday run on another laptop, without
+retained samples (see the matrix). Still open: the matrix gaps listed above. The release decision is still **NO-GO / not assessed**. Commands (choose each format through native Settings first,
 with one app instance running and no window covering the taskbar):
 
 ```powershell

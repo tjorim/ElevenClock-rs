@@ -27,7 +27,7 @@ selection, format `%g%V.%u`.
 | Repeated launch/Settings cycles | **Pass, 20/20** | Second launch → Settings shown (median 354 ms) → `WM_CLOSE` hid it. One process throughout, and every second launch exited 0. Handles 274, threads 5, GDI 25, USER 22–23 and private memory 6.03–6.07 MiB were flat from cycle 1 to 20. |
 | Accessible name (Narrator proxy) | **Pass (UIA only)** | The overlay is a UIA Button named with the displayed text (`2643.3`), automation id `ElevenClock-rs.Clock`, Invoke pattern, correct bounds. Hit-testing at the clock centre returns it. Narrator speech was not heard or verified. |
 | Reset/Cancel/Exit | **Pass** | Reset to defaults filled in the default preset, and Cancel discarded it (preferences file unchanged). Exit removed the process; native clock visible; log `ElevenClock-rs stopped`. |
-| Startup choice | **Not toggled** | The Startup tab correctly reported that the existing login entry starts a *different* copy (the main checkout's build) and offered Repair. That entry is the maintainer's real login configuration, so it was left unchanged. |
+| Startup choice | **Pass** | The Startup tab correctly reported that the existing login entry starts a *different* copy (the main checkout's build) and offered Repair. Later in the session, with the maintainer's go-ahead and on build `ef94dcfbc05f` (same Rust code): Repair pointed `HKCU\…\Run\ElevenClockRust` at this copy with `--startup`; unticking removed the value ("does not start when you sign in"); ticking recreated it; Cancel left it as is, as the tab states. The original entry was restored afterwards. Actual sign-in startup is owned by #15. |
 
 ## Observation: overlay not drawn after Show Desktop (not reproduced)
 
@@ -47,6 +47,6 @@ until reproduced or ruled out.
   maintainer. Changing the system time also needs elevation.
 - **Mixed DPI 100/125/150/200%, hotplug, primary swap, negative origins:** need display
   topology or scale changes on a single-display VM. 125% alone is covered.
-- **Start-menu walkthrough and a separate non-administrator account:** owned by #15
+- **Start-menu walkthrough, actual sign-in startup and a separate non-administrator account:** owned by #15
   (installed build). Not run here.
 - **Narrator speech:** UIA exposure verified only.
