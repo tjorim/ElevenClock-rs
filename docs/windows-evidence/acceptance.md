@@ -290,10 +290,16 @@ single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/REA
       19:09:33 UTC → `clock hidden for now: the PC is locked`. Unlocked 19:09:37 → for
       about 1 s `Windows reported taskbar or display measurements that cannot be used`
       (native clock shown), then `clock replaced` at 19:09:38. Same process, which then
-      had 281 handles and 6 threads. The tray re-laid out shortly after unlock (bell
-      button, clock moved). The overlay briefly exposed `21/1`, then re-aligned within
-      seconds: overlay x 1394–1481 = clock button
-- [ ] Time and time zone changes: system settings left to the maintainer
+      had 281 handles and 6 threads. Afterwards overlay x 1394–1481 = clock button. A
+      `21/1` fragment seen only in the screen-control tool's capture did not appear in
+      direct `CopyFromScreen` captures, so it is treated as a capture artifact
+- [x] Time and time zone changes, done by the maintainer at `ef94dcfbc05f` on
+      2026-10-21. Windows logged offset changes UTC+2 → +1 → +0 → +1 (19:10:38–43 UTC), a
+      +175 s jump at 19:10:53, a resync −174 s at 19:13:51, and a return to UTC+2 at
+      19:11:18 (Romance Standard Time). Afterwards the overlay's accessible text matched
+      local time to the second in five samples (`21:11:50`–`21:11:55`, `%H:%M:%S`). It
+      was the same process, with no log entries and no restart. Behaviour *during* each
+      change was not observed
 - [x] Explorer restart ×3; forced app kill reveals native clock; quiet `--startup` launch
 - [x] Repeated launch/Settings cycles (20/20, flat handles/GDI/USER); invalid stored
       preferences (7/7); overflow rejected in Settings *(4f586f5)*

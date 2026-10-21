@@ -43,8 +43,7 @@ until reproduced or ruled out.
 ## Not done here, and why
 
 - **Lock/unlock:** done afterwards by the maintainer; see `../acceptance.md`.
-- **System time and time-zone changes:** machine-wide system settings, left to the
-  maintainer. Changing the system time also needs elevation.
+- **System time and time-zone changes:** done afterwards by the maintainer; see `../acceptance.md`.
 - **Mixed DPI 100/125/150/200%, hotplug, primary swap, negative origins:** need display
   topology or scale changes on a single-display VM. 125% alone is covered.
 - **Start-menu walkthrough, actual sign-in startup and a separate non-administrator account:** owned by #15
