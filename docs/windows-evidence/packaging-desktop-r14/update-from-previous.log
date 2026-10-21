@@ -1,0 +1,90 @@
+﻿2026-10-21 22:13:35.939   Log opened. (Time zone: UTC+02:00)
+2026-10-21 22:13:35.939   Setup version: Inno Setup version 6.7.3
+2026-10-21 22:13:35.939   Original Setup EXE: C:\Users\tiele\Documents\GitHub\ElevenClock-rs\dist\candidate-desktop-new\ElevenClock-rs-0.1.0-585ad4df18cc-x64-dev-setup.exe
+2026-10-21 22:13:35.939   Setup command line: /SL5="$3D0022,1436840,893952,C:\Users\tiele\Documents\GitHub\ElevenClock-rs\dist\candidate-desktop-new\ElevenClock-rs-0.1.0-585ad4df18cc-x64-dev-setup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="C:\Users\tiele\Documents\GitHub\ElevenClock-rs\.claude\worktrees\elevenclock-rs-issue-46-61f344\native-evidence\packaging-r14-desktop/update-from-previous.log" 
+2026-10-21 22:13:35.941   Windows version: 10.0.26300
+2026-10-21 22:13:35.941   Windows architecture: x64 (64-bit)
+2026-10-21 22:13:35.941   Machine types supported by system: x86 x64
+2026-10-21 22:13:35.941   User privileges: None
+2026-10-21 22:13:35.945   Administrative install mode: No
+2026-10-21 22:13:35.945   Install mode root key: HKEY_CURRENT_USER
+2026-10-21 22:13:35.945   64-bit install mode: Yes
+2026-10-21 22:13:35.948   RedirectionGuard status for current process: Enabled in enforcing mode
+2026-10-21 22:13:35.951   Created temporary directory: C:\Users\tiele\AppData\Local\Temp\is-CTA99FZEMV.tmp
+2026-10-21 22:13:36.379   Starting the installation process.
+2026-10-21 22:13:36.386   Directory for uninstall files: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs
+2026-10-21 22:13:36.387   Will append to existing uninstall log: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\unins000.dat
+2026-10-21 22:13:36.394   -- File entry --
+2026-10-21 22:13:36.394   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\unins000.exe
+2026-10-21 22:13:36.394   Non-default bitness: 32-bit
+2026-10-21 22:13:36.400   Time stamp of our file: 2026-10-21 22:13:35.566
+2026-10-21 22:13:36.400   Dest file exists.
+2026-10-21 22:13:36.400   Time stamp of existing file: 2026-10-21 22:13:33.272
+2026-10-21 22:13:36.401   Version of our file: 51.1054.0.0
+2026-10-21 22:13:36.416   Version of existing file: 51.1054.0.0
+2026-10-21 22:13:36.416   Installing the file.
+2026-10-21 22:13:36.478   Leaving temporary file in place for now.
+2026-10-21 22:13:36.478   -- File entry --
+2026-10-21 22:13:36.480   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\elevenclock-rs.exe
+2026-10-21 22:13:36.480   Time stamp of our file: 2026-10-16 16:40:10.000
+2026-10-21 22:13:36.480   Dest file exists.
+2026-10-21 22:13:36.482   Time stamp of existing file: 2026-10-16 12:47:38.000
+2026-10-21 22:13:36.482   Installing the file.
+2026-10-21 22:13:36.532   Successfully installed the file.
+2026-10-21 22:13:36.532   -- File entry --
+2026-10-21 22:13:36.534   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\LICENSE.txt
+2026-10-21 22:13:36.534   Time stamp of our file: 2026-10-16 02:18:10.000
+2026-10-21 22:13:36.534   Dest file exists.
+2026-10-21 22:13:36.534   Time stamp of existing file: 2026-10-16 02:18:10.000
+2026-10-21 22:13:36.534   Installing the file.
+2026-10-21 22:13:36.538   Successfully installed the file.
+2026-10-21 22:13:36.538   -- File entry --
+2026-10-21 22:13:36.540   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\THIRD-PARTY-NOTICES.txt
+2026-10-21 22:13:36.540   Time stamp of our file: 2026-10-16 16:40:14.000
+2026-10-21 22:13:36.540   Dest file exists.
+2026-10-21 22:13:36.540   Time stamp of existing file: 2026-10-16 13:01:46.000
+2026-10-21 22:13:36.540   Installing the file.
+2026-10-21 22:13:36.560   Successfully installed the file.
+2026-10-21 22:13:36.560   -- File entry --
+2026-10-21 22:13:36.560   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\RUST-COPYRIGHT.html
+2026-10-21 22:13:36.560   Time stamp of our file: 2026-10-16 02:43:46.000
+2026-10-21 22:13:36.560   Dest file exists.
+2026-10-21 22:13:36.560   Time stamp of existing file: 2026-10-16 02:43:46.000
+2026-10-21 22:13:36.560   Installing the file.
+2026-10-21 22:13:36.741   Successfully installed the file.
+2026-10-21 22:13:36.741   -- File entry --
+2026-10-21 22:13:36.743   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\provenance.json
+2026-10-21 22:13:36.743   Time stamp of our file: 2026-10-16 16:40:48.000
+2026-10-21 22:13:36.743   Dest file exists.
+2026-10-21 22:13:36.744   Time stamp of existing file: 2026-10-16 13:02:06.000
+2026-10-21 22:13:36.744   Installing the file.
+2026-10-21 22:13:36.746   Successfully installed the file.
+2026-10-21 22:13:36.746   -- File entry --
+2026-10-21 22:13:36.746   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\runtime-dependencies.json
+2026-10-21 22:13:36.748   Time stamp of our file: 2026-10-16 16:40:46.000
+2026-10-21 22:13:36.748   Dest file exists.
+2026-10-21 22:13:36.748   Time stamp of existing file: 2026-10-16 13:02:06.000
+2026-10-21 22:13:36.748   Installing the file.
+2026-10-21 22:13:36.750   Successfully installed the file.
+2026-10-21 22:13:36.750   -- File entry --
+2026-10-21 22:13:36.752   Dest filename: C:\Users\tiele\AppData\Local\Programs\ElevenClock-rs\PACKAGE-README.txt
+2026-10-21 22:13:36.752   Time stamp of our file: 2026-10-16 12:35:36.000
+2026-10-21 22:13:36.752   Dest file exists.
+2026-10-21 22:13:36.752   Time stamp of existing file: 2026-10-16 12:35:36.000
+2026-10-21 22:13:36.752   Installing the file.
+2026-10-21 22:13:36.754   Successfully installed the file.
+2026-10-21 22:13:36.754   -- Icon entry --
+2026-10-21 22:13:36.756   Dest filename: C:\Users\tiele\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\ElevenClock-rs.lnk
+2026-10-21 22:13:36.758   Creating the icon.
+2026-10-21 22:13:36.879   Successfully created the icon.
+2026-10-21 22:13:36.900   Saving uninstall information.
+2026-10-21 22:13:36.900   Renaming uninstaller.
+2026-10-21 22:13:36.900   Deleting uninstall key left over from previous non administrative install.
+2026-10-21 22:13:36.900   Creating new uninstall key: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\{97911B67-52D7-4D9B-B833-29303BC540A7}_is1
+2026-10-21 22:13:36.902   Writing uninstall key values.
+2026-10-21 22:13:36.902   Detected previous administrative 64-bit install? No
+2026-10-21 22:13:36.902   Detected previous administrative 32-bit install? No
+2026-10-21 22:13:36.913   Installation process succeeded.
+2026-10-21 22:13:36.913   Need to restart Windows? No
+2026-10-21 22:13:36.923   Deinitializing Setup.
+2026-10-21 22:13:36.947   Log closed.

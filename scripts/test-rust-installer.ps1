@@ -29,7 +29,9 @@ $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $results = [ordered]@{
     os = [Environment]::OSVersion.Version.ToString()
     artifact = $package.name
-    administratorGroup = ($identity.Groups.Value -contains 'S-1-5-32-544')
+    # WindowsIdentity.Groups omits deny-only SIDs, so an administrator running with
+    # a UAC-filtered token would look like a standard user there; whoami lists both.
+    administratorGroup = [bool]@(whoami /groups /fo csv | ConvertFrom-Csv | Where-Object { $_.SID -eq 'S-1-5-32-544' }).Count
     elevated = ([Security.Principal.WindowsPrincipal]::new($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     cleanRuntimeMachine = $false  # Hosted images have developer runtimes installed.
     previousReleaseRollback = 'not run: no earlier installer supplied'
