@@ -438,7 +438,13 @@ try {
     Set-Content -Path $holderScript -Encoding UTF8 -Value @'
 param([string]$Flag)
 Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern bool OpenClipboard(IntPtr owner); [DllImport("user32.dll")] public static extern bool CloseClipboard();' -Name Clip -Namespace Holder
-if (-not [Holder.Clip]::OpenClipboard([IntPtr]::Zero)) { exit 2 }
+# Another process (a clipboard viewer, or the Set/Get-Clipboard just above) may still
+# have it open for a moment; OpenClipboard fails rather than waits, so retry briefly.
+$deadline = [DateTime]::UtcNow.AddSeconds(5)
+while (-not [Holder.Clip]::OpenClipboard([IntPtr]::Zero)) {
+    if ([DateTime]::UtcNow -ge $deadline) { exit 2 }
+    Start-Sleep -Milliseconds 50
+}
 Set-Content -Path $Flag -Value 'held'
 Start-Sleep -Seconds 5
 [Holder.Clip]::CloseClipboard() | Out-Null
@@ -446,8 +452,9 @@ Start-Sleep -Seconds 5
     $holder = Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $holderScript, $flag -PassThru -WindowStyle Hidden
     try {
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
-        while (-not (Test-Path $flag) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
-        Assert (Test-Path $flag) 'The clipboard holder process did not start'
+        while (-not (Test-Path $flag) -and -not $holder.HasExited -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+        $holderExit = if ($holder.HasExited) { "exit code $($holder.ExitCode)" } else { 'still running' }
+        Assert (Test-Path $flag) "The clipboard holder did not take the clipboard ($holderExit)"
         $held = [Diagnostics.Stopwatch]::StartNew()
         Click (Control $window $PAGE.Support 1504)   # includes a 500 ms settle
         $busy = [SettingsNative]::Text($feedback)

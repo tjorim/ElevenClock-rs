@@ -1,0 +1,2 @@
+"UtcTime","Event","Id","Name","StartUtc","Path"
+"2026-10-21T17:28:58.2462067Z","present","12940","elevenclock-rs","2026-10-21T17:06:09.9799910Z","rust\target\release\elevenclock-rs.exe"

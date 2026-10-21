@@ -11,7 +11,7 @@
 use super::{
     Input, Observation, PaintContext, PaintResult, Platform, Runtime, ShellIdentity, UserAction,
     overlay_window::{Overlay, OverlayClass, REPAINT_EPOCH},
-    shell::covers_monitor,
+    shell::{covers_monitor, is_click_through},
 };
 use crate::{
     clock_time,
@@ -45,7 +45,7 @@ use windows::{
         System::LibraryLoader::GetModuleHandleW,
         UI::{HiDpi::GetDpiForWindow, WindowsAndMessaging::*},
     },
-    core::{HSTRING, PCWSTR},
+    core::{HSTRING, PCWSTR, w},
 };
 
 const WM_DISCOVERY: u32 = WM_APP + 3;
@@ -90,7 +90,23 @@ fn window_rect(hwnd: HWND) -> Option<PhysicalRect> {
     physical_rect(rect)
 }
 
-/// What is in front: its rectangle, and whether it is the desktop or the shell.
+/// The taskbar's legacy notification-area child, relative to the taskbar so an
+/// auto-hide slide is not a change. One window lookup: no UI Automation.
+fn tray_rect(taskbar: HWND, taskbar_rect: PhysicalRect) -> Option<PhysicalRect> {
+    // SAFETY: read-only lookup of a direct child of a possibly stale window.
+    let tray = unsafe { FindWindowExW(Some(taskbar), None, w!("TrayNotifyWnd"), None) }.ok()?;
+    let rect = window_rect(tray)?;
+    PhysicalRect::new(
+        rect.left() - taskbar_rect.left(),
+        rect.top() - taskbar_rect.top(),
+        rect.width(),
+        rect.height(),
+    )
+    .ok()
+}
+
+/// What is in front: its rectangle, and whether it is exempt from full-screen
+/// detection (the desktop, the shell, or a click-through overlay).
 fn foreground() -> (Option<PhysicalRect>, bool) {
     // SAFETY: simple queries on a handle that may vanish at any time.
     let hwnd = unsafe { GetForegroundWindow() };
@@ -104,7 +120,9 @@ fn foreground() -> (Option<PhysicalRect>, bool) {
         class.as_str(),
         "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
     );
-    (window_rect(hwnd), shell)
+    // SAFETY: style query on a possibly stale handle; failure reads as zero.
+    let extended = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+    (window_rect(hwnd), shell || is_click_through(extended))
 }
 
 #[derive(Clone, Copy)]
@@ -182,6 +200,14 @@ impl NativePlatform {
             return;
         }
         self.repaint_epoch = epoch;
+        self.redraw_shown(false);
+    }
+
+    /// Redraw shown overlays from their last text, with no reducer involvement.
+    /// An overlay minimized from outside is restored hidden, repainted and only
+    /// then shown again; minimizing also invalidates it, so this runs first.
+    /// With `minimized_only`, the others are left alone.
+    fn redraw_shown(&mut self, minimized_only: bool) {
         let Some(state) = &self.paint_state else {
             return;
         };
@@ -194,9 +220,13 @@ impl NativePlatform {
             let Some(text) = overlay.last_text.clone() else {
                 continue;
             };
-            if !overlay.is_shown() {
+            if !overlay.is_shown() || (minimized_only && !overlay.is_minimized()) {
                 continue;
             }
+            let Ok(restored) = overlay.restore_if_minimized() else {
+                overlay.hide();
+                continue;
+            };
             overlay.surface.mark_dirty();
             let request = PaintRequest {
                 text: &text,
@@ -205,10 +235,11 @@ impl NativePlatform {
                 font_pt: state.preferences.font_size_pt(),
                 palette: theme::resolve(state.preferences.theme(), state.appearance),
             };
-            if !matches!(
+            let painted = matches!(
                 overlay.paint(&self.renderer, &request),
                 Ok(PaintOutcome::Painted | PaintOutcome::Unchanged)
-            ) {
+            );
+            if !painted || (restored && overlay.show_anchored().is_err()) {
                 overlay.hide();
             }
         }
@@ -285,15 +316,17 @@ impl Platform for NativePlatform {
                 .flatten();
             (rect, GetDpiForWindow(hwnd), IsWindowVisible(hwnd).as_bool())
         };
-        let (front, front_is_shell) = foreground();
+        let (front, front_exempt) = foreground();
+        let rect = window_rect(hwnd);
         Observation {
             exists: true,
             visible,
-            rect: window_rect(hwnd),
+            rect,
             dpi,
             monitor_rect,
             fullscreen: monitor_rect
-                .is_some_and(|monitor| covers_monitor(front, front_is_shell, monitor)),
+                .is_some_and(|monitor| covers_monitor(front, front_exempt, monitor)),
+            tray: rect.and_then(|taskbar| tray_rect(hwnd, taskbar)),
         }
     }
     fn create_overlay(&mut self, key: TaskbarKey, bounds: PhysicalRect) -> Result<(), String> {
@@ -322,6 +355,10 @@ impl Platform for NativePlatform {
         let Some(overlay) = self.overlays.get_mut(&key) else {
             return PaintResult::Failed("no overlay window".into());
         };
+        if let Err(error) = overlay.restore_if_minimized() {
+            overlay.hide();
+            return PaintResult::Failed(format!("restore: {error}"));
+        }
         let request = PaintRequest {
             text: context.text,
             worst_case: context.worst_case,
@@ -394,10 +431,20 @@ impl Platform for NativePlatform {
         }
     }
     fn maintain(&mut self) {
+        // Re-anchoring cannot bring back a minimized overlay (SWP_SHOWWINDOW does
+        // not restore it), and a date-only clock may not repaint for hours.
+        if self
+            .overlays
+            .values()
+            .any(|overlay| overlay.is_shown() && overlay.is_minimized())
+        {
+            self.redraw_shown(true);
+        }
         for overlay in self.overlays.values_mut() {
             if overlay.is_shown() && !overlay.is_anchored() && overlay.show_anchored().is_err() {
                 overlay.hide();
             }
+            overlay.confirm_exposure();
         }
     }
     fn arm_timer(&mut self, delay: Duration) {

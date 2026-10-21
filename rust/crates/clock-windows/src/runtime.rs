@@ -297,6 +297,10 @@ pub struct Runtime<P: Platform> {
     reported: HashMap<TaskbarKey, (TaskbarVisibility, bool)>,
     faults: HashMap<TaskbarKey, Reason>,
     relocation_seen: BTreeMap<u64, PhysicalRect>,
+    /// Each taskbar's notification-area rectangle when discovery last ran. The
+    /// clock can move inside an unmoved taskbar; a different tray asks for a
+    /// rediscovery without hiding the overlay.
+    tray_baseline: BTreeMap<u64, Option<PhysicalRect>>,
     in_flight: Option<ShellGeneration>,
     topology_dirty: bool,
     settle_due: Option<Duration>,
@@ -329,6 +333,7 @@ impl<P: Platform> Runtime<P> {
             reported: HashMap::new(),
             faults: HashMap::new(),
             relocation_seen: BTreeMap::new(),
+            tray_baseline: BTreeMap::new(),
             in_flight: None,
             topology_dirty: false,
             settle_due: None,
@@ -651,6 +656,7 @@ impl<P: Platform> Runtime<P> {
             self.reported.clear();
             self.faults.clear();
             self.relocation_seen.clear();
+            self.tray_baseline.clear();
             self.topology_dirty = false;
             self.settle_due = None;
             self.retry.reset();
@@ -741,6 +747,7 @@ impl<P: Platform> Runtime<P> {
         let mut changed = false;
         let inventory_changed = self.platform.taskbar_inventory_changed();
         let mut relocated: Vec<(u64, Option<PhysicalRect>)> = Vec::new();
+        let mut tray_moved = false;
         let snapshots: Vec<_> = self.snapshots.values().cloned().collect();
         for snapshot in snapshots {
             let key = snapshot.key;
@@ -774,6 +781,13 @@ impl<P: Platform> Runtime<P> {
                 }
                 Placement::Present(visibility) => {
                     self.relocation_seen.remove(&key.id.0);
+                    // The tray re-laid out inside an unmoved taskbar, so the clock
+                    // may have moved. Keep the overlay until discovery says where.
+                    let baseline = *self
+                        .tray_baseline
+                        .entry(key.id.0)
+                        .or_insert(observation.tray);
+                    tray_moved |= baseline != observation.tray;
                     let (reported_visibility, reported_fullscreen) = self
                         .reported
                         .get(&key)
@@ -807,7 +821,8 @@ impl<P: Platform> Runtime<P> {
         // After a failed discovery the authoritative batch is empty. The live
         // inventory then differs until recovery succeeds; let failure backoff
         // own that retry instead of resetting it on every poll.
-        if (inventory_changed && self.last_failure.is_none()) || !relocated.is_empty() {
+        if (inventory_changed && self.last_failure.is_none()) || !relocated.is_empty() || tray_moved
+        {
             changed = true;
             // Throttle: an inconsistent shell must not turn polling into a
             // discovery loop. A skipped refresh is retried by the next poll.
@@ -916,6 +931,8 @@ impl<P: Platform> Runtime<P> {
         self.faults.retain(|key, _| self.reported.contains_key(key));
         self.relocation_seen
             .retain(|id, _| self.snapshots.contains_key(id));
+        self.tray_baseline
+            .retain(|id, _| self.snapshots.contains_key(id));
         self.dispatch(Event::DiscoveryResult {
             generation,
             snapshots,
@@ -948,6 +965,13 @@ impl<P: Platform> Runtime<P> {
                         self.disabled_discovery_reply(generation);
                     } else {
                         self.in_flight = Some(generation);
+                        // What this discovery will see. A later difference means
+                        // the clock may have moved again, so ask once more then.
+                        let snapshots: Vec<_> = self.snapshots.values().cloned().collect();
+                        for snapshot in snapshots {
+                            let tray = self.platform.observe(&snapshot).tray;
+                            self.tray_baseline.insert(snapshot.key.id.0, tray);
+                        }
                         self.platform.request_discovery(generation);
                     }
                 }
