@@ -32,9 +32,9 @@ notices and satisfy the selected terms for each dependency.
 
 The root LICENSE and workspace metadata declare Apache 2.0 for the original Rust
 implementation. The [owner decision and provenance record](windows-evidence/licensing-provenance.md)
-explain that scope. Python code and inherited artwork remain under `legacy/`,
-with their original GPLv3 license in `legacy/LICENSE`; the active icon is
-[original Apache-licensed artwork](../assets/README.md). Dependency licenses and
+explain that scope. The GPLv3 Python code and inherited artwork were removed at
+cutover and remain in Git history ([migration guide](migration.md#legacy-reference));
+the active icon is [original Apache-licensed artwork](../assets/README.md). Dependency licenses and
 original notices are unchanged. Product-name review in #32 remains open.
 The [packaging workflow](releasing.md) now includes the original inventory and
 toolchain notices in unsigned development candidates, plus matching vendored

@@ -1,5 +1,5 @@
 version: 2
-# Follow the default branch when the Rust rewrite lands in main.
+# Updates target the default branch (main), which builds only the Rust app.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"

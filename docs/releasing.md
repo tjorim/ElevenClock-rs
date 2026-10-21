@@ -103,10 +103,11 @@ The [owner decision and provenance record](windows-evidence/licensing-provenance
 document Apache 2.0 for the independently authored Rust implementation and original
 replacement icon. The packaging script copies the root Apache LICENSE into
 `LICENSE.txt` for both installer and portable ZIP. The inherited Python application
-and imagery remain under `legacy/`, including GPLv3 in `legacy/LICENSE` and the
-original credits to Martí Climent and Xavier Delugo. They remain in the source
-companion and are not installed. The stale upstream Apache README sentence does
-not relicense that legacy material. Product-name review remains open in
+and imagery, with GPLv3 and the original credits to Martí Climent and Xavier
+Delugo, were removed from the tree at cutover. They are no longer in the source
+companion and were never installed; they remain in Git history (see the
+[migration guide](migration.md#legacy-reference)). The stale upstream Apache
+README sentence does not relicense that legacy material. Product-name review remains open in
 [#32](https://github.com/tjorim/ElevenClock-rs/issues/32). The full dependency
 inventory supplies original notices (including build/test dependencies); Rust's
 COPYRIGHT.html supplies toolchain notices. Hash-checked supplemental notices retain

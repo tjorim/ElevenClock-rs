@@ -1,10 +1,9 @@
-# Rust development (R01)
+# Contributing to ElevenClock-rs
 
-The integration branch is `rust-rewrite`, created from main with the planning
-contracts included. One issue per feature PR targeting that branch; do not merge
-into main until the release gates pass. The Python application stays intact.
-The baseline is f967218e95b6f3c15e26f840e6090a6720528e39; the reviewed plans landed
-in main through #17. The old `rust-rewrite-plan` link in R01 no longer resolves.
+`main` is the default branch and builds only the Rust app; open feature PRs against
+it. The Python/Qt app, its build scripts and the rewrite plan were removed at the
+cutover (R15). They stay retrievable from Git; the commits are listed in the
+[migration guide](migration.md#legacy-reference).
 
 ## Toolchains and commands
 
@@ -60,9 +59,9 @@ cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_
 Double-click the resulting `elevenclock-rs.exe` for the native
 runtime and Settings shell. It has no command suite. Closing Settings keeps the
 clock running in the background; **Exit ElevenClock-rs** quits (R08, see
-[its record](design/lifecycle.md)). This is a work in progress with no
-release: the experimental R02 candidate places the clock overlay, and P1 is still
-NO-GO (#21), so expect rough edges.
+[its record](design/lifecycle.md)). Exit any legacy ElevenClock first: two overlay
+apps cannot share a taskbar. The current release state is in
+[`windows-evidence/acceptance.md`](windows-evidence/acceptance.md).
 `rust-ci.yml` checks the GUI subsystem, embedded manifest, native launch/close
 and forward/reverse dialog focus. Its development harness captures the actual
 dialog and records runner OS/build/DPI as prototype evidence. The environment
@@ -83,7 +82,7 @@ owns FFI. On Linux the app is a no-op build stub, not a supported product.
 
 `clock-core::model` defines physical-pixel rectangles with checked signed edges,
 transient generation-scoped taskbar keys, discovery snapshots, rendered text,
-cadence and event/effect values. See [contracts](rewrite/dissection.md#4-target-boundaries-and-interfaces).
+cadence and event/effect values. See the [contracts](https://github.com/tjorim/ElevenClock-rs/blob/0ac31152e265bb5d6e02fcac18404362453670d2/docs/rewrite/dissection.md#4-target-boundaries-and-interfaces) (removed at cutover; linked at the last commit that has them).
 R02 owns snapshot validation: a Some clock rect means proven clock-only bounds;
 DPI must be nonzero, clock/taskbar must fit the monitor, and adjacent controls
 must be excluded. Unknown visibility/geometry must not produce overlays.

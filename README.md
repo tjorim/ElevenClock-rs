@@ -2,65 +2,104 @@
 
 ![ElevenClock-rs icon](assets/icon.png)
 
-A customizable clock for the Windows 11 taskbar, written as a native Windows app in
-Rust. It replaces the taskbar clock with a formatted one on every display, and leaves
-the original clock untouched underneath, so quitting or pausing always brings it back.
+A customizable clock for the Windows 11 taskbar. It shows your own date and time
+format, such as the ISO week date `2642.2` (2026, week 42, Tuesday), in place of the
+taskbar clock on one or every display. The Windows clock is never changed or
+disabled; it sits underneath, so exiting always brings it straight back.
 
-> **Status: work in progress, not released.** The runtime, rendering, settings shell and
-> the clock/tray interaction are implemented; several checks need a real Windows desktop
-> and are still open. See [`docs/windows-evidence`](docs/windows-evidence) for what has and
-> has not been verified, and the [rewrite plan](docs/rewrite/plan.md) for the roadmap.
+> **Release status: no supported release yet.** Installers built from this
+> repository are unsigned development candidates while the remaining
+> [release gates](docs/releasing.md) are open. See the
+> [acceptance record](docs/windows-evidence/acceptance.md) for what has been tested.
+
+## Install
+
+You need stock Windows 11 on an x64 PC. No administrator rights are needed.
+
+1. Download `ElevenClock-rs-…-setup.exe`. Windows may warn that the download is
+   unsigned.
+2. Run it. It installs for your account only.
+3. Open **ElevenClock-rs** from the Start menu.
+
+If you used the original ElevenClock, quit it and switch it off in
+**Windows Settings > Apps > Startup** first. The [migration guide](docs/migration.md)
+explains this and what changed.
+
+A portable ZIP is also built: extract it to a folder you can write to and
+double-click `elevenclock-rs.exe`.
+
+## Use
+
+The first launch opens **Settings**. Closing Settings keeps the clock running.
+
+| Settings page | What you can change |
+| --- | --- |
+| Date and time | Pick a preset or write your own format, with a live preview and a list of every supported token. Presets: *ISO week date* (`2642.2`), *Calendar year + ISO week*, *Time + ISO week date* (two lines) |
+| Appearance | Primary display only or all displays; font size 6–24 pt; theme System, Light or Dark |
+| Startup | Start ElevenClock-rs when you sign in. Off until you turn it on |
+| Support | Version and status, and **Copy diagnostics** |
+
+Click **Apply** or **OK** to use your changes; **Cancel** discards them, and
+**Reset to defaults** stages the defaults for you to apply. A format that is invalid
+or does not fit the taskbar is explained beside the field and is never applied.
+
+On the taskbar:
+
+- **Left-click** the clock to open the Windows calendar and notifications.
+- **Right-click** the clock or the tray icon for **Settings**, **Pause clock
+  replacement** (shows the Windows clock until you resume) and **Exit**.
+- Starting ElevenClock-rs again from the Start menu opens Settings for the clock that
+  is already running.
+
+## Getting help
+
+Open **Settings > Support** and click **Copy diagnostics**, then paste the text into
+a [new issue](https://github.com/tjorim/ElevenClock-rs/issues/new). The report
+contains no user name, file paths or window titles, and nothing is sent anywhere
+unless you paste it yourself.
+
+## Uninstall and rollback
+
+1. Choose **Exit ElevenClock-rs** in Settings or the tray menu. The Windows clock
+   shows again.
+2. Uninstall from **Windows Settings > Apps > Installed apps**. The uninstaller
+   also removes ElevenClock-rs from startup. Your ElevenClock-rs settings are kept,
+   so reinstalling restores them.
+
+To go back to an earlier version, uninstall and run the earlier installer; to go back
+to the original ElevenClock, see [Going back](docs/migration.md#going-back).
+
+## Not supported
+
+Windows 10, ARM64 devices, Windows Insider builds, taskbar replacements such as
+ExplorerPatcher or StartAllBack, and taskbars on the side or top of the screen.
+Internet time sync, notification counters, custom gestures, format expressions and
+time offsets, extra time zones, translations and settings import from the original
+ElevenClock are not available; the [migration guide](docs/migration.md#what-carries-over-and-what-does-not)
+lists everything that was removed.
+
+## Contributing
+
+Build, test and packaging instructions are in the
+[contributor guide](docs/contributing.md) and the [release guide](docs/releasing.md).
+The [docs index](docs/README.md) maps the design records and Windows evidence.
 
 ## Name
 
-ElevenClock-rs is the Rust rewrite of [ElevenClock](https://github.com/marticliment/ElevenClock)
-for Windows 11, begun as a fork of it. The `-rs` suffix is the usual marker for a Rust port.
-It is an independent project maintained by tjorim; affiliation with or endorsement
-by the original ElevenClock project is not claimed. The Python app it replaces lives on, frozen, in
-[`legacy/`](legacy), and documents written during the rewrite (the plan, the issue specs and
-`docs/windows-evidence`) say "ElevenClock" for either, depending on context.
-
-## Repository layout
-
-| Path | What it is |
-| --- | --- |
-| [`rust/`](rust) | The Cargo workspace: `clock-core` (portable logic), `clock-windows` (Win32 adapter), `clock-app` (the executable, `elevenclock-rs.exe`); development harnesses are examples within these three crates |
-| [`docs/`](docs) | Plan, contracts, architecture decisions and per-issue Windows evidence |
-| [`scripts/`](scripts) | Hosted-desktop test harnesses and the dependency-license check |
-| [`assets/`](assets) | Original icon source and generated Windows icons |
-| [`legacy/`](legacy) | The original Python/Qt app, kept as a reference until the rewrite no longer needs it, then removed |
-| [`.github/workflows/`](.github/workflows) | CI for the Rust workspace and the hosted Windows checks |
-
-## Developing
-
-Rust stable on Windows (MSVC toolchain and Windows SDK) is needed for the full build; the
-portable crates also build and test on Linux. Commands and conventions are in
-[`docs/contributing.md`](docs/contributing.md); in short, from the repository root:
-
-```sh
-cargo fmt --manifest-path rust/Cargo.toml --all --check
-cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
-cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
-```
+ElevenClock-rs is a Rust rewrite of [ElevenClock](https://github.com/marticliment/ElevenClock)
+for Windows 11, begun as a fork of it; the `-rs` suffix is the usual marker for a Rust
+port. It is an independent project maintained by tjorim; affiliation with or
+endorsement by the original ElevenClock project is not claimed.
 
 ## License
 
-Native x64 installer/ZIP candidate packaging and the remaining distribution gates
-are documented in [the release guide](docs/releasing.md).
+The Rust implementation, its tooling and the [application artwork](assets/README.md)
+are licensed under [Apache License 2.0](LICENSE). Copyright 2026 ElevenClock-rs
+contributors. Third-party dependencies keep their own licenses; see
+[dependencies](docs/dependencies.md).
 
-The independently authored Rust implementation, its new supporting tooling and
-[original application artwork](assets/README.md) are licensed under
-[Apache License 2.0](LICENSE). Copyright 2026 ElevenClock-rs contributors.
-
-The inherited Python application and upstream imagery under [`legacy/`](legacy)
-retain [GPLv3](legacy/LICENSE) and their original notices. Third-party dependencies
-and copied notices retain their respective licenses. The upstream README's Apache
-sentence is historical and does not change the legacy code's GPLv3 license.
-
-The [provenance record](docs/windows-evidence/licensing-provenance.md) documents
-the owner's statement that no Python implementation code was used in the Rust
-implementation, the technical comparison, and the Apache 2.0 decision. Product-name
-review and the remaining release gates are still open.
-
-The [name and listing review](docs/windows-evidence/product-name-and-listings.md)
-records the separate package identities, draft listing copy and remaining name checks.
+The original Python ElevenClock is GPLv3. It is no longer in this tree and is not
+part of ElevenClock-rs releases; the [migration guide](docs/migration.md#legacy-reference)
+links the commits that contain it. The [provenance record](docs/windows-evidence/licensing-provenance.md)
+documents the Apache 2.0 decision, and the [name and listing review](docs/windows-evidence/product-name-and-listings.md)
+records the remaining product-name checks.

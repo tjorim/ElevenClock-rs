@@ -26,10 +26,9 @@ standard-account run without developer runtimes is still required before release
 No elevated prerequisite installer is run.
 
 LICENSE.txt contains Apache License 2.0 for the independently authored Rust
-implementation and original application artwork. Inherited Python code and
-imagery appear only under legacy/ in the source companion, with GPLv3 in
-legacy/LICENSE and original credits to Marti Climent and Xavier Delugo.
-They are not part of the installed application or portable binary payload.
+implementation and original application artwork. The inherited GPLv3 Python
+app (credits: Marti Climent and Xavier Delugo) is not part of this package or
+its source companion; it remains in the project's Git history.
 The owner decision and remaining product-name review are recorded in
 docs/windows-evidence/licensing-provenance.md in the matching source (#32).
 THIRD-PARTY-NOTICES.txt and RUST-COPYRIGHT.html retain dependency/toolchain notices.

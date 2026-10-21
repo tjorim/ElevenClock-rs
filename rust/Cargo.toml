@@ -7,7 +7,7 @@ edition = "2024"
 rust-version = "1.99"
 version = "0.1.0"
 publish = false
-# Original Rust implementation; inherited GPLv3 material stays under legacy/.
+# Original Rust implementation (Apache-2.0). The inherited GPLv3 Python app was removed at cutover.
 license = "Apache-2.0"
 license-file = "../LICENSE"
 

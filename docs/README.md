@@ -1,17 +1,17 @@
 # Documentation
 
-Docs for the Rust rewrite of ElevenClock (`ElevenClock-rs`). The legacy Python app is under
-[`legacy/`](../legacy) and is not covered here.
+Docs for ElevenClock-rs. Using the app is covered in the [README](../README.md); moving
+from the original Python ElevenClock is covered in the [migration guide](migration.md).
 
 | Folder / file | What it is | Changes when |
 | --- | --- | --- |
+| [`migration.md`](migration.md) | Moving from the Python ElevenClock, removed features, rollback and where the legacy code lives in Git | Support or the legacy reference changes |
 | [`contributing.md`](contributing.md) | Workspace layout, commands, CI and the contracts contributors must keep | The workflow changes |
 | [`dependencies.md`](dependencies.md), [`dependency-notices/`](dependency-notices) | Dependency policy and bundled third-party notices | A dependency is added, removed or updated |
 | [`releasing.md`](releasing.md) | Native x64 packaging, installer ownership and release gates | Packaging changes |
 | [`design/`](design) | How each part behaves and why: the interfaces, states and limits a reader needs | The behaviour changes |
 | [`adr/`](adr) | Architecture decisions that were weighed and settled | A decision is made or superseded |
 | [`windows-evidence/`](windows-evidence) | Dated records from real Windows runs: environments, screenshots, measurements, and the acceptance results (`acceptance.md`) | A new run happens. Never edited to say something that was not observed |
-| [`rewrite/`](rewrite) | Rewrite planning scaffolding: plan, source dissection, issue index and issue specs | Removed together at cutover (R15) |
 
 ## `design/`
 
@@ -39,7 +39,7 @@ release gate is in `windows-evidence/`.
 | Overlay feasibility and recovery | [`overlay-spike.md`](windows-evidence/overlay-spike.md) | [`overlay-hosted/`](windows-evidence/overlay-hosted), [`overlay-recovery-hosted/`](windows-evidence/overlay-recovery-hosted) |
 | Native Settings foundation (DPI, high contrast, keyboard) | [`settings-foundation.md`](windows-evidence/settings-foundation.md) | [`settings-foundation-matrix/`](windows-evidence/settings-foundation-matrix) |
 | Packaging and installer lifecycle | [`packaging.md`](windows-evidence/packaging.md) | `native-evidence/packaging/` (generated CI artifact) |
-| Licensing provenance and artwork | [`licensing-provenance.md`](windows-evidence/licensing-provenance.md) | [`assets/`](../assets), [`legacy/media/`](../legacy/media) |
+| Licensing provenance and artwork | [`licensing-provenance.md`](windows-evidence/licensing-provenance.md) | [`assets/`](../assets); inherited artwork in Git history ([migration guide](migration.md#legacy-reference)) |
 | Product name and listing review | [`product-name-and-listings.md`](windows-evidence/product-name-and-listings.md) | Linked public listings and trademark search outcomes |
 
 Screenshots used by a design file live next to it, in [`design/images/`](design/images).
@@ -47,5 +47,5 @@ Screenshots used by a design file live next to it, in [`design/images/`](design/
 ## Naming
 
 Files are named by topic, not by issue number. Issue IDs (R01 to R15) appear inside the
-text as cross-references only, because the numbering belongs to the rewrite plan, which is
-removed at cutover.
+text as cross-references only. They belong to the rewrite plan, which was removed at
+cutover; it remains in Git history ([migration guide](migration.md#legacy-reference)).
