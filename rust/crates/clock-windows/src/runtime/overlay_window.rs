@@ -107,6 +107,50 @@ impl Drop for Overlay {
     }
 }
 
+/// Far outside any monitor, yet clear of the -32000 minimized-window sentinel.
+const OFFSCREEN: i32 = -30_000;
+
+/// Undo a minimize from outside the app (screen-control or window-management
+/// tools) while keeping the window hidden. A minimized window has a 0x0 client
+/// area, so every paint would report overflow and the clock would stay on the
+/// native clock until restart. Restoring off screen, hiding, then moving back
+/// means no unpainted pixels are ever visible. Returns whether it was minimized.
+fn restore_hidden(hwnd: HWND, bounds: PhysicalRect) -> Result<bool> {
+    // SAFETY: state query on our own window.
+    if !unsafe { IsIconic(hwnd) }.as_bool() {
+        return Ok(false);
+    }
+    let mut placement = WINDOWPLACEMENT {
+        length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
+        ..Default::default()
+    };
+    let (width, height) = (bounds.width(), bounds.height());
+    // SAFETY: `placement` is a live, correctly sized buffer; only our own window
+    // is restored (without activation), hidden and moved.
+    unsafe {
+        GetWindowPlacement(hwnd, &mut placement)?;
+        placement.showCmd = SW_SHOWNOACTIVATE.0 as u32;
+        placement.rcNormalPosition = RECT {
+            left: OFFSCREEN,
+            top: OFFSCREEN,
+            right: OFFSCREEN + width,
+            bottom: OFFSCREEN + height,
+        };
+        SetWindowPlacement(hwnd, &placement)?;
+        let _ = ShowWindow(hwnd, SW_HIDE);
+        SetWindowPos(
+            hwnd,
+            None,
+            bounds.left(),
+            bounds.top(),
+            width,
+            height,
+            SWP_NOACTIVATE | SWP_NOZORDER,
+        )?;
+    }
+    Ok(true)
+}
+
 fn topmost(hwnd: HWND) -> bool {
     // SAFETY: style query on a possibly stale handle; failure reads as zero.
     unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0 }
@@ -214,6 +258,23 @@ impl Overlay {
         request: &PaintRequest<'_>,
     ) -> std::result::Result<PaintOutcome, RenderError> {
         self.surface.paint(renderer, request)
+    }
+
+    pub fn is_minimized(&self) -> bool {
+        // SAFETY: state query on our own window.
+        unsafe { IsIconic(self.hwnd) }.as_bool()
+    }
+
+    /// Bring an externally minimized overlay back to its bounds, still hidden,
+    /// so the next paint measures the real region instead of 0x0.
+    pub fn restore_if_minimized(&mut self) -> Result<bool> {
+        let restored = restore_hidden(self.hwnd, self.bounds)?;
+        if restored {
+            self.shown = false;
+            // The old pixels did not survive; never skip the next draw as unchanged.
+            self.surface.mark_dirty();
+        }
+        Ok(restored)
     }
 
     pub fn is_shown(&self) -> bool {
@@ -403,4 +464,87 @@ fn point_in_client(hwnd: HWND, lparam: LPARAM) -> bool {
         && x < client.right
         && y >= client.top
         && y < client.bottom
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{render::WorstCase, theme::Palette};
+    use clock_core::Preferences;
+
+    /// A minimized window measures 0x0, so paint latches on overflow (#46). After
+    /// `restore_hidden` the same surface paints again and nothing was shown.
+    #[test]
+    fn a_minimized_window_is_restored_hidden_and_paints_again() {
+        let bounds = PhysicalRect::new(100, 100, 92, 60).unwrap();
+        // SAFETY: STATIC is a system class; the window is destroyed below.
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                w!("STATIC"),
+                w!(""),
+                WS_POPUP,
+                bounds.left(),
+                bounds.top(),
+                bounds.width(),
+                bounds.height(),
+                None,
+                None,
+                None,
+                None,
+            )
+        }
+        .unwrap();
+        let renderer = Renderer::new().unwrap();
+        let mut surface = renderer.create_surface(hwnd);
+        let prefs = Preferences::default().validate().unwrap();
+        let text = clock_core::ClockText {
+            lines: vec!["12:34".into()],
+        };
+        let worst_case = WorstCase::for_format(prefs.format());
+        let request = PaintRequest {
+            text: &text,
+            worst_case: &worst_case,
+            dpi: 96,
+            font_pt: 9,
+            palette: Palette::DARK,
+        };
+        assert_eq!(
+            surface.paint(&renderer, &request).unwrap(),
+            PaintOutcome::Painted
+        );
+        assert!(!restore_hidden(hwnd, bounds).unwrap(), "not minimized yet");
+
+        // SAFETY: minimizes the test's own window without activating it.
+        unsafe {
+            let _ = ShowWindow(hwnd, SW_SHOWMINNOACTIVE);
+        }
+        assert!(unsafe { IsIconic(hwnd) }.as_bool());
+        assert!(matches!(
+            surface.paint(&renderer, &request).unwrap(),
+            PaintOutcome::Overflow(overflow) if overflow.available.width == 0
+        ));
+
+        assert!(restore_hidden(hwnd, bounds).unwrap());
+        let mut rect = RECT::default();
+        // SAFETY: live output buffer for the test's own window.
+        unsafe { GetWindowRect(hwnd, &mut rect) }.unwrap();
+        assert!(!unsafe { IsIconic(hwnd) }.as_bool());
+        assert!(!unsafe { IsWindowVisible(hwnd) }.as_bool());
+        assert_eq!(
+            (rect.left, rect.top, rect.right, rect.bottom),
+            (100, 100, 192, 160)
+        );
+        surface.mark_dirty();
+        assert_eq!(
+            surface.paint(&renderer, &request).unwrap(),
+            PaintOutcome::Painted
+        );
+
+        drop(surface);
+        // SAFETY: owned by this test thread.
+        unsafe {
+            let _ = DestroyWindow(hwnd);
+        }
+    }
 }

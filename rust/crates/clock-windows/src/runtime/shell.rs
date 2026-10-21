@@ -13,6 +13,11 @@ pub struct Observation {
     pub monitor_rect: Option<PhysicalRect>,
     /// A foreground window covers this taskbar's whole monitor.
     pub fullscreen: bool,
+    /// The legacy notification-area window, relative to the taskbar's origin.
+    /// Explorer keeps it sized to the tray, so it changes when the clock button
+    /// moves or resizes inside an unmoved taskbar (for example when the separate
+    /// do-not-disturb bell appears). `None` where it does not exist.
+    pub tray: Option<PhysicalRect>,
 }
 impl Observation {
     pub const GONE: Self = Self {
@@ -22,6 +27,7 @@ impl Observation {
         dpi: 0,
         monitor_rect: None,
         fullscreen: false,
+        tray: None,
     };
 }
 
@@ -102,6 +108,7 @@ mod tests {
             dpi: s.dpi,
             monitor_rect: Some(s.monitor_rect),
             fullscreen: false,
+            tray: None,
         }
     }
 
