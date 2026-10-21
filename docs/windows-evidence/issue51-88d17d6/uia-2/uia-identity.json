@@ -1,0 +1,473 @@
+﻿{
+    "executable":  "rust\\target\\release\\elevenclock-rs.exe",
+    "sha256":  "A0F82E7ECFE6B39434A75D38CC4C8C7F1D9DFD854E73885A7FC5D7A3D1F39879",
+    "os":  "Windows 11 Core 26H2 26300.9711 AMD64",
+    "step":  4,
+    "taskbars":  [
+                     {
+                         "index":  0,
+                         "class":  "Shell_TrayWnd",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  1046,
+                                        "right":  1536,
+                                        "bottom":  1106
+                                    },
+                         "dpi":  120,
+                         "shellPid":  8828,
+                         "checks":  {
+                                        "oneClock":  true,
+                                        "oneOverlay":  true,
+                                        "clockOwnedByTaskbarShell":  true,
+                                        "clockParentReachesTaskbar":  true,
+                                        "present_SystemTray.ShowDesktopButton":  true,
+                                        "overlayMatchesClock":  true,
+                                        "overlayClearOf_neighbour1":  true,
+                                        "overlayClearOf_neighbour2":  true,
+                                        "overlayClearOf_neighbour3":  true,
+                                        "overlayClearOf_neighbour4":  true,
+                                        "overlayClearOf_showDesktop":  true,
+                                        "points_clock":  true,
+                                        "points_neighbour1":  true,
+                                        "points_neighbour2":  true,
+                                        "points_neighbour3":  true,
+                                        "points_neighbour4":  true,
+                                        "points_showDesktop":  true
+                                    },
+                         "trayButtons":  [
+                                             {
+                                                 "automationId":  "SystemTrayIcon",
+                                                 "class":  "SystemTray.NormalButton",
+                                                 "name":  "Show Hidden Icons",
+                                                 "controlType":  "ControlType.Button",
+                                                 "framework":  "XAML",
+                                                 "processId":  8828,
+                                                 "offscreen":  false,
+                                                 "rect":  {
+                                                              "left":  1254,
+                                                              "top":  1046,
+                                                              "right":  1294,
+                                                              "bottom":  1106
+                                                          }
+                                             },
+                                             {
+                                                 "automationId":  "SystemTrayIcon",
+                                                 "class":  "SystemTray.NormalButton",
+                                                 "name":  "Tray Input Indicator English (United Kingdom)\r\nUnited Kingdom\r\n\r\nTo switch input methods, press Windows key + space.",
+                                                 "controlType":  "ControlType.Button",
+                                                 "framework":  "XAML",
+                                                 "processId":  8828,
+                                                 "offscreen":  false,
+                                                 "rect":  {
+                                                              "left":  1294,
+                                                              "top":  1046,
+                                                              "right":  1349,
+                                                              "bottom":  1106
+                                                          }
+                                             },
+                                             {
+                                                 "automationId":  "SystemTrayIcon",
+                                                 "class":  "SystemTray.AccentButton",
+                                                 "name":  "Network Network\nInternet access",
+                                                 "controlType":  "ControlType.Button",
+                                                 "framework":  "XAML",
+                                                 "processId":  8828,
+                                                 "offscreen":  false,
+                                                 "rect":  {
+                                                              "left":  1354,
+                                                              "top":  1046,
+                                                              "right":  1384,
+                                                              "bottom":  1106
+                                                          }
+                                             },
+                                             {
+                                                 "automationId":  "SystemTrayIcon",
+                                                 "class":  "SystemTray.OmniButtonRight",
+                                                 "name":  "Volume Speakers (High Definition Audio Device): 67%",
+                                                 "controlType":  "ControlType.Button",
+                                                 "framework":  "XAML",
+                                                 "processId":  8828,
+                                                 "offscreen":  false,
+                                                 "rect":  {
+                                                              "left":  1389,
+                                                              "top":  1046,
+                                                              "right":  1419,
+                                                              "bottom":  1106
+                                                          }
+                                             },
+                                             {
+                                                 "automationId":  "SystemTrayIcon",
+                                                 "class":  "SystemTray.OmniButton",
+                                                 "name":  "Clock 22:36\n‎21/‎10/‎2026",
+                                                 "controlType":  "ControlType.Button",
+                                                 "framework":  "XAML",
+                                                 "processId":  8828,
+                                                 "offscreen":  false,
+                                                 "rect":  {
+                                                              "left":  1429,
+                                                              "top":  1046,
+                                                              "right":  1516,
+                                                              "bottom":  1106
+                                                          }
+                                             },
+                                             {
+                                                 "automationId":  "SystemTrayIcon",
+                                                 "class":  "SystemTray.ShowDesktopButton",
+                                                 "name":  "Show Desktop",
+                                                 "controlType":  "ControlType.Button",
+                                                 "framework":  "XAML",
+                                                 "processId":  8828,
+                                                 "offscreen":  false,
+                                                 "rect":  {
+                                                              "left":  1521,
+                                                              "top":  1046,
+                                                              "right":  1536,
+                                                              "bottom":  1106
+                                                          }
+                                             }
+                                         ],
+                         "overlay":  {
+                                         "left":  1429,
+                                         "top":  1046,
+                                         "right":  1516,
+                                         "bottom":  1106
+                                     },
+                         "clock":  {
+                                       "automationId":  "SystemTrayIcon",
+                                       "class":  "SystemTray.OmniButton",
+                                       "name":  "Clock 22:36\n‎21/‎10/‎2026",
+                                       "controlType":  "ControlType.Button",
+                                       "framework":  "XAML",
+                                       "processId":  8828,
+                                       "offscreen":  false,
+                                       "rect":  {
+                                                    "left":  1429,
+                                                    "top":  1046,
+                                                    "right":  1516,
+                                                    "bottom":  1106
+                                                },
+                                       "parentage":  {
+                                                         "chain":  [
+                                                                       "SystemTray.OmniButton[SystemTrayIcon]",
+                                                                       "Windows.UI.Input.InputSite.WindowClass[]",
+                                                                       "Windows.UI.Composition.DesktopWindowContentBridge[]",
+                                                                       "Shell_TrayWnd[]"
+                                                                   ],
+                                                         "reachesTaskbar":  true
+                                                     }
+                                   },
+                         "points":  [
+                                        {
+                                            "target":  "clock",
+                                            "class":  "SystemTray.OmniButton",
+                                            "name":  "Clock 22:36\n‎21/‎10/‎2026",
+                                            "runtimeId":  "42.524376.4.29",
+                                            "rect":  {
+                                                         "left":  1429,
+                                                         "top":  1046,
+                                                         "right":  1516,
+                                                         "bottom":  1106
+                                                     },
+                                            "points":  368,
+                                            "hits":  352,
+                                            "firstMisses":  [
+                                                                "(1429,1046) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1050) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1054) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1058) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1062) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1066) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1070) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1074) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1078) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1082) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1086) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1090) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1094) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1098) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1102) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1429,1105) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]"
+                                                            ],
+                                            "elapsedMs":  9727,
+                                            "edgeMisses":  16,
+                                            "interiorMisses":  0,
+                                            "otherButton":  0
+                                        },
+                                        {
+                                            "target":  "neighbour1",
+                                            "class":  "SystemTray.NormalButton",
+                                            "name":  "Show Hidden Icons",
+                                            "runtimeId":  "42.524376.4.2",
+                                            "rect":  {
+                                                         "left":  1254,
+                                                         "top":  1046,
+                                                         "right":  1294,
+                                                         "bottom":  1106
+                                                     },
+                                            "points":  176,
+                                            "hits":  176,
+                                            "firstMisses":  [
+
+                                                            ],
+                                            "elapsedMs":  4278,
+                                            "edgeMisses":  0,
+                                            "interiorMisses":  0,
+                                            "otherButton":  0
+                                        },
+                                        {
+                                            "target":  "neighbour2",
+                                            "class":  "SystemTray.NormalButton",
+                                            "name":  "Tray Input Indicator English (United Kingdom)\r\nUnited Kingdom\r\n\r\nTo switch input methods, press Windows key + space.",
+                                            "runtimeId":  "42.524376.4.19",
+                                            "rect":  {
+                                                         "left":  1294,
+                                                         "top":  1046,
+                                                         "right":  1349,
+                                                         "bottom":  1106
+                                                     },
+                                            "points":  240,
+                                            "hits":  224,
+                                            "firstMisses":  [
+                                                                "(1294,1046) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1050) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1054) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1058) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1062) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1066) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1070) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1074) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1078) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1082) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1086) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1090) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1094) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1098) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1102) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027",
+                                                                "(1294,1105) -\u003e SystemTray.NormalButton \u0027Show Hidden Icons\u0027"
+                                                            ],
+                                            "elapsedMs":  5778,
+                                            "edgeMisses":  16,
+                                            "interiorMisses":  0,
+                                            "otherButton":  16
+                                        },
+                                        {
+                                            "target":  "neighbour3",
+                                            "class":  "SystemTray.AccentButton",
+                                            "name":  "Network Network\nInternet access",
+                                            "runtimeId":  "42.524376.4.23",
+                                            "rect":  {
+                                                         "left":  1354,
+                                                         "top":  1046,
+                                                         "right":  1384,
+                                                         "bottom":  1106
+                                                     },
+                                            "points":  144,
+                                            "hits":  128,
+                                            "firstMisses":  [
+                                                                "(1354,1046) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1050) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1054) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1058) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1062) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1066) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1070) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1074) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1078) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1082) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1086) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1090) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1094) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1098) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1102) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1354,1105) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]"
+                                                            ],
+                                            "elapsedMs":  4067,
+                                            "edgeMisses":  16,
+                                            "interiorMisses":  0,
+                                            "otherButton":  0
+                                        },
+                                        {
+                                            "target":  "neighbour4",
+                                            "class":  "SystemTray.OmniButtonRight",
+                                            "name":  "Volume Speakers (High Definition Audio Device): 67%",
+                                            "runtimeId":  "42.524376.4.25",
+                                            "rect":  {
+                                                         "left":  1389,
+                                                         "top":  1046,
+                                                         "right":  1419,
+                                                         "bottom":  1106
+                                                     },
+                                            "points":  144,
+                                            "hits":  128,
+                                            "firstMisses":  [
+                                                                "(1389,1046) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1050) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1054) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1058) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1062) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1066) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1070) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1074) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1078) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1082) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1086) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1090) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1094) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1098) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1102) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]",
+                                                                "(1389,1105) -\u003e none:Windows.UI.Input.InputSite.WindowClass[]"
+                                                            ],
+                                            "elapsedMs":  3973,
+                                            "edgeMisses":  16,
+                                            "interiorMisses":  0,
+                                            "otherButton":  0
+                                        },
+                                        {
+                                            "target":  "showDesktop",
+                                            "class":  "SystemTray.ShowDesktopButton",
+                                            "name":  "Show Desktop",
+                                            "runtimeId":  "42.524376.4.33",
+                                            "rect":  {
+                                                         "left":  1521,
+                                                         "top":  1046,
+                                                         "right":  1536,
+                                                         "bottom":  1106
+                                                     },
+                                            "points":  80,
+                                            "hits":  80,
+                                            "firstMisses":  [
+
+                                                            ],
+                                            "elapsedMs":  1875,
+                                            "edgeMisses":  0,
+                                            "interiorMisses":  0,
+                                            "otherButton":  0
+                                        }
+                                    ],
+                         "neighbours":  [
+                                            {
+                                                "automationId":  "SystemTrayIcon",
+                                                "class":  "SystemTray.NormalButton",
+                                                "name":  "Show Hidden Icons",
+                                                "controlType":  "ControlType.Button",
+                                                "framework":  "XAML",
+                                                "processId":  8828,
+                                                "offscreen":  false,
+                                                "rect":  {
+                                                             "left":  1254,
+                                                             "top":  1046,
+                                                             "right":  1294,
+                                                             "bottom":  1106
+                                                         },
+                                                "parentage":  {
+                                                                  "chain":  [
+                                                                                "SystemTray.NormalButton[SystemTrayIcon]",
+                                                                                "Windows.UI.Input.InputSite.WindowClass[]",
+                                                                                "Windows.UI.Composition.DesktopWindowContentBridge[]",
+                                                                                "Shell_TrayWnd[]"
+                                                                            ],
+                                                                  "reachesTaskbar":  true
+                                                              }
+                                            },
+                                            {
+                                                "automationId":  "SystemTrayIcon",
+                                                "class":  "SystemTray.NormalButton",
+                                                "name":  "Tray Input Indicator English (United Kingdom)\r\nUnited Kingdom\r\n\r\nTo switch input methods, press Windows key + space.",
+                                                "controlType":  "ControlType.Button",
+                                                "framework":  "XAML",
+                                                "processId":  8828,
+                                                "offscreen":  false,
+                                                "rect":  {
+                                                             "left":  1294,
+                                                             "top":  1046,
+                                                             "right":  1349,
+                                                             "bottom":  1106
+                                                         },
+                                                "parentage":  {
+                                                                  "chain":  [
+                                                                                "SystemTray.NormalButton[SystemTrayIcon]",
+                                                                                "Windows.UI.Input.InputSite.WindowClass[]",
+                                                                                "Windows.UI.Composition.DesktopWindowContentBridge[]",
+                                                                                "Shell_TrayWnd[]"
+                                                                            ],
+                                                                  "reachesTaskbar":  true
+                                                              }
+                                            },
+                                            {
+                                                "automationId":  "SystemTrayIcon",
+                                                "class":  "SystemTray.AccentButton",
+                                                "name":  "Network Network\nInternet access",
+                                                "controlType":  "ControlType.Button",
+                                                "framework":  "XAML",
+                                                "processId":  8828,
+                                                "offscreen":  false,
+                                                "rect":  {
+                                                             "left":  1354,
+                                                             "top":  1046,
+                                                             "right":  1384,
+                                                             "bottom":  1106
+                                                         },
+                                                "parentage":  {
+                                                                  "chain":  [
+                                                                                "SystemTray.AccentButton[SystemTrayIcon]",
+                                                                                "Windows.UI.Input.InputSite.WindowClass[]",
+                                                                                "Windows.UI.Composition.DesktopWindowContentBridge[]",
+                                                                                "Shell_TrayWnd[]"
+                                                                            ],
+                                                                  "reachesTaskbar":  true
+                                                              }
+                                            },
+                                            {
+                                                "automationId":  "SystemTrayIcon",
+                                                "class":  "SystemTray.OmniButtonRight",
+                                                "name":  "Volume Speakers (High Definition Audio Device): 67%",
+                                                "controlType":  "ControlType.Button",
+                                                "framework":  "XAML",
+                                                "processId":  8828,
+                                                "offscreen":  false,
+                                                "rect":  {
+                                                             "left":  1389,
+                                                             "top":  1046,
+                                                             "right":  1419,
+                                                             "bottom":  1106
+                                                         },
+                                                "parentage":  {
+                                                                  "chain":  [
+                                                                                "SystemTray.OmniButtonRight[SystemTrayIcon]",
+                                                                                "Windows.UI.Input.InputSite.WindowClass[]",
+                                                                                "Windows.UI.Composition.DesktopWindowContentBridge[]",
+                                                                                "Shell_TrayWnd[]"
+                                                                            ],
+                                                                  "reachesTaskbar":  true
+                                                              }
+                                            },
+                                            {
+                                                "automationId":  "SystemTrayIcon",
+                                                "class":  "SystemTray.ShowDesktopButton",
+                                                "name":  "Show Desktop",
+                                                "controlType":  "ControlType.Button",
+                                                "framework":  "XAML",
+                                                "processId":  8828,
+                                                "offscreen":  false,
+                                                "rect":  {
+                                                             "left":  1521,
+                                                             "top":  1046,
+                                                             "right":  1536,
+                                                             "bottom":  1106
+                                                         },
+                                                "parentage":  {
+                                                                  "chain":  [
+                                                                                "SystemTray.ShowDesktopButton[SystemTrayIcon]",
+                                                                                "Windows.UI.Input.InputSite.WindowClass[]",
+                                                                                "Windows.UI.Composition.DesktopWindowContentBridge[]",
+                                                                                "Shell_TrayWnd[]"
+                                                                            ],
+                                                                  "reachesTaskbar":  true
+                                                              }
+                                            }
+                                        ],
+                         "passed":  true
+                     }
+                 ],
+    "passed":  true
+}

@@ -22,11 +22,11 @@ Home 10.0.26300.9711 x64 VM, one 1536×1106 display at 125%.
 | Single display; auto-hide; full screen; calendar and neighbour clicks; tray re-layout | **Pass** | [`matrix-4f586f5/`](matrix-4f586f5/README.md) |
 | Invalid preferences; overflow; repeated launch/Settings cycles; Reset/Cancel/Exit; startup choice | **Pass** | [`matrix-4f586f5/`](matrix-4f586f5/README.md) |
 | Lock/unlock; time and time-zone changes | **Pass (maintainer-performed)** | [Matrix status](#matrix-status) |
-| Explorer restart ×3; forced kill reveals native clock; quiet start | **Pass at `940634a`**; Explorer recovery **open in #51** | [Recovery](#recovery-executed-on-this-vm); #51 records later Explorer recovery failures |
+| Explorer restart ×3; forced kill reveals native clock; quiet start | **Pass at `940634a`**; Explorer recovery **open in #51** | [Recovery](#recovery-executed-on-this-vm); #51 records later two-display Explorer recovery failures; one display recovered 10/10 at `88d17d6` ([`issue51-88d17d6/`](issue51-88d17d6/README.md)) |
 | Start menu, standard (non-admin) account, startup without UAC | **Pass at `ab2a963`** (closed #15) | [`packaging.md`](packaging.md), standard-account desktop session |
 | Actual sign-out/sign-in startup; clean first-run machine | **Not run (reviewed limitation)** | Not covered by #15's session, and not possible for the agent (no password entry, single VM) |
 | Narrator speech | **Partial** | UIA name, role and Invoke verified; speech not heard |
-| Mixed DPI 100/150/200%, hotplug, primary swap, negative origins, physical hardware, independent UIA identity | **Open in #51** | Handled separately by the maintainer |
+| Mixed DPI 100/150/200%, hotplug, primary swap, negative origins, physical hardware, independent UIA identity | **Open in #51** | Handled separately by the maintainer; single-display 125% UIA identity passed at `88d17d6` ([`issue51-88d17d6/`](issue51-88d17d6/README.md)) |
 | Overflow after minimize; tray re-layout; overlay visible but not drawn | **Fixed / mitigated** | Findings below; the original Show Desktop failure is mitigated, not reproduced |
 
 **Decision.** Every criterion #46 owns has qualifying evidence, a maintainer decision
