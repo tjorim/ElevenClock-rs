@@ -6,12 +6,15 @@
 # public process/window state: the product has no command suite or debug channel.
 # Overlay observation (-ObserveOverlays) is informational evidence: P1 is still
 # NO-GO (#23), so overlay counts are recorded but never an acceptance check.
+# With it, each Explorer restart also records how long the overlays took to come
+# back (#51). -RecoveryBoundSeconds turns that into a check, for a reviewed bound.
 param(
     [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/debug/elevenclock-rs.exe',
     [string]$OutputDirectory = 'native-evidence/lifecycle',
     [int]$ExplorerRestarts = 3,
     [int]$IdleSeconds = 20,
-    [switch]$ObserveOverlays
+    [switch]$ObserveOverlays,
+    [int]$RecoveryBoundSeconds = 0
 )
 $ErrorActionPreference = 'Stop'
 Add-Type @'
@@ -98,6 +101,21 @@ function Max-Processes([Diagnostics.Process]$P, [int]$Seconds) {
     }
     return $max
 }
+# Like Max-Processes, but also notes when the visible overlay count first gets
+# back to $Expected, in milliseconds from $Since (the Explorer kill).
+function Watch-Recovery([Diagnostics.Process]$P, [int]$Seconds, [int]$Expected, [Diagnostics.Stopwatch]$Since) {
+    $max = 0; $recovered = $null; $counts = @()
+    $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $max = [Math]::Max($max, (Others).Count)
+        if ($P.HasExited) { throw 'Application exited unexpectedly' }
+        $count = Overlay-Count $P
+        if ($counts.Count -eq 0 -or $counts[-1].count -ne $count) { $counts += [ordered]@{ ms = $Since.ElapsedMilliseconds; count = $count } }
+        if ($null -eq $recovered -and $count -ge $Expected) { $recovered = $Since.ElapsedMilliseconds }
+        Start-Sleep -Milliseconds 100
+    }
+    return [ordered]@{ maxProcesses = $max; recoveredMs = $recovered; overlayCounts = $counts }
+}
 function Overlay-Count([Diagnostics.Process]$P) { [Lifecycle]::Count([uint32]$P.Id, 'ElevenClock-rs.Overlay', $true) }
 
 $app = $null
@@ -147,6 +165,7 @@ try {
         $session = (Get-Process -Id $PID).SessionId
         $old = @(Get-Process explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session })
         $old | Stop-Process -Force
+        $sinceKill = [Diagnostics.Stopwatch]::StartNew()
         Start-Sleep -Milliseconds 500
         if ($ObserveOverlays) { $lost = Overlay-Count $app }
         if ([Lifecycle]::FindWindowW('Shell_TrayWnd', [NullString]::Value) -eq [IntPtr]::Zero) {
@@ -155,13 +174,27 @@ try {
             if ([Lifecycle]::FindWindowW('Shell_TrayWnd', [NullString]::Value) -eq [IntPtr]::Zero) { Start-Process explorer.exe | Out-Null }
         }
         Wait-Until { [Lifecycle]::FindWindowW('Shell_TrayWnd', [NullString]::Value) -ne [IntPtr]::Zero } 45 'Explorer taskbar to return'
-        $maxDuring = Max-Processes $app 10
+        $explorerBackMs = $sinceKill.ElapsedMilliseconds
+        if ($ObserveOverlays) {
+            # Watch long enough to reach the bound even when Explorer is slow.
+            $watch = Watch-Recovery $app ([Math]::Max(10, $RecoveryBoundSeconds - [int]($explorerBackMs / 1000) + 1)) $results.steps.overlaysVisibleAtStart $sinceKill
+            $maxDuring = $watch.maxProcesses
+        } else {
+            $maxDuring = Max-Processes $app 10
+        }
         $app.Refresh()
         if ($app.HasExited) { throw "Application exited during Explorer restart $i" }
         if ($maxDuring -gt 2) { throw "Helper accumulation during restart ${i}: $maxDuring processes" }
         $entry = [ordered]@{ restart = $i; maxProcesses = $maxDuring; after = (Sample $app) }
-        if ($ObserveOverlays) { $entry.overlaysRightAfterLoss = $lost; $entry.overlaysAfterRecovery = Overlay-Count $app }
+        if ($ObserveOverlays) {
+            $entry.overlaysRightAfterLoss = $lost; $entry.overlaysAfterRecovery = Overlay-Count $app
+            $entry.explorerBackMs = $explorerBackMs; $entry.overlaysRecoveredMs = $watch.recoveredMs; $entry.overlayCounts = $watch.overlayCounts
+        }
         $restarts += $entry
+        if ($ObserveOverlays -and $RecoveryBoundSeconds -gt 0 -and ($null -eq $watch.recoveredMs -or $watch.recoveredMs -gt $RecoveryBoundSeconds * 1000)) {
+            $results.steps.explorerRestarts = $restarts
+            throw "Overlays did not recover within $RecoveryBoundSeconds s of Explorer restart $i"
+        }
     }
     $results.steps.explorerRestarts = $restarts
     if ($ExplorerRestarts -gt 0) {
