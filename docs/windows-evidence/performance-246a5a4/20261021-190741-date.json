@@ -1,0 +1,83 @@
+{
+    "label":  "date",
+    "workload":  "ISO week date preset (%g%V.%u); idle desktop; candidate 246a5a4 clean build",
+    "csv":  "20261021-190741-date.csv",
+    "processEvents":  "20261021-190741-date-processes.csv",
+    "environment":  "20261021-190741-date-environment.json",
+    "intervalSeconds":  10,
+    "requestedSeconds":  600,
+    "wallSeconds":  608.7,
+    "samples":  58,
+    "complete":  true,
+    "logicalProcessors":  8,
+    "processesSeen":  1,
+    "processesStarted":  0,
+    "processesExited":  0,
+    "cpuPercentOfMachine":  0.0116,
+    "privateMiBMax":  3.01,
+    "trends":  {
+                   "privateMiB":  {
+                                      "start":  2.97,
+                                      "end":  2.96,
+                                      "min":  2.94,
+                                      "max":  3.01,
+                                      "mean":  2.97,
+                                      "slopePerHour":  0.2304
+                                  },
+                   "handles":  {
+                                   "start":  230,
+                                   "end":  228,
+                                   "min":  228,
+                                   "max":  230,
+                                   "mean":  228.1,
+                                   "slopePerHour":  -3.5206
+                               },
+                   "threads":  {
+                                   "start":  5,
+                                   "end":  3,
+                                   "min":  3,
+                                   "max":  6,
+                                   "mean":  3.81,
+                                   "slopePerHour":  4.4113
+                               },
+                   "processes":  {
+                                     "start":  1,
+                                     "end":  1,
+                                     "min":  1,
+                                     "max":  1,
+                                     "mean":  1,
+                                     "slopePerHour":  0
+                                 },
+                   "gdiObjects":  {
+                                      "start":  10,
+                                      "end":  10,
+                                      "min":  10,
+                                      "max":  10,
+                                      "mean":  10,
+                                      "slopePerHour":  0
+                                  },
+                   "userObjects":  {
+                                       "start":  13,
+                                       "end":  13,
+                                       "min":  13,
+                                       "max":  13,
+                                       "mean":  13,
+                                       "slopePerHour":  0
+                                   },
+                   "topLevelWindows":  {
+                                           "start":  3,
+                                           "end":  3,
+                                           "min":  3,
+                                           "max":  3,
+                                           "mean":  3,
+                                           "slopePerHour":  0
+                                       }
+               },
+    "targets":  "CPU \u003c 0.2% of machine; private working set \u003c 40 MiB (reference machine only)",
+    "cpuTargetMet":  true,
+    "memoryTargetMet":  true,
+    "instrumentationGaps":  [
+                                "Timer-wake and discovery rates: not observable externally; take them from Support diagnostics.",
+                                "Hooks: not observable externally; GDI/USER object and window counts are the external proxy."
+                            ]
+}

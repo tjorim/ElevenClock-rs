@@ -1,0 +1,163 @@
+﻿{
+    "appProcess":  340,
+    "originalState":  0,
+    "attempts":  [
+                     {
+                         "primary":  true,
+                         "repeat":  1,
+                         "bothParkedBeforeReveal":  true,
+                         "shownAfterMs":  129.8911,
+                         "overlayHit":  true,
+                         "sampleAfterMs":  2842.5372,
+                         "captureAfterMs":  3288.7325,
+                         "pointer":  {
+                                         "X":  768,
+                                         "Y":  1105
+                                     },
+                         "corners":  [
+                                         {
+                                             "x":  1430,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1430,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         }
+                                     ],
+                         "otherTaskbarShown":  0
+                     },
+                     {
+                         "primary":  true,
+                         "repeat":  2,
+                         "bothParkedBeforeReveal":  true,
+                         "shownAfterMs":  111.64460000000001,
+                         "overlayHit":  true,
+                         "sampleAfterMs":  111.64460000000001,
+                         "captureAfterMs":  507.7756,
+                         "pointer":  {
+                                         "X":  768,
+                                         "Y":  1105
+                                     },
+                         "corners":  [
+                                         {
+                                             "x":  1430,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1430,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         }
+                                     ],
+                         "otherTaskbarShown":  0
+                     },
+                     {
+                         "primary":  true,
+                         "repeat":  3,
+                         "bothParkedBeforeReveal":  true,
+                         "shownAfterMs":  111.44760000000001,
+                         "overlayHit":  true,
+                         "sampleAfterMs":  111.44760000000001,
+                         "captureAfterMs":  491.0129,
+                         "pointer":  {
+                                         "X":  768,
+                                         "Y":  1105
+                                     },
+                         "corners":  [
+                                         {
+                                             "x":  1430,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1430,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         }
+                                     ],
+                         "otherTaskbarShown":  0
+                     }
+                 ],
+    "restored":  true
+}

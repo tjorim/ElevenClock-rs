@@ -145,6 +145,7 @@ impl Platform for Fake {
                 dpi: taskbar.dpi,
                 monitor_rect: Some(taskbar.monitor_rect),
                 fullscreen: false,
+                tray: None,
             })
     }
     fn create_overlay(&mut self, key: TaskbarKey, _: PhysicalRect) -> Result<(), String> {
@@ -902,6 +903,71 @@ fn a_moved_or_resized_taskbar_triggers_one_rediscovery_not_a_loop() {
 }
 
 #[test]
+fn a_tray_relayout_rediscovers_once_and_keeps_the_overlay_meanwhile() {
+    // 26300.9711: enabling do-not-disturb adds a bell button right of the clock
+    // and moves the clock left inside an unmoved taskbar (#46).
+    let mut runtime = runtime(Monitors::All);
+    let base = runtime.platform.observe(&bar(0, 1, true));
+    let tray = |left| Observation {
+        tray: Some(rect(left, 0, 1920 - left, 80)),
+        ..base
+    };
+    runtime.platform.observations.insert(1, tray(1255));
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    take(&mut runtime);
+
+    runtime.platform.observations.insert(1, tray(1220));
+    advance(&mut runtime, RECOVERY_POLL);
+    let calls = take(&mut runtime);
+    assert!(
+        !calls
+            .iter()
+            .any(|c| matches!(c, Call::Hide(_) | Call::Destroy(_)))
+    );
+    assert_eq!(
+        runtime.state().overlay_state(key(0, 1)),
+        OverlayState::Visible
+    );
+    advance(&mut runtime, TOPOLOGY_SETTLE);
+    assert_eq!(requests(&take(&mut runtime)), vec![0]);
+
+    // The request recorded the new layout: no loop while it stays that way.
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    for _ in 0..5 {
+        advance(&mut runtime, RECOVERY_POLL);
+    }
+    assert!(requests(&take(&mut runtime)).is_empty());
+
+    // Turning do-not-disturb off again is another move.
+    runtime.platform.observations.insert(1, tray(1255));
+    advance(&mut runtime, RECOVERY_POLL);
+    advance(&mut runtime, TOPOLOGY_SETTLE);
+    assert_eq!(requests(&take(&mut runtime)), vec![0]);
+}
+
+#[test]
+fn a_tray_change_during_discovery_asks_again_afterwards() {
+    let mut runtime = runtime(Monitors::All);
+    let base = runtime.platform.observe(&bar(0, 1, true));
+    let tray = |left| Observation {
+        tray: Some(rect(left, 0, 1920 - left, 80)),
+        ..base
+    };
+    runtime.platform.observations.insert(1, tray(1255));
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    take(&mut runtime);
+    runtime.handle(Input::Signal(Signal::TopologyChanged));
+    advance(&mut runtime, TOPOLOGY_SETTLE);
+    assert_eq!(requests(&take(&mut runtime)), vec![0]);
+    // The layout changes while the helper runs; its answer may predate that.
+    runtime.platform.observations.insert(1, tray(1220));
+    advance(&mut runtime, RECOVERY_POLL);
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    advance(&mut runtime, TOPOLOGY_SETTLE);
+    assert_eq!(requests(&take(&mut runtime)), vec![0]);
+}
+
+#[test]
 fn a_dpi_change_or_unplugged_monitor_rediscovers() {
     let mut runtime = runtime(Monitors::All);
     discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
@@ -970,6 +1036,7 @@ fn a_new_taskbar_that_starts_under_a_fullscreen_window_is_hidden_immediately() {
             rect: Some(bar(0, 1, true).taskbar_rect),
             dpi: 96,
             monitor_rect: Some(bar(0, 1, true).monitor_rect),
+            tray: None,
         },
     );
     discover(&mut runtime, 0, vec![bar(0, 1, true)]);
@@ -1351,6 +1418,7 @@ fn a_click_that_is_stale_hidden_or_unknown_does_nothing() {
                 dpi: 96,
                 monitor_rect: Some(bar(0, 1, true).monitor_rect),
                 fullscreen: false,
+                tray: None,
             }
         },
     );
