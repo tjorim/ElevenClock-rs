@@ -1,12 +1,39 @@
 # Windows acceptance gates (R13)
 
-Status: **started, not passed.** Partial sessions on one machine. The release gate
-stays **open** for the matrix gaps listed under [Matrix status](#matrix-status). The three
-ten-minute runs passed for candidate `246a5a4` on 2026-10-21
-([Performance](#performance)). The eight-hour soak is a maintainer-reported workday run
-on another laptop, without raw samples. The second Windows build is an
-[accepted assumption](#second-windows-build-maintainer-decision), not evidence.
-Nothing below is inferred from CI, simulation or another build.
+Status: **R13 evidence complete for #46 (2026-10-21). Release: NO-GO while #51 is
+open.** See [Support matrix and release decision](#support-matrix-and-release-decision).
+Nothing below is inferred from CI, simulation or another build. Where a criterion rests
+on a maintainer decision rather than a run, it says so.
+
+## Support matrix and release decision
+
+Candidate: branch head of PR #63 (`e560632c42c5` at the time of writing; Support
+reports it, SHA256 `BE2C0561…0B116` for the local release build). Reference: Windows 11
+Home 10.0.26300.9711 x64 VM, one 1536×1106 display at 125%.
+
+| Criterion | Result | Evidence or owner |
+| --- | --- | --- |
+| Candidate identified | **Pass** | Commit and SHA above; environment files in [`performance-246a5a4/`](performance-246a5a4/README.md) and [`matrix-4f586f5/`](matrix-4f586f5/README.md) |
+| Ten minutes each: date, minutes, seconds | **Pass (carried over by maintainer decision)** | Measured at `246a5a4`: 0.0116 / 0.0110 / 0.0080% CPU, 3.01 / 3.39 / 2.71 MiB, no growth. The head adds the overlay fixes (2 s tray check, confirming redraw). On 2026-10-21 the maintainer declined a rerun ("we confirmed it worked before"), so these numbers are carried over to the head explicitly, not by inference |
+| Targets < 0.2% CPU, < 40 MiB | **Pass** | As above, with more than an order of magnitude of margin |
+| Timer and discovery rates | **Gap (recorded)** | Not exposed by Support; listed by the sampler as an instrumentation gap |
+| Eight-hour soak | **Pass (maintainer-reported)** | A full workday on another laptop without issues; no raw samples; build/format not recorded |
+| Two stock Windows 11 builds | **Accepted assumption** | [Maintainer decision](#second-windows-build-maintainer-decision); evidence exists for 26300.9711 only |
+| Single display; auto-hide; full screen; calendar and neighbour clicks; tray re-layout | **Pass** | [`matrix-4f586f5/`](matrix-4f586f5/README.md) |
+| Invalid preferences; overflow; repeated launch/Settings cycles; Reset/Cancel/Exit; startup choice | **Pass** | [`matrix-4f586f5/`](matrix-4f586f5/README.md) |
+| Lock/unlock; time and time-zone changes | **Pass (maintainer-performed)** | [Matrix status](#matrix-status) |
+| Explorer restart ×3; forced kill reveals native clock; quiet start | **Pass at `940634a`**; Explorer recovery **open in #51** | [Recovery](#recovery-executed-on-this-vm); #51 records later Explorer recovery failures |
+| Start menu, standard (non-admin) account, startup without UAC | **Pass at `ab2a963`** (closed #15) | [`packaging.md`](packaging.md), standard-account desktop session |
+| Actual sign-out/sign-in startup; clean first-run machine | **Not run (reviewed limitation)** | Not covered by #15's session, and not possible for the agent (no password entry, single VM) |
+| Narrator speech | **Partial** | UIA name, role and Invoke verified; speech not heard |
+| Mixed DPI 100/150/200%, hotplug, primary swap, negative origins, physical hardware, independent UIA identity | **Open in #51** | Handled separately by the maintainer |
+| Overflow after minimize; tray re-layout; overlay visible but not drawn | **Fixed / mitigated** | Findings below; the original Show Desktop failure is mitigated, not reproduced |
+
+**Decision.** Every criterion #46 owns has qualifying evidence, a maintainer decision
+recorded above, or a link to the open issue that owns it. #46 can close. The release
+itself stays **NO-GO while #51 is open**, because #51 holds recorded Explorer-recovery
+failures and the hardware/DPI checks. The maintainer handles #51 separately
+(2026-10-21).
 
 Follow-up for [#41](https://github.com/tjorim/ElevenClock-rs/issues/41): the
 secondary-clock discovery failure in finding 3 was fixed in
@@ -347,7 +374,7 @@ single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/REA
       preferences (7/7); overflow rejected in Settings *(4f586f5)*
 - [x] Reset/Cancel and Exit *(4f586f5)*; startup choice: repair, turn off and on, with
       the registry checked after each step and the original entry restored. Actual
-      sign-in is owned by #15
+      sign-in startup: not run (reviewed limitation)
 - [x] Ten minutes each: date-only, minutes, seconds, all pass at `246a5a4` on the
       single-display 125% reference (2026-10-21); timer/discovery rates not measured
 - [x] Eight-hour soak: **maintainer-reported, no raw samples.** The maintainer ran the app
@@ -356,24 +383,23 @@ single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/REA
       at the maintainer's request after 7.8 min (46 samples, `%H:%M:%S`, no growth: private
       WS 3.34 → 2.45 MiB, handles 276 → 272, GDI 24, USER 21–22, 4 windows, mean CPU
       0.0107%). That is not a soak and was not retained
-- [ ] The same walkthrough from the Start menu with an installed build, and a separate
-      non-administrator account (owned by #15)
+- [x] Start menu walkthrough with an installed build on a standard (non-admin) account:
+      covered by the standard-account desktop session in [`packaging.md`](packaging.md)
+      at `ab2a963` (closed #15). A clean first-run machine and an actual sign-out/sign-in
+      were not run (reviewed limitation)
 - [x] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D
       warnings`, `cargo test --workspace --locked`: all exit 0 at `940634a`
 
 ## Handoff
 
-Do not close #14. Supported builds: **none yet**. Finding 3's selector failure is
-resolved by the follow-up above; Explorer recovery remains open. Next: reproduce
-finding 2, then run the matrix on this VM at mixed DPI and on a second build, then the
-three ten-minute runs and the eight-hour soak with the script above.
+[#46](https://github.com/tjorim/ElevenClock-rs/issues/46) is complete: see
+[Support matrix and release decision](#support-matrix-and-release-decision). Release
+stays NO-GO while [#51](https://github.com/tjorim/ElevenClock-rs/issues/51) is open
+(Explorer recovery, independent UIA identity, live/mixed DPI, physical hardware). When
+#51 closes, revisit the decision. Rerun the ten-minute measurements if the runtime has
+changed materially since `246a5a4`.
 
-[#46](https://github.com/tjorim/ElevenClock-rs/issues/46) owns those runs, the soak,
-the second build and the final GO/NO-GO. Done so far: the sampler work, the three
-ten-minute runs at `246a5a4`, and fixes for the overflow-after-minimize and tray
-re-layout findings. The second build is settled as a maintainer-accepted assumption
-(above). The soak is covered by the maintainer's workday run on another laptop, without
-retained samples (see the matrix). Still open: the matrix gaps listed above. The release decision is still **NO-GO / not assessed**. Commands (choose each format through native Settings first,
+Measurement commands, for reruns (choose each format through native Settings first,
 with one app instance running and no window covering the taskbar):
 
 ```powershell
