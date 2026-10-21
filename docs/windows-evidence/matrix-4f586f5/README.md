@@ -56,8 +56,8 @@ Follow-up the same evening (details in `../acceptance.md`):
 - **Mitigations:** click-through windows no longer count as full-screen; the overlay
   is invalidated whenever it is exposed; one confirming redraw follows ≥ 500 ms later.
   With these, 99 of 100 fresh starts were drawn (three of them via the confirming
-  redraw, at about 2.15 s). The single failure happened before inspection was set up
-  and is unexplained. All 10 Show Desktop re-runs passed.
+  redraw, at about 2.15 s). The single failure happened before inspection was set up;
+  200 further starts with live inspection ready drew 200/200, so it did not recur. All 10 Show Desktop re-runs passed.
 
 ## Not done here, and why
 

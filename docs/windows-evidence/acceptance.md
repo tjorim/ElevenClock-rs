@@ -300,8 +300,10 @@ Native tests cover the repaint request on show and re-show, no repaint for a pla
 re-anchor, and the single delayed confirmation. They fail without the fix. A unit test
 covers the click-through style check. On the VM with these changes: 99 of 100 fresh starts
 were drawn, three of them via the confirming redraw at about 2.15 s. The one failure
-happened before inspection was set up and is unexplained. Show Desktop re-runs passed
-10/10.
+happened before inspection was set up. A second run of 200 starts, with a harness that
+stops and inspects the first undrawn overlay live, found none: 200/200 drawn (median
+489 ms, slowest 2.5–4.2 s, after the confirming redraw). Overall 299 of 300. The single
+failure did not recur and remains unexplained. Show Desktop re-runs passed 10/10.
 
 ## Matrix status
 
