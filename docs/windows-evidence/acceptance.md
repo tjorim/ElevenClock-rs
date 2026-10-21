@@ -1,9 +1,10 @@
 # Windows acceptance gates (R13)
 
 Status: **started, not passed.** Partial sessions on one machine. The release gate
-stays **open**: most of the matrix, the eight-hour soak and the second build have not
-been run. The three ten-minute runs passed for candidate `246a5a4` on 2026-10-21
-([Performance](#performance)).
+stays **open**: most of the matrix and the eight-hour soak have not been run. The three
+ten-minute runs passed for candidate `246a5a4` on 2026-10-21
+([Performance](#performance)). The second Windows build is an
+[accepted assumption](#second-windows-build-maintainer-decision), not evidence.
 Nothing below is inferred from CI, simulation or another build.
 
 Follow-up for [#41](https://github.com/tjorim/ElevenClock-rs/issues/41): the
@@ -42,6 +43,22 @@ this does not turn the original observation into a reproduced desktop failure.
 
 Only **one** Windows build was available. The issue requires two exact stock Windows 11
 x64 builds; the second is **not run**.
+
+### Second Windows build: maintainer decision
+
+On 2026-10-21 the maintainer stated that no second Windows system will be available for
+agent-driven acceptance. They decided to **assume the app works on other stock Windows
+11 x64 builds for now**. This is an explicitly reviewed support limitation under #46,
+not evidence:
+
+- Runtime evidence exists for **10.0.26300.9711 only**: this VM, plus the earlier
+  26200.9457 session referenced from #34 for app revisions before `246a5a4`.
+- On any other build, behaviour is assumed, not observed. The design fails closed:
+  discovery that cannot confirm the clock leaves the native clock alone (as in finding 3).
+  That property is also unverified on other builds.
+- Revisit this decision if a user reports a build-specific failure, or if a second
+  machine becomes available. Running the matrix there would replace the assumption with
+  evidence.
 
 ## Observed
 
@@ -252,7 +269,8 @@ Checked boxes mean actually executed here. Everything else is **not run**.
 
 - [x] Release build at an exact commit; Settings opens from the taskbar; preset edit,
       preview, Apply; Support status and Copy diagnostics
-- [ ] Second stock Windows 11 build
+- [x] Second stock Windows 11 build: **not run; accepted as an assumption** by maintainer
+      decision on 2026-10-21 ([details](#second-windows-build-maintainer-decision))
 - [x] Clock replacing the native clock on the primary taskbar (not on the secondary,
       finding 3)
 - [ ] Single display; primary swap / hotplug; negative origins (second monitor is at +1280
@@ -280,10 +298,11 @@ finding 2, then run the matrix on this VM at mixed DPI and on a second build, th
 three ten-minute runs and the eight-hour soak with the script above.
 
 [#46](https://github.com/tjorim/ElevenClock-rs/issues/46) owns those runs, the soak,
-the second build and the final GO/NO-GO. Done so far: the sampler work and the three
-ten-minute runs at `246a5a4`. Still open: the eight-hour soak, the second build, the
-matrix gaps and the overflow-after-full-screen finding. The release decision is still
-**NO-GO / not assessed**. Commands (choose each format through native Settings first,
+the second build and the final GO/NO-GO. Done so far: the sampler work, the three
+ten-minute runs at `246a5a4`, and fixes for the overflow-after-minimize and tray
+re-layout findings. The second build is settled as a maintainer-accepted assumption
+(above). Still open: the eight-hour soak (to be run on a build with both overlay
+fixes) and the matrix gaps. The release decision is still **NO-GO / not assessed**. Commands (choose each format through native Settings first,
 with one app instance running and no window covering the taskbar):
 
 ```powershell
