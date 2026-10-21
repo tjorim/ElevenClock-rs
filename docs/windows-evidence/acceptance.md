@@ -191,10 +191,56 @@ taskbar 1 overflow: required=10x1px, available=0x0px, discovered slot=87x60px, D
 ```
 
 The overflow retry from the #42 fix runs every 2 s, but the clock was still latched about
-40 s later. It recovered only when the app was restarted. `available=0x0px` (and the
-implausible `required=10x1px`) point to the hide/show transition leaving an empty
-region, not to text that really does not fit. Not yet reproduced on demand. It
-blocks a full-screen/auto-hide pass and needs its own issue.
+40 s later. It recovered only when the app was restarted.
+
+**Root cause, reproduced on demand:** the overlay window had been **minimized from
+outside the app**. The screen-control tool minimizes windows of processes that are not on
+its allowlist, and this build was not on it yet. A minimized window has a 0×0 client
+area. The renderer then reports `required = 2 × padding × 1 px` (10×1 at 120 DPI) against
+`available=0x0px`, and the overlay is hidden. Nothing ever restores it, so every retry
+measures 0×0 again. Calling `ShowWindow(overlay, SW_SHOWMINNOACTIVE)` from another
+process reproduces the exact log line. Restoring the window (off screen, hidden, then
+back to its bounds) lets the existing retry recover it within 2 s. A second, silent
+variant: minimizing also sends `WM_PAINT`, and the invalidation repaint then hid the
+overlay **without recording a fault**. With a date-only format, the clock stayed gone
+until the next date change while Support still said "replaced".
+
+A fix is in progress: the overlay restores itself hidden before painting or redrawing,
+then shows again only after a successful paint. It has a native regression test, and it
+was verified on this VM with seconds and date-only formats: three minimize cycles each,
+recovered in ≤ 0.1 s, no overflow logged.
+
+### Finding: overlay left behind when the tray re-lays out (2026-10-21)
+
+Parts of the native clock showed beside the overlay: `21/1` on its left, or digits and
+the year on its right. Live UI Automation dumps showed the cause. The overlay matches
+the clock button (`SystemTray.OmniButton`) exactly, but only as discovery measured it.
+Turning do-not-disturb on adds a separate bell button (`SystemTray.OmniButtonRight`)
+between the clock and Show Desktop. That moves the clock 35 px left (x 1429–1516 →
+1394–1481) inside an unmoved taskbar. The runtime watched only the taskbar window, so
+the overlay stayed on the old spot until something else triggered discovery. During
+that time it hid the bell and exposed part of the native clock. Turning do-not-disturb
+off reverses the move.
+
+A 3-minute recorder while toggling do-not-disturb showed that the legacy
+`TrayNotifyWnd` child tracks every move. Its left edge went 1220 → 1255 → 1220 in step
+with the clock (1394 → 1429 → 1394). The runtime now reads that rectangle on each
+2-second observation pass, relative to the taskbar, with no UI Automation. It records
+the rectangle when discovery is requested, and requests one throttled rediscovery
+when it differs. The overlay stays up meanwhile, so tray changes that do not move the
+clock cause no flash. A moved clock gets new bounds from the result.
+
+Verified on this VM: toggling do-not-disturb off, then on, moved the overlay over the
+whole native clock within 5 s each time. One second after each toggle the stale
+position was still visible, which is expected with the 2 s poll, settle and helper
+run. Final overlay x 1394–1481 = clock button x 1394–1481. Runtime tests cover the
+single rediscovery, no loop, and a change during discovery.
+
+Not covered: secondary taskbars (`Shell_SecondaryTrayWnd`) are not expected to have a
+`TrayNotifyWnd` (not checked: this VM has one display). Where it is missing, the
+observation reports none and a re-layout still waits for the next discovery. The notification
+bell is deliberately left uncovered when it is its own button, so its glyph stays visible
+to the right of the overlay.
 
 Also from this session: a maximized window that covers the whole monitor, including the
 taskbar, counts as full screen. The clock then stays hidden, which is correct.
