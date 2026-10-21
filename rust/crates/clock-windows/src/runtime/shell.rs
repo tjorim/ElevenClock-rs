@@ -67,13 +67,25 @@ pub fn classify(snapshot: &TaskbarSnapshot, observation: &Observation) -> Placem
 }
 
 /// A foreground window that covers an entire monitor hides that monitor's
-/// overlay, unless it is the desktop or the shell itself.
+/// overlay, unless it is exempt: the desktop, the shell itself, or a
+/// click-through overlay (see [`is_click_through`]).
 pub fn covers_monitor(
     foreground: Option<PhysicalRect>,
-    foreground_is_shell: bool,
+    foreground_exempt: bool,
     monitor: PhysicalRect,
 ) -> bool {
-    !foreground_is_shell && foreground.is_some_and(|rect| rect.contains(monitor))
+    !foreground_exempt && foreground.is_some_and(|rect| rect.contains(monitor))
+}
+
+const WS_EX_TRANSPARENT: u32 = 0x0000_0020;
+const WS_EX_LAYERED: u32 = 0x0008_0000;
+
+/// A layered window that passes all input through (screen-control indicators,
+/// game and recording overlays) draws over the screen without hiding the
+/// taskbar, so it is not a full-screen app even when it covers the monitor
+/// (#46: such a window briefly in front hid the clock).
+pub fn is_click_through(extended_style: u32) -> bool {
+    extended_style & (WS_EX_LAYERED | WS_EX_TRANSPARENT) == WS_EX_LAYERED | WS_EX_TRANSPARENT
 }
 
 #[cfg(test)]
@@ -211,6 +223,22 @@ mod tests {
                 }
             ),
             Placement::Present(TaskbarVisibility::Visible)
+        );
+    }
+
+    #[test]
+    fn only_layered_input_transparent_windows_are_click_through() {
+        // The Claude screen-control indicator recorded on 26300.9711:
+        // NOACTIVATE | NOREDIRECTIONBITMAP | LAYERED | TRANSPARENT | TOPMOST.
+        assert!(is_click_through(0x0828_0028));
+        assert!(!is_click_through(0x0008_0000), "layered but clickable");
+        assert!(
+            !is_click_through(0x0000_0020),
+            "transparent but not layered"
+        );
+        assert!(
+            !is_click_through(0x0000_0100),
+            "an ordinary full-screen window"
         );
     }
 

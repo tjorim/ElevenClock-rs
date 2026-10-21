@@ -29,7 +29,7 @@ selection, format `%g%V.%u`.
 | Reset/Cancel/Exit | **Pass** | Reset to defaults filled in the default preset, and Cancel discarded it (preferences file unchanged). Exit removed the process; native clock visible; log `ElevenClock-rs stopped`. |
 | Startup choice | **Pass** | The Startup tab correctly reported that the existing login entry starts a *different* copy (the main checkout's build) and offered Repair. Later in the session, with the maintainer's go-ahead and on build `ef94dcfbc05f` (same Rust code): Repair pointed `HKCU\…\Run\ElevenClockRust` at this copy with `--startup`; unticking removed the value ("does not start when you sign in"); ticking recreated it; Cancel left it as is, as the tab states. The original entry was restored afterwards. Actual sign-in startup is owned by #15. |
 
-## Observation: overlay not drawn after Show Desktop (not reproduced)
+## Observation: overlay not drawn after Show Desktop (mitigated, not reproduced)
 
 Once, right after the bell test, Show Desktop left the overlay window visible,
 topmost directly above the topmost taskbar, uncloaked and at the right bounds. Yet
@@ -37,8 +37,27 @@ screen captures showed the native clock, and it stayed that way after restoring 
 windows, until the app was restarted. The log just before had a full-screen hide and
 show in the same second (18:48:56). During diagnosis a cross-process
 `DwmSetWindowAttribute(DWMWA_EXCLUDED_FROM_PEEK)` was called on the overlay, so it is
-unknown whether it would have recovered by itself. Two clean repeats passed. Open
-until reproduced or ruled out.
+unknown whether it would have recovered by itself.
+
+Follow-up the same evening (details in `../acceptance.md`):
+
+- **The Show Desktop failure itself was not reproduced** in about 25 scripted runs
+  (`Shell.Application.ToggleDesktop`) across five scenarios, all classified from direct
+  screen captures.
+- **The hide/show just before it is explained.** The Claude app's screen-control
+  indicator is a full-screen layered, click-through window
+  (`WS_EX_LAYERED | WS_EX_TRANSPARENT | …`). When it briefly became the foreground, the
+  app counted it as a full-screen app.
+- **The same "visible but not drawn" state was reproduced at app start.** In about 1
+  of 6 fresh starts the overlay stayed visible, uncloaked and with no repaint pending,
+  yet not drawn. An external `InvalidateRect` drew it at once. A native test showed that
+  showing the overlay left no repaint pending, so the app relied entirely on pixels
+  drawn while hidden.
+- **Mitigations:** click-through windows no longer count as full-screen; the overlay
+  is invalidated whenever it is exposed; one confirming redraw follows ≥ 500 ms later.
+  With these, 99 of 100 fresh starts were drawn (three of them via the confirming
+  redraw, at about 2.15 s). The single failure happened before inspection was set up
+  and is unexplained. All 10 Show Desktop re-runs passed.
 
 ## Not done here, and why
 

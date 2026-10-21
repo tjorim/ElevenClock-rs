@@ -11,7 +11,7 @@
 use super::{
     Input, Observation, PaintContext, PaintResult, Platform, Runtime, ShellIdentity, UserAction,
     overlay_window::{Overlay, OverlayClass, REPAINT_EPOCH},
-    shell::covers_monitor,
+    shell::{covers_monitor, is_click_through},
 };
 use crate::{
     clock_time,
@@ -105,7 +105,8 @@ fn tray_rect(taskbar: HWND, taskbar_rect: PhysicalRect) -> Option<PhysicalRect> 
     .ok()
 }
 
-/// What is in front: its rectangle, and whether it is the desktop or the shell.
+/// What is in front: its rectangle, and whether it is exempt from full-screen
+/// detection (the desktop, the shell, or a click-through overlay).
 fn foreground() -> (Option<PhysicalRect>, bool) {
     // SAFETY: simple queries on a handle that may vanish at any time.
     let hwnd = unsafe { GetForegroundWindow() };
@@ -119,7 +120,9 @@ fn foreground() -> (Option<PhysicalRect>, bool) {
         class.as_str(),
         "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
     );
-    (window_rect(hwnd), shell)
+    // SAFETY: style query on a possibly stale handle; failure reads as zero.
+    let extended = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+    (window_rect(hwnd), shell || is_click_through(extended))
 }
 
 #[derive(Clone, Copy)]
@@ -313,7 +316,7 @@ impl Platform for NativePlatform {
                 .flatten();
             (rect, GetDpiForWindow(hwnd), IsWindowVisible(hwnd).as_bool())
         };
-        let (front, front_is_shell) = foreground();
+        let (front, front_exempt) = foreground();
         let rect = window_rect(hwnd);
         Observation {
             exists: true,
@@ -322,7 +325,7 @@ impl Platform for NativePlatform {
             dpi,
             monitor_rect,
             fullscreen: monitor_rect
-                .is_some_and(|monitor| covers_monitor(front, front_is_shell, monitor)),
+                .is_some_and(|monitor| covers_monitor(front, front_exempt, monitor)),
             tray: rect.and_then(|taskbar| tray_rect(hwnd, taskbar)),
         }
     }
@@ -441,6 +444,7 @@ impl Platform for NativePlatform {
             if overlay.is_shown() && !overlay.is_anchored() && overlay.show_anchored().is_err() {
                 overlay.hide();
             }
+            overlay.confirm_exposure();
         }
     }
     fn arm_timer(&mut self, delay: Duration) {

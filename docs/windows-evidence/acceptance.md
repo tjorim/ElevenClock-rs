@@ -260,9 +260,48 @@ observation reports none and a re-layout still waits for the next discovery. The
 bell is deliberately left uncovered when it is its own button, so its glyph stays visible
 to the right of the overlay.
 
-Also from this session: a maximized window that covers the whole monitor, including the
-taskbar, counts as full screen. The clock then stays hidden, which is correct.
-Measurements need a desktop where no window covers the taskbar.
+### Finding: overlay visible but not drawn (2026-10-21)
+
+**Status: mitigated, not reproduced in its original Show Desktop form.**
+
+Once during the matrix checks, Show Desktop left the overlay window visible, topmost
+directly above the topmost taskbar, uncloaked and correctly placed. Yet direct screen
+captures showed the native clock until the app was restarted (date-only format, so no
+tick repaint). A hide and show in the same second preceded it.
+
+- **The hide/show was a false full-screen detection.** The Claude app's screen-control
+  indicator is a full-screen layered, click-through window (ex style `0x08280028`:
+  `NOACTIVATE | NOREDIRECTIONBITMAP | LAYERED | TRANSPARENT | TOPMOST`). When it briefly
+  became the foreground, the app counted it as a full-screen app. An earlier note here,
+  that "a maximized window covering the taskbar" hid the clock, misattributed this.
+- **"Visible but not drawn" was reproduced at app start.** About 1 in 6 fresh starts
+  (date-only) left the overlay visible, uncloaked and with no repaint pending, but not
+  drawn. An external `InvalidateRect` drew it at once. A native test showed that
+  `show_anchored` left no repaint pending, even on the first show. So the overlay
+  relied entirely on pixels drawn while hidden. With temporary logging the failure
+  disappeared (30/30), consistent with a timing race. The redraw that followed showing
+  reported `Painted` but did not reach the screen.
+- **Show Desktop itself did not reproduce the failure** in about 25 scripted runs across
+  five scenarios (toggle alone; after a full-screen flash; during a full-screen window;
+  right after a screenshot; the original calendar/bell/Show Desktop click sequence).
+
+Mitigations in `clock-windows`:
+
+1. A foreground window that is both layered and click-through
+   (`WS_EX_LAYERED | WS_EX_TRANSPARENT`) is exempt from full-screen detection, like the
+   desktop and the shell. On the VM, an ordinary full-screen window still hid the clock
+   for its whole 5 s. A click-through one hid it only for about 1 s as it took the
+   foreground, then the clock was replaced while it stayed up.
+2. Whenever the overlay is exposed (first show, re-show after a hide, band change), it
+   is invalidated, so `WM_PAINT` redraws it while visible.
+3. One confirming redraw follows at least 500 ms after exposure, from the 2 s upkeep.
+
+Native tests cover the repaint request on show and re-show, no repaint for a plain
+re-anchor, and the single delayed confirmation. They fail without the fix. A unit test
+covers the click-through style check. On the VM with these changes: 99 of 100 fresh starts
+were drawn, three of them via the confirming redraw at about 2.15 s. The one failure
+happened before inspection was set up and is unexplained. Show Desktop re-runs passed
+10/10.
 
 ## Matrix status
 
@@ -284,7 +323,8 @@ single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/REA
 - [x] Auto-hide taskbar, 3/3 reveals; full-screen window hide/restore *(4f586f5)*.
       Single monitor, so "per monitor" is not exercised
 - [x] Native calendar click; bell and Show Desktop neighbour clicks *(4f586f5)*. One
-      unreproduced Show Desktop failure recorded as an open observation
+      Show Desktop failure: **mitigated, not reproduced**
+      ([details](#finding-overlay-visible-but-not-drawn-2026-10-21))
 - [ ] Narrator: UIA name/role/Invoke verified *(4f586f5)*; Narrator speech not verified
 - [x] Lock/unlock, done by the maintainer at `ef94dcfbc05f` on 2026-10-21. Locked
       19:09:33 UTC → `clock hidden for now: the PC is locked`. Unlocked 19:09:37 → for
