@@ -1,0 +1,156 @@
+﻿{
+    "executable":  "rust/target/release/elevenclock-rs.exe",
+    "steps":  {
+                  "startupWindows":  [
+                                         "ElevenClock-rs.Overlay | ElevenClock-rs | visible",
+                                         "ElevenClock-rs.Runtime.Host | ElevenClock-rs.Host.[user-scoped SID redacted] | hidden",
+                                         "IME | Default IME | hidden"
+                                     ],
+                  "quietStart":  "Process running, no Settings window, host window present",
+                  "startupSample":  {
+                                        "threads":  6,
+                                        "handles":  230,
+                                        "workingSetKiB":  21336,
+                                        "processes":  1
+                                    },
+                  "maxProcessesWhileIdle":  1,
+                  "idleSample":  {
+                                     "threads":  6,
+                                     "handles":  230,
+                                     "workingSetKiB":  21336,
+                                     "processes":  1
+                                 },
+                  "overlaysVisibleAtStart":  1,
+                  "secondLaunch":  "Existing process showed Settings; the duplicate exited with code 0",
+                  "closeToBackground":  "Settings closed; process kept running",
+                  "explorerRestarts":  [
+                                           {
+                                               "restart":  1,
+                                               "maxProcesses":  2,
+                                               "after":  {
+                                                             "threads":  6,
+                                                             "handles":  247,
+                                                             "workingSetKiB":  24604,
+                                                             "processes":  1
+                                                         },
+                                               "overlaysRightAfterLoss":  0,
+                                               "overlaysAfterRecovery":  1,
+                                               "explorerBackMs":  3568,
+                                               "overlaysRecoveredMs":  7935,
+                                               "overlayCounts":  [
+                                                                     {
+                                                                         "ms":  3651,
+                                                                         "count":  0
+                                                                     },
+                                                                     {
+                                                                         "ms":  7935,
+                                                                         "count":  1
+                                                                     }
+                                                                 ]
+                                           },
+                                           {
+                                               "restart":  2,
+                                               "maxProcesses":  2,
+                                               "after":  {
+                                                             "threads":  8,
+                                                             "handles":  250,
+                                                             "workingSetKiB":  24660,
+                                                             "processes":  1
+                                                         },
+                                               "overlaysRightAfterLoss":  0,
+                                               "overlaysAfterRecovery":  1,
+                                               "explorerBackMs":  3574,
+                                               "overlaysRecoveredMs":  8155,
+                                               "overlayCounts":  [
+                                                                     {
+                                                                         "ms":  3583,
+                                                                         "count":  0
+                                                                     },
+                                                                     {
+                                                                         "ms":  8155,
+                                                                         "count":  1
+                                                                     }
+                                                                 ]
+                                           },
+                                           {
+                                               "restart":  3,
+                                               "maxProcesses":  2,
+                                               "after":  {
+                                                             "threads":  8,
+                                                             "handles":  250,
+                                                             "workingSetKiB":  24668,
+                                                             "processes":  1
+                                                         },
+                                               "overlaysRightAfterLoss":  0,
+                                               "overlaysAfterRecovery":  1,
+                                               "explorerBackMs":  3555,
+                                               "overlaysRecoveredMs":  8007,
+                                               "overlayCounts":  [
+                                                                     {
+                                                                         "ms":  3563,
+                                                                         "count":  0
+                                                                     },
+                                                                     {
+                                                                         "ms":  8007,
+                                                                         "count":  1
+                                                                     }
+                                                                 ]
+                                           },
+                                           {
+                                               "restart":  4,
+                                               "maxProcesses":  2,
+                                               "after":  {
+                                                             "threads":  5,
+                                                             "handles":  251,
+                                                             "workingSetKiB":  24616,
+                                                             "processes":  1
+                                                         },
+                                               "overlaysRightAfterLoss":  0,
+                                               "overlaysAfterRecovery":  1,
+                                               "explorerBackMs":  3575,
+                                               "overlaysRecoveredMs":  8327,
+                                               "overlayCounts":  [
+                                                                     {
+                                                                         "ms":  3583,
+                                                                         "count":  0
+                                                                     },
+                                                                     {
+                                                                         "ms":  8327,
+                                                                         "count":  1
+                                                                     }
+                                                                 ]
+                                           },
+                                           {
+                                               "restart":  5,
+                                               "maxProcesses":  2,
+                                               "after":  {
+                                                             "threads":  5,
+                                                             "handles":  251,
+                                                             "workingSetKiB":  24624,
+                                                             "processes":  1
+                                                         },
+                                               "overlaysRightAfterLoss":  0,
+                                               "overlaysAfterRecovery":  1,
+                                               "explorerBackMs":  3558,
+                                               "overlaysRecoveredMs":  8373,
+                                               "overlayCounts":  [
+                                                                     {
+                                                                         "ms":  3565,
+                                                                         "count":  0
+                                                                     },
+                                                                     {
+                                                                         "ms":  8373,
+                                                                         "count":  1
+                                                                     }
+                                                                 ]
+                                           }
+                                       ],
+                  "afterRestartsSample":  {
+                                              "threads":  5,
+                                              "handles":  251,
+                                              "workingSetKiB":  24624,
+                                              "processes":  1
+                                          },
+                  "exit":  "Exit code 0; no elevenclock-rs process remained"
+              }
+}
