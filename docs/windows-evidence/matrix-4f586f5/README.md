@@ -42,7 +42,7 @@ until reproduced or ruled out.
 
 ## Not done here, and why
 
-- **Lock/unlock:** unlocking needs the account password, which the agent may not enter.
+- **Lock/unlock:** done afterwards by the maintainer; see `../acceptance.md`.
 - **System time and time-zone changes:** machine-wide system settings, left to the
   maintainer. Changing the system time also needs elevation.
 - **Mixed DPI 100/125/150/200%, hotplug, primary swap, negative origins:** need display

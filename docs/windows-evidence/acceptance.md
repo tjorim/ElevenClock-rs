@@ -286,8 +286,14 @@ single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/REA
 - [x] Native calendar click; bell and Show Desktop neighbour clicks *(4f586f5)*. One
       unreproduced Show Desktop failure recorded as an open observation
 - [ ] Narrator: UIA name/role/Invoke verified *(4f586f5)*; Narrator speech not verified
-- [ ] Lock/resume: needs the account password (not entered by the agent); time and time
-      zone changes: system settings left to the maintainer
+- [x] Lock/unlock, done by the maintainer at `ef94dcfbc05f` on 2026-10-21. Locked
+      19:09:33 UTC → `clock hidden for now: the PC is locked`. Unlocked 19:09:37 → for
+      about 1 s `Windows reported taskbar or display measurements that cannot be used`
+      (native clock shown), then `clock replaced` at 19:09:38. Same process, which then
+      had 281 handles and 6 threads. The tray re-laid out shortly after unlock (bell
+      button, clock moved). The overlay briefly exposed `21/1`, then re-aligned within
+      seconds: overlay x 1394–1481 = clock button
+- [ ] Time and time zone changes: system settings left to the maintainer
 - [x] Explorer restart ×3; forced app kill reveals native clock; quiet `--startup` launch
 - [x] Repeated launch/Settings cycles (20/20, flat handles/GDI/USER); invalid stored
       preferences (7/7); overflow rejected in Settings *(4f586f5)*
