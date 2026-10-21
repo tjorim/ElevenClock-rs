@@ -1,7 +1,9 @@
 # Windows acceptance gates (R13)
 
-Status: **started, not passed.** One partial session on one machine. The release gate
-stays **open**: most of the matrix, both performance runs and the soak have not been run.
+Status: **started, not passed.** Partial sessions on one machine. The release gate
+stays **open**: most of the matrix, the eight-hour soak and the second build have not
+been run. The three ten-minute runs passed for candidate `246a5a4` on 2026-10-21
+([Performance](#performance)).
 Nothing below is inferred from CI, simulation or another build.
 
 Follow-up for [#41](https://github.com/tjorim/ElevenClock-rs/issues/41): the
@@ -109,24 +111,94 @@ changed. 125% remains possible at 1280×1024 with a layout change; not attempted
 
 ## Performance
 
-`scripts/measure-rust-resources.ps1` (new, development-only) samples every
+`scripts/measure-rust-resources.ps1` (development-only) samples every
 `elevenclock-rs*` process and reports CPU-time delta ÷ (wall time × logical processors),
-private working set (`WorkingSetPrivate`), handles and threads.
+private working set (`WorkingSetPrivate`), handles and threads. The date-only row below
+was taken with its first version.
+
+For [#46](https://github.com/tjorim/ElevenClock-rs/issues/46) the sampler was extended
+so the remaining runs and the soak give usable evidence:
+
+- **Helper-safe accounting.** Processes are tracked by PID and start time. One that
+  starts between samples counts all of its CPU. One that exits loses only the CPU used
+  since its last sample, and that loss is reported as an accounting gap. Previously,
+  summed cumulative CPU went wrong whenever the process set changed.
+- **Process lifetimes** (`*-processes.csv`: present/started/exited with start time and
+  path).
+- **Soak counters:** GDI and USER objects and top-level windows per sample, plus a
+  start/end/min/max/mean and least-squares slope per hour for every counter.
+- **No lost samples.** Rows are appended as they are taken. If the app exits, the run is
+  interrupted or sampling fails, the summary is still written with `complete: false`
+  and exit status 1. Previously an app exit threw before the CSV was written.
+- **Candidate identification** (`*-environment.json`): executable path and SHA256,
+  checkout commit, `rustc -V`, Windows edition/build/UBR/architecture, CPU and logical
+  processors, machine, theme, system DPI and physical monitor bounds.
+- `-Workload` records the format and any transitions with the run, and
+  `instrumentationGaps` lists what the script cannot see (timer/discovery rates and
+  hooks; take those from Support diagnostics).
+
+Validation on 2026-10-21, at `246a5a4`, on the same VM: a 45 s run against the release
+build with a stand-in `elevenclock-rs-fakehelper.exe` started and exited mid-run. The
+sampler recorded the helper's start and exit, the process count going 2 → 1 and one
+gap interval, with `complete: true`. This validated the script only; it is **not** a
+performance measurement.
+
+### Ten-minute runs at `246a5a4` (2026-10-21)
+
+**New reference configuration.** On 2026-10-21 the VM had one display at 1536×1106
+physical with system DPI 120 (125%), not the two 1280×720 displays at 96 DPI recorded
+above. This single 125% display was declared the reference configuration for #46. All
+three modes were measured on it with a clean release build of `246a5a4` (SHA256
+`ADD4B581…48EEDE`; Support reports `App commit: 246a5a439c6f`). The clock replaced the
+native clock throughout: Support showed `Status: Active` and the log has no transition
+after `clock replaced` at 17:06:58 UTC. Formats were chosen in native Settings. Raw
+CSV/JSON, process lifetimes, environment and full details are in
+[`performance-246a5a4/`](performance-246a5a4/README.md).
+
+| Mode | Wall | CPU, % of machine (8 logical) | Private WS max | Handles | Threads | GDI / USER | Processes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Date-only (`%g%V.%u`, ISO week preset) | 608.7 s | **0.0116%** | **3.01 MiB** | 230 → 228 | 5 → 3 | 10 / 13 flat | 1 |
+| Minutes (`%H:%M`) | 602.5 s | **0.0110%** | **3.39 MiB** | 271 → 272 | 7 → 5 | 25 / 22 flat | 1 |
+| Seconds (`%H:%M:%S`) | 606.9 s | **0.0080%** | **2.71 MiB** | 272 flat | 5 → 3 | 25 / 22 flat | 1 |
+
+**All three pass** the < 0.2% CPU and < 40 MiB private working set targets on the
+reference configuration, with no growth within any run. The step in handles, GDI/USER
+objects and windows between date-only and minutes comes from first opening the Settings
+window before the minutes run, and stays flat afterwards. The build has no helper
+processes.
+
+**Instrumentation gap:** the Support report has no timer-wake or discovery-rate counters,
+so those rates were **not measured**. Hooks are not externally observable either.
+
+### Earlier date-only run at `940634a252c1` (history)
+
+Two 1280×720 displays at 96 DPI; superseded for the candidate by the run above.
 
 | Mode | Wall | CPU, % of machine (8 logical) | Private working set | Handles | Threads | Processes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Date-only (`%g%V.%u`, ISO week preset), primary clock replaced, secondary not | 601.6 s | **0.0088%** (< 0.2% target) | 2.89 → 2.05 MiB, max 2.93 (< 40 MiB target) | 224 → 223 | 6 → 5 | 1 (no helper process) |
-| Minutes (`%H:%M`) | not run | | | | | |
-| Seconds (`%H:%M:%S`) | not run | | | | | |
+| Date-only (`%g%V.%u`, ISO week preset), primary clock replaced, secondary not | 601.6 s | **0.0088%** | 2.89 → 2.05 MiB, max 2.93 | 224 → 223 | 6 → 5 | 1 |
 
-Date-only passes both targets on this VM, with one process and no growth over ten
-minutes. This is **one mode on one machine**; the minute and seconds runs and the
-eight-hour soak are required before any performance claim. Samples are in
-`native-evidence/resources/` (CSV, 10 s interval; not committed). The 30 s runs earlier in
-the session only validated the script.
+### Finding: overflow latched after a full-screen hide (2026-10-21)
 
-Timer-wake and discovery rates are not visible from outside the process; take them from
-Support diagnostics when the real runs happen.
+With a `246a5a4+modified` build (script and doc edits uncommitted; app code identical)
+and the ISO week format, the clock was replaced at 17:04:12 UTC. At 17:04:40 it was
+correctly hidden because a full-screen window (the maximized Claude desktop app, during
+screen control) was in front. When it came back at 17:04:53, it went to Windows clock
+in use with this log line:
+
+```text
+taskbar 1 overflow: required=10x1px, available=0x0px, discovered slot=87x60px, DPI=120, font=9pt
+```
+
+The overflow retry from the #42 fix runs every 2 s, but the clock was still latched about
+40 s later. It recovered only when the app was restarted. `available=0x0px` (and the
+implausible `required=10x1px`) point to the hide/show transition leaving an empty
+region, not to text that really does not fit. Not yet reproduced on demand. It
+blocks a full-screen/auto-hide pass and needs its own issue.
+
+Also from this session: a maximized window that covers the whole monitor, including the
+taskbar, counts as full screen. The clock then stays hidden, which is correct.
+Measurements need a desktop where no window covers the taskbar.
 
 ## Matrix status
 
@@ -146,7 +218,8 @@ Checked boxes mean actually executed here. Everything else is **not run**.
 - [ ] Lock/resume; time and timezone changes
 - [x] Explorer restart ×3; forced app kill reveals native clock; quiet `--startup` launch
 - [ ] Repeated launch/Settings cycles; invalid stored preferences; overflow
-- [x] Ten minutes date-only (pass); [ ] minutes; [ ] seconds
+- [x] Ten minutes each: date-only, minutes, seconds, all pass at `246a5a4` on the
+      single-display 125% reference (2026-10-21); timer/discovery rates not measured
 - [ ] Eight-hour soak
 - [ ] Cancel/Reset, startup choice, closing Settings and Exit as one walkthrough from the
       Start menu, and a non-administrator account
@@ -159,3 +232,17 @@ Do not close #14. Supported builds: **none yet**. Finding 3's selector failure i
 resolved by the follow-up above; Explorer recovery remains open. Next: reproduce
 finding 2, then run the matrix on this VM at mixed DPI and on a second build, then the
 three ten-minute runs and the eight-hour soak with the script above.
+
+[#46](https://github.com/tjorim/ElevenClock-rs/issues/46) owns those runs, the soak,
+the second build and the final GO/NO-GO. Done so far: the sampler work and the three
+ten-minute runs at `246a5a4`. Still open: the eight-hour soak, the second build, the
+matrix gaps and the overflow-after-full-screen finding. The release decision is still
+**NO-GO / not assessed**. Commands (choose each format through native Settings first,
+with one app instance running and no window covering the taskbar):
+
+```powershell
+./scripts/measure-rust-resources.ps1 -DurationSeconds 600 -IntervalSeconds 10 -Label date -Workload 'ISO week date (%g%V.%u)'
+./scripts/measure-rust-resources.ps1 -DurationSeconds 600 -IntervalSeconds 10 -Label minutes -Workload '%H:%M'
+./scripts/measure-rust-resources.ps1 -DurationSeconds 600 -IntervalSeconds 10 -Label seconds -Workload '%H:%M:%S'
+./scripts/measure-rust-resources.ps1 -DurationSeconds 28800 -IntervalSeconds 10 -Label soak -Workload '<format and transitions>'
+```
