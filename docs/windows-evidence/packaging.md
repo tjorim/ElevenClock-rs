@@ -2,8 +2,9 @@
 
 Status: **local packaging, hosted lifecycle, and standard-account development-build
 install/update/uninstall/rollback and GUI checks passed; release blocked**.
-Clean-machine runtime, fresh-account first run, actual Windows logon and the
-remaining ownership/compatibility variants below remain unverified.
+Clean-machine runtime, a genuine standard account, fresh-account first run and
+actual Windows logon remain unverified. The ownership/lifecycle variants passed on
+the desktop as an unelevated administrator (2026-10-21, below), not as a standard user.
 See [release instructions](../releasing.md) for build and ownership contracts.
 
 ## Local session, 2026-10-16
@@ -122,6 +123,13 @@ desktop account token confirmed **no Administrators group membership and no
 elevated token**. This machine already contains Rust/MSVC/developer runtimes and
 saved preferences: it is not the required clean-machine or first-run account.
 
+> **Correction (2026-10-21):** on 2026-10-21 this same account is a member of
+> `BUILTIN\Administrators`, present in its unelevated token as *deny-only*.
+> `WindowsIdentity.Groups`, which the installer harness used, omits deny-only SIDs,
+> so a UAC-filtered administrator reads as "no Administrators membership". The
+> membership reading above may have been the same mistake. Treat this session as
+> an **unelevated administrator** run, not standard-account evidence.
+
 Candidate: `ElevenClock-rs-0.1.0-ab2a96366e9f-x64-dev`, Support commit
 `ab2a96366e9f+modified`; installed and extracted-portable executable SHA256:
 `c9ee5490339cbe21fc6ec11da22d25049e305ede1474b0c90938f280e4c26e20`.
@@ -237,3 +245,67 @@ of an earlier public release does not prevent this development-build test; repea
 release-to-release compatibility when such versions exist. The final machine state
 is the earlier candidate installed but stopped, original ISO-week preferences
 retained, and startup off. No release-gate boolean was changed.
+
+## Desktop lifecycle harness, 2026-10-21 (#47)
+
+`scripts/test-rust-installer.ps1 -DisposableAccount` ran on the same VM: Windows 11
+Home 26H2 x64 **10.0.26300.9711**, one active display 1536×1106 at 125% (DPI 120).
+The account is a **member of Administrators, running unelevated** (Medium integrity;
+the Administrators SID is deny-only). It is not a standard user. VC++ 14.44 runtime,
+Visual Studio 2022 C++ tools and Rust are installed machine-wide, so this is not
+runtime-absence evidence.
+
+| Input | Value |
+| --- | --- |
+| Candidate | `ElevenClock-rs-0.1.0-585ad4df18cc-x64-dev` (retained 2026-10-16 build) |
+| Candidate EXE SHA256 | `f9c99ec5d9d4af5201fcf55f2f1b035b0697a3961e821fd7ddba3db5821f84b1` |
+| Candidate installer SHA256 | `2572817f87099226c11d502f5d54e0dca29159fcb3276e381ff3bb7e83b7b13c` |
+| Previous installer | `ElevenClock-rs-0.1.0-ab2a96366e9f-x64-dev-setup.exe`, SHA256 `81375dca0f7da0bc57eb0923b23b9813d202a4ed3d2b30dcf64f9dab39b331c4` (EXE `c9ee5490…4c26e20`) |
+
+Why `585ad4d` and not the current head: Python is no longer installed on this VM,
+so the packaging script cannot assemble a new candidate. `packaging/windows`,
+startup registration and the uninstall code are unchanged from `585ad4d` to
+`87bc80d`; the candidate is still labelled by its own commit, not the head.
+
+Before the run, this account's existing state was backed up and cleared: the
+installed `ab2a963` copy (silent uninstall), private data and the `ElevenClockRust`
+Run value, which belongs to a different development copy. Uninstalling the installed
+copy left that other copy's Run value untouched. Afterwards the original install,
+`preferences.dat` and Run value were restored, all verified by hash or value.
+
+Results ([`results.json`](packaging-desktop-r14/results.json), installer logs and
+Settings captures in [`packaging-desktop-r14/`](packaging-desktop-r14/)):
+
+| Case | Result |
+| --- | --- |
+| Artifact checksums | Pass |
+| Silent per-user install: default path, Start shortcut target, startup off | Pass |
+| Start shortcut launch → one Settings window → Exit | Pass (shortcut launched by script, not by selecting it in Start) |
+| Settings/Support journey (`test-rust-settings.ps1`: first-run text, keyboard, preview, invalid format, Apply, Cancel, second-launch focus, startup toggle/repair, Support preview, exact clipboard copy, Reset) | Pass. [Support report](packaging-desktop-r14/settings/support-report.txt) |
+| Same-candidate reinstall | Pass (hash unchanged) |
+| Uninstall removes owned Run + StartupApproved values | Pass |
+| Uninstall keeps private data, unowned install-dir file, legacy `elevenClock` startup | Pass |
+| Quoted install path with spaces and `é` | Pass |
+| Uninstall keeps a portable copy's Run value and approval flag | Pass |
+| Uninstall keeps a malformed `ElevenClockRust` value and its flag | Pass |
+| Portable ZIP from a spaced `é` folder: Settings/Exit, and `--startup` stays quiet | Pass (marker launch, not a logon) |
+| Update `ab2a963` → `585ad4d`, uninstall, roll back to the exact `ab2a963` hash, launch, Exit | Pass |
+
+The raw `results.json` says `"administratorGroup": false`. That was the harness
+defect described in the correction above, and the script now reads membership from
+`whoami /groups`. Read that field as **true** for this run.
+
+### #47 checklist status
+
+| #47 check | Status |
+| --- | --- |
+| Clean standard account: GUI installer, no UAC, first-run Settings | **Not run**: needs a clean VM and a standard user |
+| Direct selection from the Start surface + full UI journey | **Not run** by direct Start selection. The UI journey passed via the shortcut (2026-10-16 GUI and this harness) |
+| Portable ZIP on an absent-runtime machine | **Not run**: runtimes present here. Portable launch itself passed |
+| Missing-native-runtime behaviour | **Not run**. Static-CRT build and import list above are supporting evidence only |
+| Startup on/off with real sign-out/in | **Not run**: needs an actual logon (password) |
+| Lifecycle/ownership variants under a standard account | **Partial**: all passed as an unelevated administrator; standard-user run outstanding |
+| Development-build update/uninstall/restore in a clean environment | **Partial**: passed here and on 2026-10-16, not in a clean environment |
+| Per-case matrix recorded | This section |
+
+`clean_standard_account` in `packaging/release-gates.json` stays `false`.

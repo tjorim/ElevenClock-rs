@@ -1,0 +1,17 @@
+﻿{
+    "os":  "10.0.26300.0",
+    "artifact":  "ElevenClock-rs-0.1.0-585ad4df18cc-x64-dev",
+    "administratorGroup":  false,
+    "elevated":  false,
+    "cleanRuntimeMachine":  false,
+    "previousReleaseRollback":  "passed: earlier hash restored and Settings/Exit works",
+    "status":  "passed automated cases; see unverified clean-machine/account/rollback gates",
+    "checksums":  "passed",
+    "startMenuLaunch":  "passed: Settings opens and Exit completes",
+    "settingsSupportJourney":  "passed",
+    "reinstall":  "passed (same candidate; not version-update evidence)",
+    "uninstallOwnership":  "passed: private/unowned files and legacy startup preserved",
+    "portableAndQuietLaunch":  "passed (marker launch; actual Windows logon not tested)",
+    "quotedUnicodePath":  "passed",
+    "malformedStartupOwnership":  "passed"
+}
