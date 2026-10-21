@@ -55,7 +55,7 @@ public static class AutoHideTest {
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $baseline=Get-Content -LiteralPath $Inspection -Raw | ConvertFrom-Json
 $overlayProcesses=@($baseline.windows | Where-Object Class -eq 'ElevenClock-rs.Overlay' | Select-Object -ExpandProperty Process -Unique)
-if ($overlayProcesses.Count -ne 1 -or $baseline.taskbars.Count -ne 2) { throw 'Expected one app and two taskbars in the inspection' }
+if ($overlayProcesses.Count -ne 1 -or $baseline.taskbars.Count -lt 1) { throw 'Expected one app and at least one taskbar in the inspection' }
 $appProcessId=[uint32]$overlayProcesses[0]
 $taskbars=@(foreach ($bar in $baseline.taskbars) {
     $matching=@(foreach ($handle in [AutoHideTest]::Taskbars()) {

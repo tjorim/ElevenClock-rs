@@ -273,20 +273,30 @@ Checked boxes mean actually executed here. Everything else is **not run**.
       decision on 2026-10-21 ([details](#second-windows-build-maintainer-decision))
 - [x] Clock replacing the native clock on the primary taskbar (not on the secondary,
       finding 3)
-- [ ] Single display; primary swap / hotplug; negative origins (second monitor is at +1280
-      only)
-- [ ] Mixed DPI 100/125/150/200%
-- [ ] Auto-hide taskbar; fullscreen per monitor
-- [ ] Native calendar and neighbour clicks
-- [ ] Narrator
-- [ ] Lock/resume; time and timezone changes
+Rows marked *(4f586f5)* were run on 2026-10-21 with code identical to `4f586f5` on the
+single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/README.md).
+
+- [x] Single display *(4f586f5)*
+- [ ] Primary swap / hotplug; negative origins: not possible on the single-display VM
+- [ ] Mixed DPI 100/125/150/200%: only 125% covered; other scales need display-setting
+      changes on the VM
+- [x] Auto-hide taskbar, 3/3 reveals; full-screen window hide/restore *(4f586f5)*.
+      Single monitor, so "per monitor" is not exercised
+- [x] Native calendar click; bell and Show Desktop neighbour clicks *(4f586f5)*. One
+      unreproduced Show Desktop failure recorded as an open observation
+- [ ] Narrator: UIA name/role/Invoke verified *(4f586f5)*; Narrator speech not verified
+- [ ] Lock/resume: needs the account password (not entered by the agent); time and time
+      zone changes: system settings left to the maintainer
 - [x] Explorer restart ×3; forced app kill reveals native clock; quiet `--startup` launch
-- [ ] Repeated launch/Settings cycles; invalid stored preferences; overflow
+- [x] Repeated launch/Settings cycles (20/20, flat handles/GDI/USER); invalid stored
+      preferences (7/7); overflow rejected in Settings *(4f586f5)*
+- [x] Reset/Cancel and Exit *(4f586f5)*; startup status detection only. The real login
+      entry was not toggled
 - [x] Ten minutes each: date-only, minutes, seconds, all pass at `246a5a4` on the
       single-display 125% reference (2026-10-21); timer/discovery rates not measured
 - [ ] Eight-hour soak
-- [ ] Cancel/Reset, startup choice, closing Settings and Exit as one walkthrough from the
-      Start menu, and a non-administrator account
+- [ ] The same walkthrough from the Start menu with an installed build, and a separate
+      non-administrator account (owned by #15)
 - [x] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D
       warnings`, `cargo test --workspace --locked`: all exit 0 at `940634a`
 

@@ -1,0 +1,219 @@
+﻿{
+    "capturedUtc":  "2026-10-21T18:47:18.0267238Z",
+    "windows":  [
+                    {
+                        "Handle":  5898844,
+                        "Process":  340,
+                        "Class":  "ElevenClock-rs.Overlay",
+                        "Visible":  true,
+                        "Bounds":  {
+                                       "Left":  1429,
+                                       "Top":  1046,
+                                       "Right":  1516,
+                                       "Bottom":  1106
+                                   }
+                    },
+                    {
+                        "Handle":  196650,
+                        "Process":  4728,
+                        "Class":  "Shell_TrayWnd",
+                        "Visible":  true,
+                        "Bounds":  {
+                                       "Left":  0,
+                                       "Top":  1046,
+                                       "Right":  1536,
+                                       "Bottom":  1106
+                                   }
+                    }
+                ],
+    "taskbars":  [
+                     {
+                         "primary":  true,
+                         "taskbar":  {
+                                         "bottom":  1106,
+                                         "left":  0,
+                                         "right":  1536,
+                                         "top":  1046
+                                     },
+                         "clock":  {
+                                       "bottom":  1106,
+                                       "left":  1429,
+                                       "right":  1516,
+                                       "top":  1046
+                                   },
+                         "overlayHits":  368,
+                         "samples":  368,
+                         "firstMiss":  null,
+                         "neighbours":  [
+                                            {
+                                                "class":  "SystemTray.NormalButton",
+                                                "rect":  {
+                                                             "bottom":  1106,
+                                                             "left":  1254,
+                                                             "right":  1294,
+                                                             "top":  1046
+                                                         },
+                                                "x":  1274,
+                                                "y":  1076,
+                                                "hit":  {
+                                                            "Handle":  65758,
+                                                            "Process":  4728,
+                                                            "Class":  "TrayNotifyWnd",
+                                                            "Visible":  true,
+                                                            "Bounds":  {
+                                                                           "Left":  1255,
+                                                                           "Top":  1046,
+                                                                           "Right":  1536,
+                                                                           "Bottom":  1106
+                                                                       }
+                                                        },
+                                                "nativeHits":  176,
+                                                "samples":  176,
+                                                "overlapsClock":  false
+                                            },
+                                            {
+                                                "class":  "SystemTray.NormalButton",
+                                                "rect":  {
+                                                             "bottom":  1106,
+                                                             "left":  1294,
+                                                             "right":  1349,
+                                                             "top":  1046
+                                                         },
+                                                "x":  1322,
+                                                "y":  1076,
+                                                "hit":  {
+                                                            "Handle":  65758,
+                                                            "Process":  4728,
+                                                            "Class":  "TrayNotifyWnd",
+                                                            "Visible":  true,
+                                                            "Bounds":  {
+                                                                           "Left":  1255,
+                                                                           "Top":  1046,
+                                                                           "Right":  1536,
+                                                                           "Bottom":  1106
+                                                                       }
+                                                        },
+                                                "nativeHits":  240,
+                                                "samples":  240,
+                                                "overlapsClock":  false
+                                            },
+                                            {
+                                                "class":  "SystemTray.AccentButton",
+                                                "rect":  {
+                                                             "bottom":  1106,
+                                                             "left":  1354,
+                                                             "right":  1384,
+                                                             "top":  1046
+                                                         },
+                                                "x":  1369,
+                                                "y":  1076,
+                                                "hit":  {
+                                                            "Handle":  65758,
+                                                            "Process":  4728,
+                                                            "Class":  "TrayNotifyWnd",
+                                                            "Visible":  true,
+                                                            "Bounds":  {
+                                                                           "Left":  1255,
+                                                                           "Top":  1046,
+                                                                           "Right":  1536,
+                                                                           "Bottom":  1106
+                                                                       }
+                                                        },
+                                                "nativeHits":  144,
+                                                "samples":  144,
+                                                "overlapsClock":  false
+                                            },
+                                            {
+                                                "class":  "SystemTray.OmniButtonRight",
+                                                "rect":  {
+                                                             "bottom":  1106,
+                                                             "left":  1389,
+                                                             "right":  1419,
+                                                             "top":  1046
+                                                         },
+                                                "x":  1404,
+                                                "y":  1076,
+                                                "hit":  {
+                                                            "Handle":  65758,
+                                                            "Process":  4728,
+                                                            "Class":  "TrayNotifyWnd",
+                                                            "Visible":  true,
+                                                            "Bounds":  {
+                                                                           "Left":  1255,
+                                                                           "Top":  1046,
+                                                                           "Right":  1536,
+                                                                           "Bottom":  1106
+                                                                       }
+                                                        },
+                                                "nativeHits":  144,
+                                                "samples":  144,
+                                                "overlapsClock":  false
+                                            },
+                                            {
+                                                "class":  "SystemTray.ShowDesktopButton",
+                                                "rect":  {
+                                                             "bottom":  1106,
+                                                             "left":  1521,
+                                                             "right":  1536,
+                                                             "top":  1046
+                                                         },
+                                                "x":  1528,
+                                                "y":  1076,
+                                                "hit":  {
+                                                            "Handle":  65758,
+                                                            "Process":  4728,
+                                                            "Class":  "TrayNotifyWnd",
+                                                            "Visible":  true,
+                                                            "Bounds":  {
+                                                                           "Left":  1255,
+                                                                           "Top":  1046,
+                                                                           "Right":  1536,
+                                                                           "Bottom":  1106
+                                                                       }
+                                                        },
+                                                "nativeHits":  80,
+                                                "samples":  80,
+                                                "overlapsClock":  false
+                                            }
+                                        ],
+                         "corners":  [
+                                         {
+                                             "x":  1430,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1047,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1430,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         },
+                                         {
+                                             "x":  1514,
+                                             "y":  1104,
+                                             "rgb":  [
+                                                         243,
+                                                         243,
+                                                         243
+                                                     ]
+                                         }
+                                     ]
+                     }
+                 ]
+}
