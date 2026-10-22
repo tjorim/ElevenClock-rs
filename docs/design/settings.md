@@ -102,3 +102,27 @@ format replaces the candidate cache; unavailable or failed measurements are neve
 cached as successful fits. Both caches are bounded to the current draft/check.
 Operation-count guards for this cache and for the worst-case resampling are listed in
 [contributing](../contributing.md#performance-and-resource-guards).
+
+## Action audit
+
+Audited for issue #82: the existing small typed `interaction::MenuCommand` model
+already owns command IDs and the fixed menu. No additional action abstraction is
+needed for current behavior.
+
+| Entry points | Policy and dispatch owner | Existing evidence |
+| --- | --- | --- |
+| Clock right click; tray mouse, keyboard and context-key activation | Queue `Interaction::Menu`; native pump routes to `UserAction::ShowMenu`; `interaction::menu_items` and `Runtime::command` share Settings, Pause/Resume and Exit | `tray` decoder tests; `runtime/tests.rs` menu dispatch and tray coalescing tests |
+| Clock click; screen-reader Invoke | Queue activation; runtime checks the current overlay and activation gate before the native calendar action | `interaction` press/gate/queue tests and runtime activation tests; hosted overlay harness for native input/UIA |
+| Menu Settings; second-instance launch | Native show request converges on `SettingsWindow::show_or_focus`; an existing draft is retained | Settings desktop harness for window/focus behavior |
+| Menu Exit; Settings Exit; host close/session end | Menu calls runtime quit; Settings/host queue Exit, pumped as `Input::Quit`; runtime owns teardown | Runtime menu-exit, quit and end-session tests; lifecycle harness for native teardown |
+| Apply/OK; Reset; Cancel/close | Settings controller owns validation/save/recovery; OK closes only after success, Reset stages a draft, Cancel discards it | `settings_model` and `preferences_store` portable tests; Settings desktop harness |
+| Startup checkbox; Support Refresh/Copy | Separate typed startup/support policies, serviced outside callbacks; startup changes require explicit user action | Startup/support portable tests and native registry/clipboard tests |
+
+Pause/Resume is available through the shared menu; Settings does not duplicate it.
+Settings opening and Exit are unconditional requests, so their small native adapters
+contain no competing availability policy. Unsupported preference versions disable
+saving in the Settings model and remain protected at the store boundary. These
+layers enforce different boundaries rather than duplicating action policy.
+Revisit this audit when adding an entry point or conditional action; centralize
+proven shared availability/behavior in portable typed logic and test every affected
+source. Do not unify draft commands, OS registration and clock actions speculatively.

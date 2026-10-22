@@ -139,6 +139,44 @@ Only `clock-app`'s release executable is an app artifact. Tests, examples, probe
 license inventory scripts and debug binaries are development artifacts and must
 never enter an installer or support flow. See [releasing](releasing.md) for packaging and notices.
 
+## Extending settings and actions
+
+Use this checklist for each new setting or interaction; link the relevant design
+record and verification evidence in the PR.
+
+- Put validated user preferences and format rules in `clock-core`; add an editable
+  field to `Preferences` and a validated accessor only when the running clock needs it.
+  Put draft validation, availability, messages and Apply rules in the portable
+  `settings_model`, then wire native controls in `settings.rs`. OS-owned settings
+  such as login startup stay in their owning module, outside the preference file.
+- Model clock policy as state/events/effects in the pure reducer. Route user actions
+  through `interaction` and `Runtime`; callbacks queue owned values. Keep native
+  handles and COM objects in `clock-windows`, on their owning thread, with explicit
+  cleanup and no unwinding across FFI. Keep app → windows → core dependency direction.
+- Identify blocking work before adding it to the message loop. Discovery stays in
+  the bounded helper process; other blocking work needs an explicit ownership,
+  cancellation and shutdown design. Do not add callback I/O or unbounded queues.
+- Define behavior during pause, lock, Explorer restart, stale discovery and failed
+  rendering. Preserve the native-clock fallback and generation checks. Document
+  resource disposal and whether a feature creates timers, hooks or background work.
+- Describe status and failure recovery without leaking user names, paths or window
+  titles into diagnostics or logs. Extend the diagnostics golden/redaction cases
+  when their output changes; avoid per-tick logging.
+- For persisted changes, follow the [compatibility and fixture policy](design/preferences.md#compatibility-and-retained-fixtures).
+  Save before publishing active preferences; retain draft and original data on failure.
+- Add focused portable tests at the policy boundary, including changed and unchanged
+  inputs for caches. Run fmt, host Clippy and affected portable suites above; for
+  native changes also lint the Windows target and obtain Windows CI evidence.
+  Verify keyboard/screen-reader behavior for controls and action entry points.
+  Changes to wakeups or resources also require the measured evidence procedure below.
+- For heavyweight or network-dependent features, record the explicit
+  [dependency, privacy and lifecycle decision](dependencies.md#optional-features)
+  before implementation.
+
+The current [action audit](design/settings.md#action-audit) records the shared
+entry points; introduce another abstraction only when a feature demonstrates a
+policy duplication it will remove.
+
 ## Taskbar discovery
 
 Portable discovery validation and the process-supervisor tests also run on Linux:
