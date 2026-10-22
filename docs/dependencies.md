@@ -58,7 +58,7 @@ regressions; the dependency CI job runs them before the inventory.
 `windows-bindgen`, `windows-core` and `windows-numerics` are on the 0.100 line. The
 bindings are generated against `windows-core`, so the three must stay on matching
 versions and Dependabot updates them as one group. A version bump regenerates the
-bindings (`cargo run -p clock-bindgen`) in the same PR; CI fails when the checked-in
+bindings (`cargo run -p clock-bindgen --locked`) in the same PR; CI fails when the checked-in
 file differs from a fresh generation.
 
 Criterion 0.8 (MSRV 1.86) adds `alloca`, which compiles a small C file, and

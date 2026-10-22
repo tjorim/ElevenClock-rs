@@ -228,7 +228,6 @@ impl Overlay {
     }
 
     pub fn set_bounds(&mut self, bounds: PhysicalRect) -> Result<()> {
-        self.bounds = bounds;
         // SAFETY: moves our own window without activation or z-order change.
         unsafe {
             SetWindowPos(
@@ -240,8 +239,10 @@ impl Overlay {
                 bounds.height(),
                 (SWP_NOACTIVATE | SWP_NOZORDER) as u32,
             )
-            .ok()
+            .ok()?;
         }
+        self.bounds = bounds;
+        Ok(())
     }
 
     pub fn paint(

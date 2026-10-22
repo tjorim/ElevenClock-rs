@@ -46,9 +46,13 @@ invalid geometry/unknown visibility, shell loss or quit.
   and show that eligible window. Showing a previously hidden window requires Paint
   even when text is unchanged. Hide retains the window and its last paint.
   The reducer records the requested frame without a native success acknowledgement.
-  The runtime therefore retries overflow faults for reducer-visible clocks on its
-  two-second recovery poll, with fresh local time, even when formatted text has not
-  changed. Hidden, unavailable and stale-generation clocks are never retried.
+  The runtime therefore retries overflow, render and placement faults for
+  reducer-visible clocks on its two-second recovery poll, with fresh local time,
+  even when formatted text has not changed. Failed moves hide the old window
+  immediately; placement recovery recreates it hidden at the current discovered
+  bounds before painting. Native repaint/upkeep failures enter the same diagnostics
+  and recovery path. Hidden, unavailable and stale-generation clocks are never
+  retried. Calendar-action faults still require Pause/Resume or Explorer recovery.
 - ArmTimer: replace the outstanding one-shot monotonic wait. The timer callback
   reads a fresh OS-local snapshot once and dispatches Tick. Time-change/resume
   notifications read a fresh snapshot and dispatch TimeChanged; unlock also needs

@@ -92,3 +92,11 @@ later overflow, and Settings shows that as a notice when it is open.
   notifications, are read at the start of every command. Input that arrives as a *sent*
   message never wakes `GetMessageW`, so each queued event also posts a wake message to
   the dialog.
+
+## Fit-check caching
+
+Settings retains one draft format's sampled worst-case candidates. Repeated fit
+checks reuse successful measurements while rendered text, selected clock slots,
+DPI, font size and the runtime appearance/font revision are unchanged. A different
+format replaces the candidate cache; unavailable or failed measurements are never
+cached as successful fits. Both caches are bounded to the current draft/check.

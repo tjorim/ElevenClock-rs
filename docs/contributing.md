@@ -13,15 +13,15 @@ current when it was last set) matches what CI builds with; it is not a separatel
 tested floor, so raise it when you move to a newer stable. Install
 rustfmt and Clippy. Use `fmt --all` from the repository root so cargo-fmt finds
 this virtual workspace's targets. The workspace's default member is `clock-app`, so a bare
-`cargo run` starts the app; use `--workspace` or `-p` (as below and in CI) to build,
+`cargo run --locked` starts the app; use `--workspace` or `-p` (as below and in CI) to build,
 lint or test the other crates. Release builds require a native Windows host so
 resources cannot be silently omitted during cross-compilation. Linux cross-target
 checks are type checks only.
-CI layout (`rust-ci.yml`): the Linux `core` job runs fmt, Clippy for the host and for
-`x86_64-pc-windows-msvc` (the Windows-only code is type-checked and linted, not
-executed) and the portable `clock-core` tests. The `windows` job only runs what needs
-Windows: the full test suite including Windows-only tests, the release build with its
-native resources, and the desktop smoke checks. Both jobs use a cargo cache.
+CI layout ([`rust-ci.yml`](../.github/workflows/rust-ci.yml)): the Linux `core` job
+runs fmt, host Clippy, binding regeneration and the portable `clock-core` tests.
+The `windows` job lints the Windows target and runs the full test suite including
+Windows-only tests, the release build with its native resources, and the desktop
+smoke checks. Both jobs use a cargo cache.
 Portable packaging-script and overlay-harness regression checks run once on Linux;
 the dependency job owns the advisory audit and license checks, with a cached,
 version-checked advisory tool. Core tests retain Linux and Windows coverage; the
@@ -29,7 +29,7 @@ Linux test command already includes doctests.
 
 Win32 APIs come from generated bindings, not the `windows` crate. To use a new
 function, constant, struct or interface, add its name (`Windows.Win32.<Name>`) to
-`crates/clock-windows/bindings.txt` and run `cargo run -p clock-bindgen`. COM
+`crates/clock-windows/bindings.txt` and run `cargo run -p clock-bindgen --locked`. COM
 interfaces list only the methods called (`Windows.Win32.IFoo::{A, B}`), with inherited
 methods on the base interface that declares them; an interface that is only referenced
 comes out without methods. Constants are plain integers (`#define` values are `i32`), so
@@ -57,8 +57,19 @@ Windows SDK resource compiler; users do not need these developer tools.
 ```sh
 cargo fmt --all --check
 cargo test -p clock-core --locked
-cargo clippy -p clock-core --all-targets --locked -- -D warnings
+cargo test -p clock-windows --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
+
+On Linux, optionally type-check and lint the Windows-only app code after installing
+`x86_64-pc-windows-msvc` with rustup:
+
+```sh
+cargo clippy -p clock-windows -p clock-app --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
+```
+
+Do not use `--workspace --all-targets` for this cross-target check: Criterion's
+`alloca` dependency needs MSVC. Windows binaries cannot be executed on Linux.
 
 On Windows, additionally run:
 
@@ -108,7 +119,7 @@ FullscreenChanged carries a generation-scoped taskbar key and boolean. See
 [state and scheduling](design/state-and-scheduling.md) for integration and timer semantics.
 Time events use one DateTime<FixedOffset> snapshot per update; it is not a stored
 timezone rule. Discovery responses and all overlay effects carry ShellGeneration;
-the reducer discards stale responses and destroy old-generation overlays on loss.
+the reducer discards stale responses and destroys old-generation overlays on loss.
 MonitorId/TaskbarId are process-local values, never raw handles or persistence IDs.
 Changes to shared interfaces require coordinated review before dependent work.
 
@@ -156,7 +167,7 @@ mixed-DPI setup.
 `overlay_evidence` is a development-only example in `clock-app`, never an installed
 app artifact. Its experimental overlay/interaction FFI is private to the example;
 a normal `-p clock-app` release build does not compile it. Build it with
-`cargo build -p clock-app --example overlay_evidence`.
+`cargo build -p clock-app --example overlay_evidence --locked`.
 The hosted workflow uses real native/UIA hits, screenshots, input and shell/display
 transitions; positive window flags alone do not prove opaque coverage or calendar
 access.

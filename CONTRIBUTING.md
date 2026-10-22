@@ -1,8 +1,11 @@
-Please check if there's any Issue/PR about the same thing before opening a new one.
+# Contributing to ElevenClock-rs
 
-Feel free to submit new ideas via mail or opening a new Issue, or if you'd like, feel free also to fix something/add a feature, etc, submitting a pull request :)
+Check existing issues and pull requests before opening a new one. Use an issue to
+report a bug or discuss a feature, or submit a pull request against `main`.
 
-Build, test and workspace contracts: [contributor guide](docs/contributing.md).
+The [contributor guide](docs/contributing.md) covers the workspace, build and test
+commands, CI, and architecture contracts. The [docs index](docs/README.md) links
+the design records, and the [release guide](docs/releasing.md) covers packaging.
 
-The original Python app was removed at the Rust cutover and is not accepting changes;
-see the [migration guide](docs/migration.md) for where it remains in Git history.
+The original Python app is no longer in this tree. See the
+[migration guide](docs/migration.md#legacy-reference) for its Git history.

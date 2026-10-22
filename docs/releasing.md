@@ -2,8 +2,9 @@
 
 Releases are unsigned GitHub releases: the installer, the portable ZIP, matching
 source, debug symbols and `SHA256SUMS.txt`. What has been tested is in
-[tested configurations](tested-configurations.md). Signing and winget come later;
-the name and channels are in [product name](product-name.md).
+[tested configurations](tested-configurations.md). The [code signing policy](../README.md#code-signing-policy) describes the planned
+SignPath signing; winget is a later distribution channel. The name and channels
+are in [product name](product-name.md).
 
 ## Publishing a release
 
@@ -143,9 +144,9 @@ User rollback: Exit through Settings/tray, uninstall in Windows Settings > Apps,
 install the saved earlier supported installer and launch from Start. Check its
 Support version; choose startup again in Settings if wanted. Private data remains;
 if the older version cannot read it, use its native Reset to defaults, not manual
-preference edits. Verify Exit reveals the Windows clock. There is **no earlier
-supported Rust installer**; development-build A → B → uninstall → A mechanics now
-passed on a standard Windows 11 account, while cross-version
-release compatibility remains unverified. Returning
+preference edits. Verify Exit reveals the Windows clock. Development-build
+A → B → uninstall → A mechanics passed on a standard Windows 11 account; this
+does not establish cross-version release compatibility. See
+[tested configurations](tested-configurations.md) for the validation scope. Returning
 to the native clock immediately requires only Exit/uninstall: the underlying clock
 was never disabled. Start legacy ElevenClock only after the Rust app has exited.
