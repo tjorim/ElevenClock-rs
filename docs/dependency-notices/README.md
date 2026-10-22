@@ -19,6 +19,15 @@ mismatches fail the check. The checker never downloads fallback text in CI.
   explicitly recognizes and checks that bundled file; no substitute license
   text is generated or fetched. Generic AUTHORS or README files are not
   accepted as notices for other packages.
+- **winapi-i686-pc-windows-gnu 0.4.0, winapi-x86_64-pc-windows-gnu 0.4.0**:
+  the published import-library crates omit the repository-root licenses
+  (upstream added them only after 0.4.0) and carry no `.cargo_vcs_info.json`.
+  Both were published from winapi-rs commit
+  `9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa` ("Publish 0.3.4"), whose
+  `i686/Cargo.toml` and `x86_64/Cargo.toml` declare version 0.4.0. The original
+  LICENSE-MIT and LICENSE-APACHE from that commit are copied here unmodified.
+  They are pulled in by criterion's `page_size` → `winapi` (bench-only, and only
+  for `windows-gnu` targets).
 
 The combined CI notice artifact includes all these original texts and their
 source URLs. Future dependency versions require checking their packaged notices

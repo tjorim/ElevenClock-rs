@@ -53,7 +53,7 @@ runtime is introduced. The license check covers these developer
 dependencies too.
 
 R04 adds development-only **proptest** (locked 1.12.0) for generated formatter
-validation and **Criterion** 0.7.0 (default features disabled) for parse/render
+validation and **Criterion** 0.8.2 (default features disabled) for parse/render
 measurements. Both compile on MSRV 1.90 and stable 1.99. Neither changes the
 normal app/core runtime dependency graph. Their MIT/Apache-2.0 alternatives and
 transitive original notices are retained by the same inventory gate.
@@ -90,3 +90,15 @@ in its expansion. It is the version `windows` 0.61 already locks, so no package,
 or MSRV change; only the clock-windows dependency edge in `Cargo.lock` is new. The shared
 `windows` dependency also enables `Win32_System_Ole` and `Win32_System_Variant`, which the
 UIA provider interfaces require.
+
+`windows`, `windows-core` and `windows-numerics` move together to the 0.62 line
+(0.62.2, 0.62.2, 0.3.1; MSRV 1.82). They must stay on matching versions, so
+Dependabot updates them as one group. The 0.100 releases of the small crates are
+ignored until `windows` itself reaches 0.100 (see #74).
+
+Criterion 0.8 (MSRV 1.86) adds `alloca`, which compiles a small C file, and
+`page_size` → `winapi`, whose `winapi-*-pc-windows-gnu` import-library crates
+publish no license files; their original notices are supplemented under
+[dependency-notices](dependency-notices/README.md). Because `alloca` needs the
+MSVC toolchain for `x86_64-pc-windows-msvc`, the Windows-target clippy runs on
+the Windows CI runner instead of cross-checking from Linux.

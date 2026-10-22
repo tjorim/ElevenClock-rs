@@ -12,8 +12,7 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  # Everything that does not need a Windows machine runs here, once. The Windows-only
-  # code is type-checked and linted through the MSVC target; nothing in it is executed.
+  # Everything that does not need a Windows machine runs here, once.
   core:
     runs-on: ubuntu-latest
     steps:
@@ -21,19 +20,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
       - run: cargo test -p clock-core --locked
       - name: Packaging script regression checks
         run: python3 scripts/test-rust-release.py
       - name: Overlay harness wait regression checks
         shell: pwsh
         run: ./scripts/test-rust-overlay-harness.ps1
-  # Only what needs Windows: executing the Windows-only tests, the release build with its
-  # native resources, and the desktop smoke checks.
+  # Only what needs Windows: linting the Windows-only code, executing the Windows-only
+  # tests, the release build with its native resources, and the desktop smoke checks.
+  # The MSVC lint runs here because dev-dependencies (criterion's `alloca`) compile C
+  # for the target, which needs the MSVC toolchain.
   windows:
     runs-on: windows-latest
     timeout-minutes: 15
@@ -41,8 +40,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
+          components: clippy
           targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
       - run: cargo test --workspace --all-targets --locked
       # The real Windows clipboard, including contention (R11). Ignored by default
       # because it overwrites the clipboard text while it runs.

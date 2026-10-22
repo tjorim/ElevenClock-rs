@@ -22,7 +22,3 @@ updates:
         versions: [">=0.100"]
       - dependency-name: "windows-numerics"
         versions: [">=0.100"]
-      # 0.8 pulls in `alloca` (needs a C compiler for the MSVC cross-clippy on
-      # Linux) and `winapi-*-gnu` (ships no license files, fails the notice check).
-      - dependency-name: "criterion"
-        versions: [">=0.8"]

@@ -56,7 +56,7 @@ Amsterdam tests supply explicit +01:00/+02:00 snapshots on both sides of the
 ## Development dependencies
 
 Proptest (locked 1.12.0) generates arbitrary Unicode inputs and supported-token
-formats with timestamp/offset variation; Criterion (0.7.0, default features off)
+formats with timestamp/offset variation; Criterion (0.8.2, default features off)
 measures parsing versus reuse/rendering. Both are development-only and kept
 out of the app's normal dependency graph. Existing chrono runtime dependencies
 and shared models are unchanged. Both tools are maintained Rust ecosystem
