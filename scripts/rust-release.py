@@ -39,13 +39,6 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def check_gates(gates):
-    for name in ("licensing", "windows_acceptance", "clean_standard_account"):
-        gate = gates.get(name, {})
-        if gate.get("passed") is not True or not gate.get("evidence"):
-            raise ValueError(f"Distribution blocked: {name}: {gate.get('evidence', 'missing evidence')}")
-
-
 def inspect_pe(data):
     """Read the PE32+ import table without executing the candidate."""
     if data[:2] != b"MZ":
@@ -111,10 +104,8 @@ def prepare(out, mode):
         raise ValueError("Output must be a new directory; stale artifacts are not reusable")
     if out.is_relative_to(ROOT) and not out.is_relative_to(ROOT / "dist"):
         raise ValueError("In-repository output must be under ignored dist/ to avoid capturing itself")
-    gates = json.loads((ROOT / "packaging/release-gates.json").read_text())
     dirty = bool(run("git", "status", "--porcelain"))
     if mode == "Distribution":
-        check_gates(gates)
         if dirty:
             raise ValueError("Distribution requires a clean source checkout")
         # The candidate readme deliberately says development/blocked. A release
@@ -179,7 +170,6 @@ def prepare(out, mode):
     write_json(source / "source-files.json", source_hashes)
     write_json(payload / "runtime-dependencies.json", {
         "target": TARGET, "crt": "static", "direct_imports": imports,
-        "clean_machine_verified": gates["clean_standard_account"]["passed"],
         "note": "Import inspection does not prove clean-machine execution or runtime-loaded system components.",
     })
     provenance = {
@@ -188,7 +178,7 @@ def prepare(out, mode):
         "rustc": run("rustc", "-Vv"), "cargo": run("cargo", "-V"),
         "rustflags": "-C target-feature=+crt-static", "signing": "unsigned",
         "exe_sha256": digest(binary), "lock_sha256": digest(ROOT / "Cargo.lock"),
-        "source_manifest_sha256": digest(source / "source-files.json"), "gates": gates,
+        "source_manifest_sha256": digest(source / "source-files.json"),
         "source_archive": name + "-source.zip",
     }
     for directory in (payload, symbols, source):
@@ -254,13 +244,11 @@ def verify(out):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("prepare", "finish", "verify", "check-gates"))
+    parser.add_argument("action", choices=("prepare", "finish", "verify"))
     parser.add_argument("--output", type=Path, default=ROOT / "dist/candidate")
     parser.add_argument("--mode", choices=("Development", "Distribution"), default="Development")
     args = parser.parse_args()
-    if args.action == "check-gates":
-        check_gates(json.loads((ROOT / "packaging/release-gates.json").read_text()))
-    elif args.action == "prepare":
+    if args.action == "prepare":
         prepare(args.output.resolve(), args.mode)
     elif args.action == "finish":
         finish(args.output.resolve())

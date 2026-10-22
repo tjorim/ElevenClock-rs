@@ -7,11 +7,9 @@ standard-account installation/runtime validation. A closed tracker is not eviden
 that its acceptance matrix passed. Actual results are in the
 [packaging evidence record](windows-evidence/packaging.md).
 
-The packaging implementation in #15 can close when PR #45 merges. Remaining
-clean-machine, fresh-account, real-logon and packaging ownership validation is
-explicitly handed to [#47](https://github.com/tjorim/ElevenClock-rs/issues/47).
-Licensing remains in #32 and R13 acceptance in #46. This separates implementation
-tracking from release acceptance; all three distribution gates remain blocked.
+The release decision is recorded in the [acceptance record](windows-evidence/acceptance.md),
+not in a configuration file. Releasing means rewording `packaging/PACKAGE-README.txt`
+(see below) in a reviewed change that links that decision.
 
 ## Build and artifacts
 
@@ -61,9 +59,9 @@ MSVC/SDK and the recorded Rust toolchain remain build prerequisites. This suppli
 matching source, not a byte-for-byte reproducibility guarantee. Without `.git`, the
 rebuilt Support commit says `unknown`; original provenance stays in the JSON file.
 
-`-Mode Distribution` rejects any unpassed entry in `packaging/release-gates.json`,
-missing evidence, a dirty checkout or unchanged development-only notice wording.
-Change gates only through reviewed source changes. The workflow has read-only
+`-Mode Distribution` rejects a dirty checkout and a `PACKAGE-README.txt` that still
+says "Distribution is blocked"; that wording is the only switch, and it changes only
+through a reviewed source change. The workflow has read-only
 repository permissions, no release/tag/publish step, no signing identity and no
 automatic product prerequisite installer. A future signed/versioned release needs
 an authorized release action and consistent notices.
