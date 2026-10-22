@@ -199,6 +199,51 @@ always used, after geometric validation of its rectangle.
 Hosted lifecycle evidence: `scripts/test-rust-lifecycle.ps1` via
 [runtime-lifecycle.yml](../.github/workflows/runtime-lifecycle.yml).
 
+## Performance and resource guards
+
+Two kinds of evidence, never substituted for each other:
+
+- **Synthetic guards** run in normal CI on any host, without sleeps or a desktop. They
+  count operations (measurements, sampling sweeps, paints, discovery requests) rather than
+  time, and each pairs an unchanged input that must repeat no work with a changed one that
+  must still recompute. They live in `runtime/tests.rs` ("Performance guards"; the
+  Settings fit cache, `WorstCase` resampling, idle polls) and `clock-core/tests/state.rs`
+  (effects for repeated events). `WorstCase::builds()` is a test-only per-thread counter of
+  sampling sweeps. A new cache or throttle needs a guard that fails when it is removed and
+  one that fails when it keeps a stale answer. Never cache a failed or unavailable
+  measurement as a success.
+- **Measured evidence** comes from a real Windows desktop (below) and is what the figures
+  in [tested configurations](tested-configurations.md) report.
+
+`cargo bench -p clock-core --bench state` and `cargo bench -p clock-windows --bench
+worst_case` print informative timings (the reducer on four displays; the sampling sweep
+per preset). `cargo bench -p clock-core --bench format` covers parsing and rendering. None
+of them gates CI: shared runners are too noisy for hard time limits, and the benches are
+only compiled there by `--all-targets` linting. Compare before and after on one machine
+when a change touches those paths.
+
+A change that affects wakeups, discovery, recovery, working set or native resources also
+needs this procedure on a release build, once on `main` and once on the branch:
+
+1. Run one instance and pick the format in Settings. Use the three formats from
+   [tested configurations](tested-configurations.md#resource-use) when the change can
+   affect cadence (date only, minutes, seconds).
+2. `./scripts/measure-rust-resources.ps1 -DurationSeconds 600 -IntervalSeconds 10
+   -Label <name> -Workload '<format and what you did>'` reports CPU, private working set,
+   handles, threads, GDI/USER objects and windows. Growth over the run is a finding; the
+   total-machine CPU figure is a comparison between two runs on the same machine, not a limit.
+3. The script cannot see timer wakes or hooks. Discovery shows up as helper processes: the
+   `-processes.csv` file and `processesStarted` in the summary list every helper it saw.
+   A helper that exits between two samples is missed, so use `-IntervalSeconds 1` when
+   the question is how often discovery runs, and compare the counts for the same workload.
+   Check that the change adds no timer that fires while nothing has changed (see
+   [lifecycle](design/lifecycle.md#fallback-polling-rates-and-timers) for the existing ones).
+4. For recovery or native-resource changes also run `./scripts/test-rust-lifecycle.ps1
+   -ObserveOverlays` (Explorer restarts, handle and memory limits) and record the overlay
+   recovery times.
+5. Put the numbers, machine and build in the pull request. Update the table in tested
+   configurations only when the reference figures actually change.
+
 ## Support and logging
 
 `clock-windows::support` (status wording, the diagnostics report, redaction, the

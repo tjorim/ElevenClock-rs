@@ -87,6 +87,8 @@ struct Fake {
     menu_choice: Option<MenuCommand>,
     /// Slot width the fake renderer needs; `None` means it cannot measure.
     fit_needs_width: Option<i32>,
+    /// Measuring fails (a transient native error) instead of answering.
+    fit_error: bool,
     fit_calls: Vec<(PixelSize, u32, u8)>,
 }
 impl Fake {
@@ -109,6 +111,7 @@ impl Fake {
             calendar: CalendarOutcome::Sent,
             menu_choice: None,
             fit_needs_width: None,
+            fit_error: false,
             fit_calls: Vec::new(),
         }
     }
@@ -195,6 +198,9 @@ impl Platform for Fake {
     ) -> Option<Result<Fit, RenderError>> {
         let needs = self.fit_needs_width?;
         self.fit_calls.push((region, dpi, font_pt));
+        if self.fit_error {
+            return Some(Err(RenderError::InvalidMeasurement));
+        }
         let required = PixelSize {
             width: needs,
             height: region.height,
@@ -1700,6 +1706,152 @@ fn settings_fit_check_reports_nothing_when_it_fits_or_cannot_measure() {
     fresh.platform.fit_needs_width = Some(1_000);
     assert!(fresh.check(&fit_format(), 9, Monitors::All, now).is_empty());
     assert!(fresh.platform.fit_calls.is_empty());
+}
+
+// ---- Performance guards: repeated work ------------------------------------
+//
+// These count operations, not time: measurements, sampling sweeps, paints and
+// discovery requests. Each pairs an unchanged input that must do no new work with
+// a genuinely changed one that must, so a guard cannot pass by never recomputing.
+// Measured CPU and memory on a real desktop are a separate procedure
+// (docs/contributing.md, "Performance and resource guards").
+
+fn measured(runtime: &Runtime<Fake>) -> usize {
+    runtime.platform.fit_calls.len()
+}
+
+#[test]
+fn settings_fit_checks_on_several_displays_sample_and_measure_only_what_changed() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
+    runtime.platform.fit_needs_width = Some(150);
+    let now = wall("2026-10-13T09:15:00+02:00");
+    let format = fit_format();
+    let builds = WorstCase::builds();
+
+    let first = runtime.check(&format, 9, Monitors::All, now);
+    assert_eq!(first.len(), 2);
+    assert_eq!(
+        measured(&runtime),
+        2,
+        "one measurement per selected display"
+    );
+    assert_eq!(WorstCase::builds(), builds + 1, "one sampling sweep");
+    // Every Settings refresh and the Apply after it repeat the same question.
+    for seconds in [0, 1, 30, 45] {
+        let later = now + chrono::TimeDelta::seconds(seconds);
+        assert_eq!(runtime.check(&format, 9, Monitors::All, later), first);
+    }
+    assert_eq!(measured(&runtime), 2);
+    assert_eq!(WorstCase::builds(), builds + 1);
+
+    // Changing which displays are selected measures that set, not the old one.
+    runtime.check(&format, 9, Monitors::Primary, now);
+    assert_eq!(measured(&runtime), 3);
+    // Only the second display's slot changes: both are measured again.
+    runtime.snapshots.get_mut(&2).unwrap().clock_rect = Some(rect(-120, 1032, 120, 48));
+    runtime.check(&format, 9, Monitors::All, now);
+    assert_eq!(measured(&runtime), 5);
+    assert_eq!(
+        WorstCase::builds(),
+        builds + 1,
+        "the sweep outlives all of it"
+    );
+
+    // A different format replaces the sweep and the verdict.
+    let other = CompiledFormat::parse("%H:%M").unwrap();
+    runtime.check(&other, 9, Monitors::All, now);
+    assert_eq!(measured(&runtime), 7);
+    assert_eq!(WorstCase::builds(), builds + 2);
+}
+
+#[test]
+fn a_transient_measurement_failure_is_retried_not_held_as_a_fit() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
+    runtime.platform.fit_needs_width = Some(150);
+    runtime.platform.fit_error = true;
+    let now = wall("2026-10-13T09:15:00+02:00");
+    let format = fit_format();
+    for round in 1..=3 {
+        assert!(runtime.check(&format, 9, Monitors::All, now).is_empty());
+        assert_eq!(measured(&runtime), 2 * round, "measured again each time");
+    }
+    runtime.platform.fit_error = false;
+    assert_eq!(runtime.check(&format, 9, Monitors::All, now).len(), 2);
+    assert_eq!(measured(&runtime), 8);
+    runtime.check(&format, 9, Monitors::All, now);
+    assert_eq!(measured(&runtime), 8, "the success is held");
+}
+
+#[test]
+fn only_a_changed_format_source_resamples_the_worst_case() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
+    let apply = |runtime: &mut Runtime<Fake>, format: &str, font_size_pt: u8, theme: Theme| {
+        let preferences = Preferences {
+            format: format.into(),
+            font_size_pt,
+            theme,
+            monitors: Monitors::All,
+        }
+        .validate()
+        .unwrap();
+        runtime.handle(Input::Preferences(preferences));
+    };
+    apply(&mut runtime, "%H:%M", 9, Theme::System);
+    take(&mut runtime);
+    let builds = WorstCase::builds();
+
+    apply(&mut runtime, "%H:%M", 9, Theme::System);
+    assert_eq!(paints(&take(&mut runtime)), 0, "identical preferences");
+    apply(&mut runtime, "%H:%M", 12, Theme::Dark);
+    assert_eq!(paints(&take(&mut runtime)), 2, "one repaint per display");
+    assert_eq!(WorstCase::builds(), builds, "font and theme keep the sweep");
+    apply(&mut runtime, "%H:%M:%S", 12, Theme::Dark);
+    assert_eq!(paints(&take(&mut runtime)), 2);
+    assert_eq!(
+        WorstCase::builds(),
+        builds + 1,
+        "a new format resamples once"
+    );
+    apply(&mut runtime, "%H:%M:%S", 12, Theme::Dark);
+    assert_eq!(paints(&take(&mut runtime)), 0);
+    assert_eq!(WorstCase::builds(), builds + 1);
+}
+
+#[test]
+fn an_idle_clock_with_unchanged_observations_does_no_native_work() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
+    // Let the transition and settling polls finish before measuring idleness.
+    for _ in 0..20 {
+        advance(&mut runtime, RECOVERY_POLL);
+    }
+    take(&mut runtime);
+    for _ in 0..30 {
+        advance(&mut runtime, RECOVERY_POLL);
+        runtime.handle(Input::Signal(Signal::Shell(ShellEvent::ForegroundChanged)));
+        runtime.handle(Input::Signal(Signal::AppearanceMaybeChanged));
+    }
+    let calls = take(&mut runtime);
+    let work: Vec<_> = calls
+        .iter()
+        .filter(|call| !matches!(call, Call::Poll(_)))
+        .collect();
+    assert!(work.is_empty(), "idle polls only re-arm the poll: {work:?}");
+
+    // A redelivered, identical discovery answer creates, moves and paints nothing.
+    discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
+    let calls = take(&mut runtime);
+    assert!(
+        !calls.iter().any(|call| matches!(
+            call,
+            Call::Create(_) | Call::Destroy(_) | Call::SetBounds(_) | Call::Paint(..)
+        )),
+        "{calls:?}"
+    );
+    assert!(requests(&calls).is_empty());
 }
 
 // ---- Support: Refresh status, report data and the transition log (R11) ----------

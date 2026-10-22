@@ -100,3 +100,5 @@ checks reuse successful measurements while rendered text, selected clock slots,
 DPI, font size and the runtime appearance/font revision are unchanged. A different
 format replaces the candidate cache; unavailable or failed measurements are never
 cached as successful fits. Both caches are bounded to the current draft/check.
+Operation-count guards for this cache and for the worst-case resampling are listed in
+[contributing](../contributing.md#performance-and-resource-guards).
