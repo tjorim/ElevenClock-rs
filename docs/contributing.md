@@ -12,7 +12,9 @@ not pin one (no `rust-toolchain.toml`). Workspace `rust-version` (1.99, the stab
 current when it was last set) matches what CI builds with; it is not a separately
 tested floor, so raise it when you move to a newer stable. Install
 rustfmt and Clippy. Use `fmt --all` from the repository root so cargo-fmt finds
-this virtual workspace's targets. Release builds require a native Windows host so
+this virtual workspace's targets. The workspace's default member is `clock-app`, so a bare
+`cargo run` starts the app; use `--workspace` or `-p` (as below and in CI) to build,
+lint or test the other crates. Release builds require a native Windows host so
 resources cannot be silently omitted during cross-compilation. Linux cross-target
 checks are type checks only.
 CI layout (`rust-ci.yml`): the Linux `core` job runs fmt, Clippy for the host and for
