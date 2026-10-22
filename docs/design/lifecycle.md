@@ -2,11 +2,10 @@
 
 Status: **runtime, lifecycle, supervision and tests implemented; the interactive and
 Explorer-correlated gates below are unchecked.** The authoring environment was Linux;
-Windows code was type-checked for `x86_64-pc-windows-msvc` only. **P1 remains
-NO-GO** ([overlay evidence](../windows-evidence/overlay-spike.md), [#21](https://github.com/tjorim/ElevenClock/issues/21),
-[#23](https://github.com/tjorim/ElevenClock/issues/23)), but the project is a work in
-progress with no release, so there is **no support gate**: the R02 experimental
-candidate always places the clock after geometric validation. A failed, late or stale
+Windows code was type-checked for `x86_64-pc-windows-msvc` only. Real-shell results
+and the Windows acceptance decision (GO) are in the
+[acceptance record](../windows-evidence/acceptance.md). There is **no support gate**:
+the R02 candidate always places the clock after geometric validation. A failed, late or stale
 discovery still fails closed to an authoritative empty batch, which removes the overlays
 and leaves the native clock untouched.
 
@@ -175,7 +174,7 @@ there, with hosted attempts as above.
 ## Unchecked gates
 
 - [ ] Default two-line clock on primary and all monitors with a **real** overlay
-      (P1 NO-GO; the experimental candidate is live, so this is observed, not accepted).
+      (see the [acceptance record](../windows-evidence/acceptance.md) for real-shell results).
 - [ ] Explorer kill/restart restores tray/clock state and rejects old discovery
       results **on a real shell** (stale-result rejection is proven with scripted and
       fixture inputs; hosted lifecycle script measures survival and no accumulation).

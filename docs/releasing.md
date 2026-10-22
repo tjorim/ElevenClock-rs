@@ -1,10 +1,11 @@
 # Native x64 packaging (R14)
 
-The installer and ZIP are **unsigned development candidates**. Distribution is
-blocked by [#32's remaining product-name review](https://github.com/tjorim/ElevenClock-rs/issues/32),
-the open [R13 acceptance gates](windows-evidence/acceptance.md), and clean Windows
-standard-account installation/runtime validation. A closed tracker is not evidence
-that its acceptance matrix passed. Actual results are in the
+The installer and ZIP are **unsigned development candidates**. The
+[R13 Windows acceptance gates](windows-evidence/acceptance.md) are GO (2026-10-22).
+Distribution is still blocked by the remaining
+[product-name review](windows-evidence/product-name-and-listings.md) (carried over
+from #32) and clean Windows standard-account installation/runtime validation. A
+closed tracker is not evidence that its acceptance matrix passed. Actual results are in the
 [packaging evidence record](windows-evidence/packaging.md).
 
 The release decision is recorded in the [acceptance record](windows-evidence/acceptance.md),
@@ -105,11 +106,12 @@ and imagery, with GPLv3 and the original credits to Martí Climent and Xavier
 Delugo, were removed from the tree at cutover. They are no longer in the source
 companion and were never installed; they remain in Git history (see the
 [migration guide](migration.md#legacy-reference)). The stale upstream Apache
-README sentence does not relicense that legacy material. Product-name review remains open in
-[#32](https://github.com/tjorim/ElevenClock-rs/issues/32). The full dependency
+README sentence does not relicense that legacy material. The
+[product-name review](windows-evidence/product-name-and-listings.md) is still
+incomplete. The full dependency
 inventory supplies original notices (including build/test dependencies); Rust's
 COPYRIGHT.html supplies toolchain notices. Hash-checked supplemental notices retain
-LF bytes on Windows. The remaining name review and Windows gates block distribution.
+LF bytes on Windows. The remaining name review blocks distribution.
 
 ## Lifecycle and rollback
 

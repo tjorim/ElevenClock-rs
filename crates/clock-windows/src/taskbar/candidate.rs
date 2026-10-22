@@ -1,13 +1,12 @@
-//! The R02 *experimental* clock candidate, as a pure function over a UIA
-//! inventory (experimental: P1 is NO-GO, see #21).
+//! The R02 clock candidate, as a pure function over a UIA inventory. Its
+//! acceptance is recorded in `docs/windows-evidence/acceptance.md`.
 //!
 //! This reproduces what the hosted captures recorded and R03's spike used: a
 //! visible XAML `SystemTray.OmniButtonLeft` button owned by the shell whose
 //! children expose `TimeInnerTextBlock` and `DateInnerTextBlock`, with the bell
 //! (`OmniButtonRight`) and Show Desktop buttons as neighbours. It uses only
 //! locale-independent properties: never a localized Name, an ordinal or an offset.
-//! Passing it proves nothing about hit targets on untested configurations, which
-//! is why it stays experimental until P1 is a GO.
+//! Passing it proves nothing about hit targets on untested configurations.
 //!
 //! A stock x64 desktop (build 26200.9457, #21) instead exposes one merged
 //! `SystemTray.OmniButton` with the same time/date children and Show Desktop as

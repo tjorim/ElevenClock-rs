@@ -4,8 +4,8 @@
 # start, second launch, close-to-background, Exit, and (optionally) Explorer
 # kill/restart while measuring processes, threads and handles. It uses only
 # public process/window state: the product has no command suite or debug channel.
-# Overlay observation (-ObserveOverlays) is informational evidence: P1 is still
-# NO-GO (#23), so overlay counts are recorded but never an acceptance check.
+# Overlay observation (-ObserveOverlays) is informational evidence: overlay counts
+# are recorded but never an acceptance check on their own.
 # With it, each Explorer restart also records how long the overlays took to come
 # back (#51). -RecoveryBoundSeconds turns that into a check, for a reviewed bound.
 param(

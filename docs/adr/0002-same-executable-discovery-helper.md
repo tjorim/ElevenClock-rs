@@ -1,7 +1,7 @@
 # ADR 0002: same-executable discovery helper for the app runtime
 
 Date: 2026-10-14. Work item: [R08 / #9](https://github.com/tjorim/ElevenClock/issues/9).
-Status: **implemented for review; work in progress (P1 is still NO-GO, so overlay placement is experimental)**.
+Status: **implemented; accepted with the Windows acceptance gates (GO, 2026-10-22, see the [acceptance record](../windows-evidence/acceptance.md))**.
 Amends [ADR 0001](0001-taskbar-discovery.md), which required this arrangement to be
 implemented and reviewed for `clock-app` before downstream use.
 

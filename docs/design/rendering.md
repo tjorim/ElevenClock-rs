@@ -3,8 +3,8 @@
 Status: **code, portable tests and Windows type-checking complete; the interactive
 DPI/theme/long-format screenshot gates below are unchecked.** No Windows desktop
 was available in the authoring environment, so nothing here is a measured Windows
-result. P1 remains NO-GO (see [overlay evidence](../windows-evidence/overlay-spike.md)); this work
-replaces prototype drawing only and enables no production overlay.
+result. Real-desktop results are in the
+[acceptance record](../windows-evidence/acceptance.md).
 
 ## Renderer API (`clock-windows`)
 

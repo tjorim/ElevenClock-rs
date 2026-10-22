@@ -166,12 +166,13 @@ a normal `-p clock-app` release build does not compile it. Build it with
 `cargo build -p clock-app --example overlay_evidence`.
 See the [coverage migration](windows-evidence/overlay-retirement.md). Core models
 and the R02 production-selector gate remain unchanged. Historical hosted results
-and the P1 no-go are in [overlay evidence](windows-evidence/overlay-spike.md). The hosted workflow uses
+and the earlier P1 no-go are in [overlay evidence](windows-evidence/overlay-spike.md). The hosted workflow uses
 real native/UIA hits, screenshots, input and shell/display transitions; positive
 window flags alone do not prove opaque coverage or calendar access. #23 fixed the
 R03 recovery failure (overlays are created in the taskbar's band) and settled
 the calendar strategy (one deliberate Win+N); #4 closed the prototype milestone.
-P1 remains NO-GO and P3 stays blocked only on the stock-x64/mixed-DPI gate in #21.
+The remaining desktop checks (#21, then #51) are closed, and the Windows acceptance
+gates are GO ([acceptance record](windows-evidence/acceptance.md)).
 
 ## R07 rendering development
 

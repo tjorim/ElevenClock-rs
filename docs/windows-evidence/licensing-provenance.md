@@ -8,7 +8,8 @@
 Recorded 2026-10-16 against source base
 `6c103039f932b46712f44cdd12c7f65ada66a174` plus this working change.
 Status: **Apache 2.0 selected for the original implementation; distribution
-remains blocked by product-name review and Windows acceptance**.
+remains blocked by product-name review** (Windows acceptance is GO since 2026-10-22,
+see the [acceptance record](acceptance.md)).
 The owner stated on 2026-10-16: "We never modified or used the python code itself,
 we can keep the fork in legacy gpl and change ours", then selected Apache 2.0.
 This owner-supplied authorship statement is the basis for the license decision.
@@ -120,8 +121,10 @@ decision relies on the owner's statement of independent authorship, not on
 permission to relicense upstream material. The historical checklist on GitHub
 has not been edited by this task.
 
-`packaging/release-gates.json` retains `licensing.passed = false` for the remaining
-product-name review; no Windows acceptance gate is cleared by these changes.
+At the time, `packaging/release-gates.json` retained `licensing.passed = false` for
+the remaining product-name review; no Windows acceptance gate was cleared by these
+changes. That file was later removed (#72); the release decision now lives in the
+[acceptance record](acceptance.md).
 
 ## Validation in this session
 

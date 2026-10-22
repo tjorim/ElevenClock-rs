@@ -121,7 +121,7 @@ and avoiding trailing differentiators. This is a reason to check acceptance of
 The current MSI/EXE route does not require inventing a Store product ID or MSIX
 identity here; retain the native installer identity until a channel decision.
 
-`packaging/release-gates.json` remains unchanged with `licensing.passed = false`
-for the outstanding name decision, not because a Store listing is needed.
+`packaging/release-gates.json` kept `licensing.passed = false` (until that file was
+removed in #72) for the outstanding name decision, not because a Store listing is needed.
 Windows acceptance and clean-account gates remain separate. This record completes the repository identity inventory and a
 preliminary listing/search pass; it does not claim complete legal or Store review.

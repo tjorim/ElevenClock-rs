@@ -1,7 +1,8 @@
 # Windows acceptance gates (R13)
 
-Status: **R13 evidence complete for #46 (2026-10-21). Release: NO-GO while #51 is
-open.** See [Support matrix and release decision](#support-matrix-and-release-decision).
+Status: **R13 evidence complete for #46 (2026-10-21). Windows acceptance: GO
+(2026-10-22), after the maintainer accepted #51.** See
+[Support matrix and release decision](#support-matrix-and-release-decision).
 Nothing below is inferred from CI, simulation or another build. Where a criterion rests
 on a maintainer decision rather than a run, it says so.
 
@@ -22,18 +23,22 @@ Home 10.0.26300.9711 x64 VM, one 1536×1106 display at 125%.
 | Single display; auto-hide; full screen; calendar and neighbour clicks; tray re-layout | **Pass** | [`matrix-4f586f5/`](matrix-4f586f5/README.md) |
 | Invalid preferences; overflow; repeated launch/Settings cycles; Reset/Cancel/Exit; startup choice | **Pass** | [`matrix-4f586f5/`](matrix-4f586f5/README.md) |
 | Lock/unlock; time and time-zone changes | **Pass (maintainer-performed)** | [Matrix status](#matrix-status) |
-| Explorer restart ×3; forced kill reveals native clock; quiet start | **Pass at `940634a`**; Explorer recovery **open in #51** | [Recovery](#recovery-executed-on-this-vm); #51 records later two-display Explorer recovery failures; one display recovered 10/10 at `88d17d6` ([`issue51-88d17d6/`](issue51-88d17d6/README.md)) |
+| Explorer restart ×3; forced kill reveals native clock; quiet start | **Pass at `940634a`**; two-display Explorer recovery **accepted by the maintainer in #51** | [Recovery](#recovery-executed-on-this-vm); #51 recorded earlier two-display Explorer recovery failures; one display recovered 10/10 at `88d17d6` ([`issue51-88d17d6/`](issue51-88d17d6/README.md)) |
 | Start menu, standard (non-admin) account, startup without UAC | **Pass at `ab2a963`** (closed #15) | [`packaging.md`](packaging.md), standard-account desktop session |
 | Actual sign-out/sign-in startup; clean first-run machine | **Not run (reviewed limitation)** | Not covered by #15's session, and not possible for the agent (no password entry, single VM) |
 | Narrator speech | **Partial** | UIA name, role and Invoke verified; speech not heard |
-| Mixed DPI 100/150/200%, hotplug, primary swap, negative origins, physical hardware, independent UIA identity | **Open in #51** | Handled separately by the maintainer; single-display 125% UIA identity passed at `88d17d6` ([`issue51-88d17d6/`](issue51-88d17d6/README.md)) |
+| Mixed DPI 100/150/200%, hotplug, primary swap, negative origins, physical hardware, independent UIA identity | **Accepted by the maintainer (#51, closed 2026-10-21)** | Handled separately by the maintainer; single-display 125% UIA identity passed at `88d17d6` ([`issue51-88d17d6/`](issue51-88d17d6/README.md)). Only that run is retained here |
 | Overflow after minimize; tray re-layout; overlay visible but not drawn | **Fixed / mitigated** | Findings below; the original Show Desktop failure is mitigated, not reproduced |
 
 **Decision.** Every criterion #46 owns has qualifying evidence, a maintainer decision
-recorded above, or a link to the open issue that owns it. #46 can close. The release
-itself stays **NO-GO while #51 is open**, because #51 holds recorded Explorer-recovery
-failures and the hardware/DPI checks. The maintainer handles #51 separately
-(2026-10-21).
+recorded above, or a link to the issue that owns it. #46 can close. The maintainer
+handled #51 (Explorer recovery and the hardware/DPI checks) separately, closed it on
+2026-10-21 and confirmed on 2026-10-22 that it is accepted, so the Windows acceptance
+gates are **GO**. This record only retains the runs listed above; #51's acceptance is
+the maintainer's. Distribution itself is still switched by the wording of
+[`packaging/PACKAGE-README.txt`](../../packaging/PACKAGE-README.txt) (see
+[releasing](../releasing.md)) and waits on the product-name review in
+[`product-name-and-listings.md`](product-name-and-listings.md).
 
 Follow-up for [#41](https://github.com/tjorim/ElevenClock-rs/issues/41): the
 secondary-clock discovery failure in finding 3 was fixed in
@@ -393,10 +398,10 @@ single-display 125% reference; details in [`matrix-4f586f5/`](matrix-4f586f5/REA
 ## Handoff
 
 [#46](https://github.com/tjorim/ElevenClock-rs/issues/46) is complete: see
-[Support matrix and release decision](#support-matrix-and-release-decision). Release
-stays NO-GO while [#51](https://github.com/tjorim/ElevenClock-rs/issues/51) is open
-(Explorer recovery, independent UIA identity, live/mixed DPI, physical hardware). When
-#51 closes, revisit the decision. Rerun the ten-minute measurements if the runtime has
+[Support matrix and release decision](#support-matrix-and-release-decision). With
+[#51](https://github.com/tjorim/ElevenClock-rs/issues/51) (Explorer recovery,
+independent UIA identity, live/mixed DPI, physical hardware) accepted by the
+maintainer, the Windows acceptance gates are GO. Rerun the ten-minute measurements if the runtime has
 changed materially since `246a5a4`.
 
 Measurement commands, for reruns (choose each format through native Settings first,

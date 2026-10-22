@@ -34,10 +34,11 @@ implementation. The [owner decision and provenance record](windows-evidence/lice
 explain that scope. The GPLv3 Python code and inherited artwork were removed at
 cutover and remain in Git history ([migration guide](migration.md#legacy-reference));
 the active icon is [original Apache-licensed artwork](../assets/README.md). Dependency licenses and
-original notices are unchanged. Product-name review in #32 remains open.
+original notices are unchanged. The [product-name review](windows-evidence/product-name-and-listings.md) is still incomplete.
 The [packaging workflow](releasing.md) now includes the original inventory and
 toolchain notices in unsigned development candidates, plus matching vendored
-source. Distribution remains blocked by #32 and the Windows acceptance gates.
+source. Distribution remains blocked by the product-name review; the Windows
+acceptance gates are GO ([acceptance record](windows-evidence/acceptance.md)).
 CI uploads test evidence (screenshots, JSON, logs) and one runnable development
 build (`elevenclock-dev-x64`) for testing; neither is a release package or installer.
 

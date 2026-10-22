@@ -107,9 +107,11 @@ account/machine conditions.
       the native Windows clock. This is development-build rollback mechanics,
       not cross-version schema migration or an earlier supported-release claim.
       Repeat release-to-release migration/rollback when distinct releases exist.
-- [ ] #32 licensing/name/asset decisions, R13 acceptance, signing/release identity.
+- [ ] Product-name review, signing/release identity. Licensing/asset decisions
+      (#32) and R13 acceptance ([GO](acceptance.md), 2026-10-22) are done.
       Candidates are unsigned; no automatic public release. Distribution remains
-      blocked in `packaging/release-gates.json`.
+      blocked by the `packaging/PACKAGE-README.txt` wording (see
+      [releasing](../releasing.md)).
 
 The PR/manual workflow attempts feasible hosted lifecycle/Settings cases. Its
 administrator/developer image cannot demonstrate runtime absence, genuine non-admin
@@ -308,4 +310,5 @@ defect described in the correction above, and the script now reads membership fr
 | Development-build update/uninstall/restore in a clean environment | **Partial**: passed here and on 2026-10-16, not in a clean environment |
 | Per-case matrix recorded | This section |
 
-`clean_standard_account` in `packaging/release-gates.json` stays `false`.
+`clean_standard_account` in `packaging/release-gates.json` stayed `false` (that file
+was removed in #72; the clean standard-account run is still outstanding).
