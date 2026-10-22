@@ -2,7 +2,7 @@
 
 ![ElevenClock-rs icon](assets/icon.png)
 
-A customizable clock for the Windows 11 taskbar. It shows your own date and time
+A customizable clock for the Windows 11 taskbar ([website](https://tjorim.github.io/ElevenClock-rs/)). It shows your own date and time
 format, such as the ISO week date `2642.2` (2026, week 42, Tuesday), in place of the
 taskbar clock on one or every display. The Windows clock is never changed or
 disabled; it sits underneath, so exiting always brings it straight back.
@@ -105,6 +105,20 @@ ElevenClock-rs is developed with help from AI coding agents. They write and revi
 much of the code, tests and documentation under the maintainer's direction; the
 maintainer reviews and merges every change. The same CI checks and Windows testing
 apply whoever wrote the change.
+
+## Code signing policy
+
+Releases are currently unsigned. Once approved, Windows releases will use free code
+signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/). Every signed build comes from this
+repository's GitHub Actions workflow, and each release is approved by hand.
+
+- Committers and reviewers: [tjorim](https://github.com/tjorim)
+- Approvers: [tjorim](https://github.com/tjorim)
+
+**Privacy policy:** This program will not transfer any information to other networked
+systems unless specifically requested by the user or the person installing or
+operating it.
 
 ## License
 

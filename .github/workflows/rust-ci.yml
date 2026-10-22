@@ -68,6 +68,12 @@ jobs:
           # Dialog and icon resources must be present in the PE resource table.
           $utf16 = [Text.Encoding]::Unicode.GetString($bytes)
           if (!$utf16.Contains('ElevenClock-rs Settings')) { throw 'Missing Settings dialog resource' }
+          $info = (Get-Item $exe).VersionInfo
+          $version = (cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json).packages |
+            Where-Object name -eq 'clock-app' | Select-Object -ExpandProperty version
+          if ($info.ProductName -ne 'ElevenClock-rs' -or $info.ProductVersion -ne $version -or $info.FileVersion -ne $version) {
+            throw "Unexpected version resource: $($info.ProductName) $($info.ProductVersion) $($info.FileVersion)"
+          }
       - name: Native dialog launch, focus, capture and close smoke check
         shell: pwsh
         run: ./scripts/test-rust-settings.ps1

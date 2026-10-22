@@ -115,6 +115,8 @@ jobs:
           See the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/README.md)
           for usage, and the [migration guide](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/migration.md)
           if you used the original ElevenClock.
+
+          [Code signing policy](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/README.md#code-signing-policy)
           NOTES
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "ElevenClock-rs ${TAG#v}" --notes-file notes.md \

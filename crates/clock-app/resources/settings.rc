@@ -6,6 +6,38 @@
 1 RT_MANIFEST "resources/app.manifest"
 102 ICON "../../assets/icon.ico"
 
+// Product name and version (from Cargo, via build.rs) shown in file properties and
+// Task Manager, and checked by code signing.
+#include "elevenclock_version.h"
+1 VERSIONINFO
+FILEVERSION ELEVENCLOCK_VERSION_NUMBER
+PRODUCTVERSION ELEVENCLOCK_VERSION_NUMBER
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "ElevenClock-rs contributors"
+            VALUE "FileDescription", "ElevenClock-rs"
+            VALUE "FileVersion", ELEVENCLOCK_VERSION_TEXT
+            VALUE "InternalName", "elevenclock-rs"
+            VALUE "LegalCopyright", "Copyright 2026 ElevenClock-rs contributors. Apache License 2.0."
+            VALUE "OriginalFilename", "elevenclock-rs.exe"
+            VALUE "ProductName", "ElevenClock-rs"
+            VALUE "ProductVersion", ELEVENCLOCK_VERSION_TEXT
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
 // The Settings window. Dialog units follow the dialog font, so everything scales
 // with the display (the manifest declares per-monitor DPI v2). The tab strip is only
 // as tall as its tabs; the four page dialogs below are placed over the hidden 1106

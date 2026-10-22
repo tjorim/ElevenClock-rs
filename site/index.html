@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ElevenClock-rs: your own clock format on the Windows 11 taskbar</title>
+  <meta name="description" content="A lightweight, customizable clock for the Windows 11 taskbar. ISO week dates, seconds, two lines: any format you like. Free, open source and native.">
+  <meta property="og:title" content="ElevenClock-rs">
+  <meta property="og:description" content="Your own date and time format on the Windows 11 taskbar. Native, tiny and free.">
+  <meta property="og:image" content="icon.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <nav class="top">
+      <a class="brand" href="#"><img src="icon.svg" alt="" width="32" height="32"> ElevenClock-rs</a>
+      <div class="links">
+        <a href="#features">Features</a>
+        <a href="#try">Try a format</a>
+        <a href="#install">Install</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/tjorim/ElevenClock-rs">GitHub</a>
+      </div>
+    </nav>
+
+    <div class="hero-body">
+      <h1>Your clock.<br><span>Your format.</span></h1>
+      <p class="lead">ElevenClock-rs puts your own date and time format on the Windows 11
+        taskbar: ISO week dates, seconds, a second line, whatever you need.
+        Native, tiny and free.</p>
+      <div class="cta">
+        <a class="button primary" href="https://github.com/tjorim/ElevenClock-rs/releases/latest">Download for Windows 11</a>
+        <a class="button" href="https://github.com/tjorim/ElevenClock-rs">View the source</a>
+      </div>
+      <p class="fineprint">Free and open source · Windows 11 x64 · No administrator rights</p>
+    </div>
+
+    <figure class="desktop" aria-label="A Windows 11 taskbar showing the ElevenClock-rs clock">
+      <div class="taskbar">
+        <div class="apps" aria-hidden="true">
+          <span class="app start"></span><span class="app"></span><span class="app"></span>
+          <span class="app"></span><span class="app"></span>
+        </div>
+        <div class="tray">
+          <span class="tray-icons" aria-hidden="true">⌃ &nbsp;◔ &nbsp;🔈</span>
+          <span class="clock" id="hero-clock">2642.2</span>
+        </div>
+      </div>
+      <figcaption id="hero-caption">ISO week date: 2026, week 42, Tuesday</figcaption>
+    </figure>
+  </header>
+
+  <main>
+    <section id="features" class="features">
+      <h2>Everything a taskbar clock should be</h2>
+      <div class="grid">
+        <article>
+          <h3>Any format you like</h3>
+          <p>Pick a preset or write your own with simple tokens: hours, minutes, seconds,
+            weekdays, months, calendar years and ISO weeks, on one line or two.
+            A live preview checks it before it reaches your taskbar.</p>
+        </article>
+        <article>
+          <h3>Featherlight</h3>
+          <p>About <strong>3 MiB</strong> of memory and around <strong>0.01% CPU</strong>.
+            No busy loop: the clock only redraws when its text changes.</p>
+        </article>
+        <article>
+          <h3>Never breaks your clock</h3>
+          <p>The Windows clock is never changed or disabled. ElevenClock-rs draws on top
+            of it, so clicking still opens the calendar, and exiting brings the
+            original straight back.</p>
+        </article>
+        <article>
+          <h3>Every display</h3>
+          <p>Show your clock on the primary taskbar or on every monitor, at any scaling.
+            It follows auto-hide, full-screen apps and Explorer restarts.</p>
+        </article>
+        <article>
+          <h3>One small native app</h3>
+          <p>Written in Rust as a single executable: no Python, Qt or runtime to install.
+            Installs for your account without administrator rights, or runs portable.</p>
+        </article>
+        <article>
+          <h3>Private and accessible</h3>
+          <p>No internet access and no telemetry. Works with screen readers, the
+            keyboard and high contrast. Light and dark themes follow Windows.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="try" class="try">
+      <h2>Try a format</h2>
+      <p>This is the same format language the app uses. Pick a preset or type your own.</p>
+      <div class="presets" role="group" aria-label="Presets">
+        <button type="button" data-format="%g%V.%u">ISO week date</button>
+        <button type="button" data-format="%y%V.%u">Calendar year + ISO week</button>
+        <button type="button" data-format="%H:%M&#10;%g%V.%u">Time + ISO week date</button>
+        <button type="button" data-format="%a %d %b %H:%M:%S">Weekday and seconds</button>
+      </div>
+      <div class="playground">
+        <label for="format">Format <span class="hint">(Enter for a second line)</span></label>
+        <textarea id="format" rows="2" spellcheck="false">%H:%M&#10;%g%V.%u</textarea>
+        <div class="preview">
+          <div class="taskbar small">
+            <div class="tray"><span class="clock" id="preview-clock" aria-live="off"></span></div>
+          </div>
+        </div>
+      </div>
+      <details class="tokens">
+        <summary>All tokens</summary>
+        <table>
+          <tr><td><code>%H</code> <code>%I</code></td><td>Hour, 24 / 12 hour</td></tr>
+          <tr><td><code>%M</code> <code>%S</code> <code>%p</code></td><td>Minute, second, AM/PM</td></tr>
+          <tr><td><code>%Y</code> <code>%y</code></td><td>Calendar year, full / two digits</td></tr>
+          <tr><td><code>%G</code> <code>%g</code></td><td>ISO week-year, full / two digits</td></tr>
+          <tr><td><code>%V</code> <code>%u</code></td><td>ISO week 01–53; weekday Monday=1 to Sunday=7</td></tr>
+          <tr><td><code>%m</code> <code>%d</code></td><td>Month, day</td></tr>
+          <tr><td><code>%a</code> <code>%A</code></td><td>Weekday, short / full</td></tr>
+          <tr><td><code>%b</code> <code>%B</code></td><td>Month name, short / full</td></tr>
+          <tr><td><code>%%</code></td><td>A literal percent sign</td></tr>
+        </table>
+      </details>
+    </section>
+
+    <section class="shot">
+      <div>
+        <h2>Settings that explain themselves</h2>
+        <p>Every change is previewed against tricky dates, like the week that spans New
+          Year. A format that is invalid or does not fit the taskbar is explained and
+          never applied. Apply, Cancel and Reset work the way you expect.</p>
+        <p>Start at sign-in is off until you turn it on, and diagnostics are only ever
+          copied to your clipboard, never sent anywhere.</p>
+      </div>
+      <img src="settings.png" width="611" height="624" loading="lazy"
+           alt="The ElevenClock-rs Settings window with the Time + ISO week date preset, a live preview and the token list">
+    </section>
+
+    <section id="install" class="install">
+      <h2>Install in a minute</h2>
+      <ol>
+        <li>Download <code>ElevenClock-rs-…-x64-setup.exe</code> from the
+          <a href="https://github.com/tjorim/ElevenClock-rs/releases/latest">latest release</a>.</li>
+        <li>Run it. It installs for your account only, without administrator rights.</li>
+        <li>Open <strong>ElevenClock-rs</strong> from the Start menu and pick your format.</li>
+      </ol>
+      <p>Prefer no installer? The release also has a <strong>portable ZIP</strong>: extract
+        it and double-click <code>elevenclock-rs.exe</code>.</p>
+      <p class="note">Releases are not code-signed yet, so Windows may say <em>“Windows
+        protected your PC”</em>. Choose <strong>More info</strong>, then
+        <strong>Run anyway</strong>. Each release lists SHA-256 checksums.</p>
+      <p>Coming from the original ElevenClock? Quit it and switch it off in
+        <strong>Settings &gt; Apps &gt; Startup</strong> first; the
+        <a href="https://github.com/tjorim/ElevenClock-rs/blob/main/docs/migration.md">migration guide</a>
+        explains what changed.</p>
+    </section>
+
+    <section id="faq" class="faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Does it change or hide the Windows clock?</summary>
+        <p>No. It draws its own clock on top of the Windows one and never modifies,
+          disables or hides it. Exit ElevenClock-rs, or pause it from the tray, and
+          the Windows clock is right there.</p>
+      </details>
+      <details>
+        <summary>What do I need?</summary>
+        <p>Stock Windows 11 on an x64 PC. Windows 10, ARM64 devices, Insider builds,
+          taskbar replacements such as ExplorerPatcher or StartAllBack, and taskbars on
+          the side or top of the screen are not supported.</p>
+      </details>
+      <details>
+        <summary>What is an ISO week date?</summary>
+        <p>A compact way to write a day as year, week and weekday: <code>2642.2</code>
+          is 2026, week 42, Tuesday. Weeks start on Monday and week 1 contains the
+          year's first Thursday, so the week-year can differ from the calendar year
+          around New Year.</p>
+      </details>
+      <details>
+        <summary>How does it relate to the original ElevenClock?</summary>
+        <p>ElevenClock-rs is an independent Rust rewrite, inspired by
+          <a href="https://github.com/marticliment/ElevenClock">ElevenClock</a> by Martí
+          Climent. It focuses on a custom format with a tiny footprint; some features of
+          the original, like internet time sync and translations, are not included. It
+          is not affiliated with or endorsed by the original project.</p>
+      </details>
+      <details>
+        <summary>How do I uninstall it?</summary>
+        <p>Choose <strong>Exit ElevenClock-rs</strong> in Settings or the tray menu, then
+          uninstall from <strong>Windows Settings &gt; Apps &gt; Installed apps</strong>.
+          It also removes its own startup entry.</p>
+      </details>
+      <details>
+        <summary>Something is wrong. Where do I get help?</summary>
+        <p>Open <strong>Settings &gt; Support</strong>, click <strong>Copy diagnostics</strong>
+          and paste it into a <a href="https://github.com/tjorim/ElevenClock-rs/issues/new">new issue</a>.
+          The report contains no user name, paths or window titles.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-cta">
+      <img src="icon.svg" alt="" width="56" height="56">
+      <p>Make the taskbar clock yours.</p>
+      <a class="button primary" href="https://github.com/tjorim/ElevenClock-rs/releases/latest">Download ElevenClock-rs</a>
+    </div>
+    <div class="footer-notes">
+      <p>Free and open source under the
+        <a href="https://github.com/tjorim/ElevenClock-rs/blob/main/LICENSE">Apache License 2.0</a>.
+        Thanks to Martí Climent and the ElevenClock contributors for the original app,
+        which inspired this one.</p>
+      <p>Developed with help from AI coding agents, directed and reviewed by the
+        maintainer. <a href="https://github.com/tjorim/ElevenClock-rs#ai-assistance">More</a></p>
+      <p><a href="https://github.com/tjorim/ElevenClock-rs#code-signing-policy">Code signing policy</a> ·
+        Privacy: this program will not transfer any information to other networked
+        systems unless specifically requested by the user or the person installing or
+        operating it.</p>
+    </div>
+  </footer>
+
+  <script src="clock.js"></script>
+</body>
+</html>
