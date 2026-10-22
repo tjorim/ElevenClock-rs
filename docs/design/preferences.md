@@ -60,3 +60,33 @@ locked-target (delete sharing denied), read-only denied-target and injected
 pre-replacement failure. These tests need no interactive desktop. Portable tests cover defaults, invalid stored
 values, unsupported versions, corrupt/oversized data, preservation/recovery,
 active rollback, reset draft and first-run persistence.
+
+## Compatibility and retained fixtures
+
+Retained synthetic files live in `crates/clock-windows/tests/fixtures/preferences/`.
+`v1-defaults.json` records initial onboarding and defaults; `v1-custom.json` records
+non-default values and completed onboarding. Portable store tests decode them and
+compare encoded values with their retained JSON structure, independently of field
+order and whitespace. Keep old fixtures unchanged when changing the writer: do not
+regenerate compatibility inputs from the encoder under test. Fixtures contain no
+real user data. Add a fixture when extending the persisted contract, including
+relevant enum/optional-field cases; ordinary same-format UI changes need none.
+
+Version 1 remains the only supported encoding. There is no migration framework.
+Before changing the format, specify whether old files can be read, the version
+bump and exact upgrade transformation, defaults for added fields, and what a user
+rolling back the executable will see. A migration must preserve its original input
+before committing and publish active values only after a successful save. Retain
+fixtures for every supported source version and expected target, with tests for
+upgrade, interrupted/failed commit, reopening and rollback expectations. If older
+files become unsupported, document that explicitly rather than treating them as
+corrupt or silently resetting them.
+
+Downgrade safety today means an older app uses safe defaults and refuses to write
+an unsupported version, including Apply, recovery and onboarding completion. It
+must not strip unfamiliar fields or convert the file to its own schema. A user can
+return to the compatible executable with the original bytes intact. Existing
+`unsupported_version_cannot_be_overwritten` tests cover the store/session boundary;
+`damaged_data_is_preserved_and_recovery_is_explicit` covers malformed originals and
+byte-for-byte preservation. Keep these protections when adding migrations, without
+replicating them in a separate framework.

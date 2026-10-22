@@ -133,6 +133,13 @@ pub fn auto_fit(
     unreachable!("nonempty font size range")
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Sampling sweeps started on this test thread: the expensive step that
+    /// regression guards count instead of timing.
+    static BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Every distinct line the format can produce over a window of dates and times
 /// that includes month/day/year boundaries, a leap day and ISO week 53. Fit is
 /// decided against all of them so a format that is fine today cannot spill over
@@ -157,6 +164,8 @@ impl WorstCase {
 
     pub fn for_format(format: &CompiledFormat) -> Self {
         use chrono::{FixedOffset, NaiveDate, TimeZone};
+        #[cfg(test)]
+        BUILDS.with(|builds| builds.set(builds.get() + 1));
         let offset = FixedOffset::east_opt(0).expect("zero offset");
         let first = NaiveDate::from_ymd_opt(Self::FIRST_YEAR, 1, 1).expect("valid date");
         let last = NaiveDate::from_ymd_opt(Self::LAST_YEAR, 12, 31).expect("valid date");
@@ -215,6 +224,11 @@ impl WorstCase {
     }
     pub fn line_count(&self) -> usize {
         self.lines.len()
+    }
+    /// How many times `for_format` ran on the calling test thread.
+    #[cfg(test)]
+    pub(crate) fn builds() -> usize {
+        BUILDS.with(std::cell::Cell::get)
     }
 }
 

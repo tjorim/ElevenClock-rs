@@ -22,6 +22,22 @@ material, and no upstream permission is claimed.
 - Apache 2.0 for this code grants no rights to the ElevenClock name; see the
   [product name](product-name.md).
 
+## Scope confirmation (2026-10-22)
+
+On 2026-10-22, the maintainer confirmed Apache-2.0 for all original project
+material in both ElevenClock-rs and scat, including their crates and artwork,
+subject to checking existing contributions and third-party exclusions. For
+ElevenClock-rs this explicitly includes all original crates, tooling,
+documentation, website and artwork. Existing contributions are covered only
+where their rights permit; the confirmation does not establish third-party
+ownership or relicense inherited material.
+
+The original Python application, inherited imagery and historical notices remain
+under their existing GPLv3 terms in Git history. Dependencies, toolchain components
+and their original notices retain their own licenses. The provenance review and
+name/trademark limitations below remain applicable. Release packaging continues
+to retain the separate dependency/toolchain notices and matching source companion.
+
 ## Supporting review
 
 A sampled technical review (2026-10-16) supported the authorship statement; it is not an

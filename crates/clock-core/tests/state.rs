@@ -423,3 +423,50 @@ fn explorer_loss_while_paused_stays_paused_and_quit_is_unaffected() {
     let (state, _) = reduce(state, Event::Quit);
     assert!(state.is_quitting());
 }
+
+#[test]
+fn repeated_events_on_four_displays_emit_no_overlay_work_but_changes_emit_exactly_one_each() {
+    let displays: Vec<_> = (1..=4).map(|id| snapshot(id, 0)).collect();
+    let (state, _) = reduce(
+        State::new(prefs("%H:%M")),
+        Event::Tick(wall("2026-10-14T12:00:00+00:00")),
+    );
+    let (mut state, effects) = reduce(state, discovery(displays.clone(), 0));
+    assert_eq!(paints(&effects), 4, "first sight paints each display once");
+
+    // Unchanged inputs: only the one-shot timer may be re-armed, and only by a time event.
+    let repeats = [
+        Event::Tick(wall("2026-10-14T12:00:40+00:00")),
+        Event::TimeChanged(wall("2026-10-14T12:00:41+00:00")),
+        discovery(displays.clone(), 0),
+        Event::ThemeChanged { revision: 0 },
+        Event::PreferencesApplied(prefs("%H:%M")),
+    ];
+    for event in repeats {
+        let effects;
+        (state, effects) = reduce(state, event.clone());
+        assert!(
+            effects
+                .iter()
+                .all(|effect| matches!(effect, Effect::ArmTimer(_))),
+            "{event:?} -> {effects:?}"
+        );
+    }
+
+    // Changed inputs repaint every display exactly once and create no window.
+    for event in [
+        Event::Tick(wall("2026-10-14T12:01:00+00:00")),
+        Event::ThemeChanged { revision: 1 },
+        Event::PreferencesApplied(prefs("%H:%M:%S")),
+    ] {
+        let effects;
+        (state, effects) = reduce(state, event.clone());
+        assert_eq!(paints(&effects), 4, "{event:?}");
+        assert!(
+            !effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::CreateOverlay { .. })),
+            "{event:?}"
+        );
+    }
+}

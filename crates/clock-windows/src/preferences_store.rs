@@ -417,6 +417,32 @@ mod tests {
         }
     }
     #[test]
+    fn retained_v1_fixtures_decode_and_preserve_the_encoding_contract() {
+        for (bytes, expected, completed) in [
+            (
+                include_bytes!("../tests/fixtures/preferences/v1-defaults.json").as_slice(),
+                Preferences::default(),
+                false,
+            ),
+            (
+                include_bytes!("../tests/fixtures/preferences/v1-custom.json").as_slice(),
+                Preferences {
+                    format: "%Y-%m-%d %H:%M:%S".into(),
+                    ..changed()
+                },
+                true,
+            ),
+        ] {
+            let stored = decode(bytes).unwrap();
+            assert_eq!(stored.preferences.draft(), expected);
+            assert_eq!(stored.first_run_completed, completed);
+            let original: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            let encoded: serde_json::Value =
+                serde_json::from_slice(&encode(&stored).unwrap()).unwrap();
+            assert_eq!(encoded, original);
+        }
+    }
+    #[test]
     fn unavailable_store_runs_on_defaults_and_fails_every_save_visibly() {
         let mut session = PreferenceSession::open(UnavailableStore);
         assert!(session.load_error().is_none());
@@ -542,8 +568,16 @@ mod tests {
             store.save(&StoredPreferences::default()),
             Err(StoreError::UnsupportedVersion(2))
         ));
+        assert!(matches!(
+            store.preserve_for_recovery(),
+            Err(StoreError::UnsupportedVersion(2))
+        ));
         let path = store.path.clone();
         let mut session = PreferenceSession::open(store);
+        assert!(matches!(
+            session.apply(changed()),
+            Err(StoreError::UnsupportedVersion(2))
+        ));
         assert!(matches!(
             session.recover(changed()),
             Err(StoreError::UnsupportedVersion(2))
