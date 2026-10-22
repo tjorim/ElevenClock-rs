@@ -15,16 +15,15 @@ jobs and the advisory/license inventory checks. Do not raise the declared
 Transitive updates need the same checks. No audit failure is silently suppressed;
 any exception needs a reviewed, dated rationale and remediation issue.
 
-Dependabot's configuration is prepared for the merge to main: both GitHub Actions
-and the `/rust` Cargo workspace follow the default branch. It takes effect when
-this configuration lands on that branch. GitHub Actions updates are checked daily
+Dependabot follows the default branch for both GitHub Actions and the root Cargo
+workspace. It takes effect when this configuration lands on that branch. GitHub Actions updates are checked daily
 and Cargo updates weekly, with separate dependency PRs and the default open-PR
 limit.
 
 CI cargo-audit denies warnings; unavailable advisory data is a failure. License
 checks fail on terms outside the explicit reviewed set or with missing original
 LICENSE/COPYING/NOTICE text; CI does not upload the inventory. Regenerate it on
-demand with `cargo metadata --manifest-path rust/Cargo.toml --locked --format-version 1 > dependency-metadata.json`
+demand with `cargo metadata --locked --format-version 1 > dependency-metadata.json`
 and `python3 scripts/rust-license-check.py dependency-metadata.json`. Review the
 inventory on updates. SPDX metadata is not a substitute for shipping attribution.
 The inventory script is development-only. Release packaging must retain applicable
@@ -32,9 +31,9 @@ notices and satisfy the selected terms for each dependency.
 
 The root LICENSE and workspace metadata declare Apache 2.0 for the original Rust
 implementation. The [owner decision and provenance record](windows-evidence/licensing-provenance.md)
-explain that scope. Python code and inherited artwork remain under `legacy/`,
-with their original GPLv3 license in `legacy/LICENSE`; the active icon is
-[original Apache-licensed artwork](../assets/README.md). Dependency licenses and
+explain that scope. The GPLv3 Python code and inherited artwork were removed at
+cutover and remain in Git history ([migration guide](migration.md#legacy-reference));
+the active icon is [original Apache-licensed artwork](../assets/README.md). Dependency licenses and
 original notices are unchanged. Product-name review in #32 remains open.
 The [packaging workflow](releasing.md) now includes the original inventory and
 toolchain notices in unsigned development candidates, plus matching vendored

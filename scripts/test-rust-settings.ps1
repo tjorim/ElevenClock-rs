@@ -4,7 +4,7 @@
 # format errors, Apply persistence, Cancel, close-to-background, second-launch focus
 # and Exit. It saves and restores the current user's preferences file.
 param(
-    [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe',
+    [string]$Executable = 'target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe',
     [string]$OutputDirectory = 'native-evidence',
     [int]$ExpectedDpi = 0,
     [ValidateSet('Window', 'Escape', 'Enter', 'Mnemonic')]

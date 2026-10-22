@@ -1,5 +1,10 @@
 # Licensing provenance and artwork (#32)
 
+> **Cutover note (2026-10-21, R15).** `legacy/` and `docs/rewrite/` were removed from
+> the tree. Paths below that start with `legacy/` or `docs/rewrite/` refer to commit
+> [`0ac3115`](https://github.com/tjorim/ElevenClock-rs/tree/0ac31152e265bb5d6e02fcac18404362453670d2), the last one that contains them. The
+> record itself is unchanged.
+
 Recorded 2026-10-16 against source base
 `6c103039f932b46712f44cdd12c7f65ada66a174` plus this working change.
 Status: **Apache 2.0 selected for the original implementation; distribution

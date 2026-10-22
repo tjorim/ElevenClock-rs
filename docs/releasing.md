@@ -19,13 +19,13 @@ On native Windows with MSVC/SDK, stable Rust, Python 3.11+ (development only) an
 [Inno Setup 6.7.3](https://jrsoftware.org/isdl.php), run from the repository root:
 
 ```powershell
-cargo fetch --manifest-path rust/Cargo.toml --locked
+cargo fetch --locked
 ./scripts/package-rust-release.ps1
 ```
 
 The output directory must be new; choose another with `-OutputDirectory dist/name`.
 Use `-Python <path>` or `-Iscc <path>` if needed. The driver builds `clock-app` with
-`--locked`, `x86_64-pc-windows-msvc`, a separate `rust/target/packaging` directory,
+`--locked`, `x86_64-pc-windows-msvc`, a separate `target/packaging` directory,
 and [`-C target-feature=+crt-static`](https://doc.rust-lang.org/reference/linkage.html#static-and-dynamic-c-runtimes).
 No global flags or developer build defaults change. The release profile retains PDBs.
 
@@ -54,7 +54,7 @@ To rebuild offline, extract the source ZIP, **change to its root**, and run:
 
 ```powershell
 $env:RUSTFLAGS = '-C target-feature=+crt-static'
-cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_64-pc-windows-msvc --locked --offline
+cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked --offline
 ```
 
 MSVC/SDK and the recorded Rust toolchain remain build prerequisites. This supplies
@@ -103,10 +103,11 @@ The [owner decision and provenance record](windows-evidence/licensing-provenance
 document Apache 2.0 for the independently authored Rust implementation and original
 replacement icon. The packaging script copies the root Apache LICENSE into
 `LICENSE.txt` for both installer and portable ZIP. The inherited Python application
-and imagery remain under `legacy/`, including GPLv3 in `legacy/LICENSE` and the
-original credits to Martí Climent and Xavier Delugo. They remain in the source
-companion and are not installed. The stale upstream Apache README sentence does
-not relicense that legacy material. Product-name review remains open in
+and imagery, with GPLv3 and the original credits to Martí Climent and Xavier
+Delugo, were removed from the tree at cutover. They are no longer in the source
+companion and were never installed; they remain in Git history (see the
+[migration guide](migration.md#legacy-reference)). The stale upstream Apache
+README sentence does not relicense that legacy material. Product-name review remains open in
 [#32](https://github.com/tjorim/ElevenClock-rs/issues/32). The full dependency
 inventory supplies original notices (including build/test dependencies); Rust's
 COPYRIGHT.html supplies toolchain notices. Hash-checked supplemental notices retain

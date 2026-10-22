@@ -1,6 +1,6 @@
 # R03 development-only evidence on an ephemeral Windows desktop. Not installed.
 param(
-    [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/debug/examples/overlay_evidence.exe',
+    [string]$Executable = 'target/x86_64-pc-windows-msvc/debug/examples/overlay_evidence.exe',
     [string]$OutputDirectory = 'native-evidence/r03',
     [string]$ProbeTarget = 'x86_64-pc-windows-msvc',
     [ValidateRange(1,5)][int]$DpiCycles = 3
