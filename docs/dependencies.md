@@ -85,3 +85,16 @@ the Windows CI runner instead of cross-checking from Linux.
 - Development only: **`tempfile`** 3 (filesystem failure tests), **proptest** 1.12
   (generated formatter inputs) and **Criterion** 0.8 (parse/render measurements). None
   of them enters the app's normal dependency graph; the license check covers them too.
+
+## Optional features
+
+A heavyweight or network-dependent capability requires an explicit design decision
+covering product need, dependency size/maintenance/license impact, data collected
+and transmitted (destination, consent, retention and diagnostic redaction), and
+ownership of background work, cancellation, timeouts, failure recovery and shutdown.
+Record how disabling it removes its work and resources, and how it behaves offline.
+The default app must remain usable offline without network access or mandatory
+accounts unless a deliberate reviewed product-policy change says otherwise. An
+optional feature must not silently add startup traffic or background polling.
+Use the contributor extension checklist and the existing dependency checks; this
+policy introduces no plugin system or optional-feature framework.

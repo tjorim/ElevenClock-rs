@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "format": "%Y-%m-%d %H:%M:%S",
+  "monitors": "all",
+  "font_size_pt": 24,
+  "theme": "dark",
+  "first_run_completed": true
+}
