@@ -180,6 +180,10 @@ pub trait Platform {
     /// Cheap upkeep after each observation pass: for example, re-anchor overlay
     /// z-order next to its taskbar. Must not repaint or block.
     fn maintain(&mut self) {}
+    /// Failures from native repaint/upkeep, drained on the UI thread.
+    fn take_overlay_failures(&mut self) -> Vec<(TaskbarKey, Reason)> {
+        Vec::new()
+    }
     /// Replace the single outstanding monotonic one-shot clock timer.
     fn arm_timer(&mut self, delay: Duration);
     /// Replace the single outstanding shell poll timer.
@@ -286,12 +290,26 @@ impl Retry {
     }
 }
 
+struct FitCache {
+    format: CompiledFormat,
+    worst_case: WorstCase,
+    verdict: Option<FitVerdict>,
+}
+struct FitVerdict {
+    current: ClockText,
+    targets: Vec<(bool, PixelSize, u32)>,
+    font_pt: u8,
+    revision: u64,
+    problems: Vec<FitProblem>,
+}
+
 pub struct Runtime<P: Platform> {
     platform: P,
     state: Option<State>,
     tracker: AppearanceTracker,
     theme_revision: u64,
     worst_case: WorstCase,
+    fit_cache: Option<FitCache>,
     shell: Option<ShellIdentity>,
     snapshots: BTreeMap<u64, TaskbarSnapshot>,
     reported: HashMap<TaskbarKey, (TaskbarVisibility, bool)>,
@@ -307,7 +325,7 @@ pub struct Runtime<P: Platform> {
     transition: TransitionPoll,
     poll_due: Option<Duration>,
     refresh_not_before: Duration,
-    overflow_retry_not_before: Duration,
+    overlay_retry_not_before: Duration,
     retry: Retry,
     unverified_retry: Retry,
     discovery_completed: u64,
@@ -325,6 +343,7 @@ impl<P: Platform> Runtime<P> {
         Self {
             worst_case: WorstCase::for_format(preferences.format()),
             platform,
+            fit_cache: None,
             state: Some(State::new(preferences)),
             tracker,
             theme_revision: 0,
@@ -340,7 +359,7 @@ impl<P: Platform> Runtime<P> {
             transition: TransitionPoll::default(),
             poll_due: None,
             refresh_not_before: Duration::ZERO,
-            overflow_retry_not_before: Duration::ZERO,
+            overlay_retry_not_before: Duration::ZERO,
             retry: Retry::default(),
             unverified_retry: Retry::default(),
             discovery_completed: 0,
@@ -408,7 +427,25 @@ impl<P: Platform> Runtime<P> {
         if !self.finished {
             self.rearm_poll();
         }
+        self.sync_overlay_failures();
         self.log_transitions();
+    }
+
+    /// Reconcile failures from native upkeep before diagnostics or another action.
+    pub fn sync_overlay_failures(&mut self) {
+        for (key, reason) in self.platform.take_overlay_failures() {
+            if self.finished || !self.reported.contains_key(&key) {
+                continue;
+            }
+            if matches!(
+                self.faults.get(&key),
+                Some(Reason::ActionFailed(_) | Reason::PlacementFailed(_))
+            ) {
+                continue;
+            }
+            self.platform.hide(key);
+            self.faults.insert(key, reason);
+        }
     }
 
     /// Write what *changed* since the last call to the bounded log: one line per
@@ -686,7 +723,8 @@ impl<P: Platform> Runtime<P> {
             self.dispatch(Event::TopologyChanged);
         }
         let changed = self.observe_all();
-        self.retry_overflow(now);
+        self.sync_overlay_failures();
+        self.retry_overlays(now);
         if self.transition.active() {
             self.transition.observed(changed);
         }
@@ -694,27 +732,43 @@ impl<P: Platform> Runtime<P> {
 
     /// The reducer remembers the requested frame even when painting fails. A
     /// date-only format may not change for a day, so ticks alone cannot recover
-    /// a transient overflow. Retry eligible clocks on the slow recovery cadence.
-    fn retry_overflow(&mut self, now: Duration) {
-        if now < self.overflow_retry_not_before {
+    /// a transient failure. Retry eligible clocks on the slow recovery cadence.
+    fn retry_overlays(&mut self, now: Duration) {
+        if now < self.overlay_retry_not_before {
             return;
         }
         let keys: Vec<_> = self
             .faults
             .iter()
             .filter_map(|(key, reason)| {
-                (matches!(reason, Reason::Overflow(_))
-                    && self.state().overlay_state(*key) == OverlayState::Visible)
+                (matches!(
+                    reason,
+                    Reason::Overflow(_) | Reason::RenderFailed(_) | Reason::PlacementFailed(_)
+                ) && self.state().overlay_state(*key) == OverlayState::Visible)
                     .then_some(*key)
             })
             .collect();
         if keys.is_empty() {
             return;
         }
-        self.overflow_retry_not_before = now + RECOVERY_POLL;
+        self.overlay_retry_not_before = now + RECOVERY_POLL;
         let wall = self.platform.local_now();
         if let Ok(text) = self.state().preferences().format().render(wall) {
             for key in keys {
+                if matches!(self.faults.get(&key), Some(Reason::PlacementFailed(_))) {
+                    let Some(bounds) = self.snapshots.get(&key.id.0).and_then(|s| s.clock_rect)
+                    else {
+                        continue;
+                    };
+                    // Recreate hidden at the current authoritative bounds. This
+                    // handles both missing windows and failed moves identically.
+                    self.platform.destroy_overlay(key);
+                    if let Err(reason) = self.platform.create_overlay(key, bounds) {
+                        self.faults.insert(key, Reason::PlacementFailed(reason));
+                        continue;
+                    }
+                    self.faults.remove(&key);
+                }
                 self.paint(key, &text);
             }
         }
@@ -982,6 +1036,7 @@ impl<P: Platform> Runtime<P> {
                 }
                 Effect::SetBounds { key, bounds } => {
                     if let Err(reason) = self.platform.set_bounds(key, bounds) {
+                        self.platform.hide(key);
                         self.faults.insert(key, Reason::PlacementFailed(reason));
                     }
                 }
@@ -1151,21 +1206,49 @@ impl<P: Platform> LayoutCheck for Runtime<P> {
         if targets.is_empty() {
             return Vec::new();
         }
-        let worst_case = WorstCase::for_format(format);
-        targets
-            .into_iter()
-            .filter_map(|(primary, region, dpi)| {
-                match self
-                    .platform
-                    .plan_fit(&current, &worst_case, region, dpi, font_pt)
-                {
-                    Some(Ok(Fit::Overflow(overflow))) => Some(FitProblem { primary, overflow }),
-                    // Fits, cannot be measured here, or measuring failed: the paint
-                    // path still decides and reports through diagnostics.
-                    _ => None,
+        if self
+            .fit_cache
+            .as_ref()
+            .is_none_or(|cache| cache.format != *format)
+        {
+            self.fit_cache = Some(FitCache {
+                format: format.clone(),
+                worst_case: WorstCase::for_format(format),
+                verdict: None,
+            });
+        }
+        let cache = self.fit_cache.as_mut().expect("initialized above");
+        if let Some(verdict) = &cache.verdict
+            && verdict.current == current
+            && verdict.targets == targets
+            && verdict.font_pt == font_pt
+            && verdict.revision == self.theme_revision
+        {
+            return verdict.problems.clone();
+        }
+        let mut problems = Vec::new();
+        let mut cacheable = true;
+        for &(primary, region, dpi) in &targets {
+            match self
+                .platform
+                .plan_fit(&current, &cache.worst_case, region, dpi, font_pt)
+            {
+                Some(Ok(Fit::Overflow(overflow))) => {
+                    problems.push(FitProblem { primary, overflow })
                 }
-            })
-            .collect()
+                Some(Ok(Fit::Fits(_))) => {}
+                // Never retain a transient measurement failure as a successful fit.
+                _ => cacheable = false,
+            }
+        }
+        cache.verdict = cacheable.then(|| FitVerdict {
+            current,
+            targets,
+            font_pt,
+            revision: self.theme_revision,
+            problems: problems.clone(),
+        });
+        problems
     }
 }
 

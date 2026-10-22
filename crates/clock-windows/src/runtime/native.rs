@@ -9,7 +9,8 @@
 //! (`events::enqueue`); the loop turns them into `Runtime` inputs after the
 //! message returns, so callbacks stay short and cannot re-enter runtime state.
 use super::{
-    Input, Observation, PaintContext, PaintResult, Platform, Runtime, ShellIdentity, UserAction,
+    Input, Observation, PaintContext, PaintResult, Platform, Reason, Runtime, ShellIdentity,
+    UserAction,
     overlay_window::{Overlay, OverlayClass, REPAINT_EPOCH},
     shell::{covers_monitor, is_click_through},
 };
@@ -146,6 +147,7 @@ pub struct NativePlatform {
     shell: Option<ShellIdentity>,
     paint_state: Option<PaintState>,
     repaint_epoch: u64,
+    overlay_failures: Vec<(TaskbarKey, Reason)>,
 }
 
 impl NativePlatform {
@@ -220,9 +222,14 @@ impl NativePlatform {
             if !overlay.is_shown() || (minimized_only && !overlay.is_minimized()) {
                 continue;
             }
-            let Ok(restored) = overlay.restore_if_minimized() else {
-                overlay.hide();
-                continue;
+            let restored = match overlay.restore_if_minimized() {
+                Ok(restored) => restored,
+                Err(error) => {
+                    overlay.hide();
+                    self.overlay_failures
+                        .push((key, Reason::RenderFailed(format!("restore: {error}"))));
+                    continue;
+                }
             };
             overlay.surface.mark_dirty();
             let request = PaintRequest {
@@ -232,12 +239,23 @@ impl NativePlatform {
                 font_pt: state.preferences.font_size_pt(),
                 palette: theme::resolve(state.preferences.theme(), state.appearance),
             };
-            let painted = matches!(
-                overlay.paint(&self.renderer, &request),
-                Ok(PaintOutcome::Painted | PaintOutcome::Unchanged)
-            );
-            if !painted || (restored && overlay.show_anchored().is_err()) {
+            let failure = match overlay.paint(&self.renderer, &request) {
+                Ok(PaintOutcome::Painted | PaintOutcome::Unchanged) => {
+                    if restored {
+                        overlay
+                            .show_anchored()
+                            .err()
+                            .map(|error| Reason::RenderFailed(format!("placement: {error}")))
+                    } else {
+                        None
+                    }
+                }
+                Ok(PaintOutcome::Overflow(overflow)) => Some(Reason::Overflow(overflow)),
+                Err(error) => Some(Reason::RenderFailed(error.to_string())),
+            };
+            if let Some(reason) = failure {
                 overlay.hide();
+                self.overlay_failures.push((key, reason));
             }
         }
     }
@@ -437,12 +455,20 @@ impl Platform for NativePlatform {
         {
             self.redraw_shown(true);
         }
-        for overlay in self.overlays.values_mut() {
-            if overlay.is_shown() && !overlay.is_anchored() && overlay.show_anchored().is_err() {
+        for (&key, overlay) in &mut self.overlays {
+            if overlay.is_shown()
+                && !overlay.is_anchored()
+                && let Err(error) = overlay.show_anchored()
+            {
                 overlay.hide();
+                self.overlay_failures
+                    .push((key, Reason::RenderFailed(format!("placement: {error}"))));
             }
             overlay.confirm_exposure();
         }
+    }
+    fn take_overlay_failures(&mut self) -> Vec<(TaskbarKey, Reason)> {
+        std::mem::take(&mut self.overlay_failures)
     }
     fn arm_timer(&mut self, delay: Duration) {
         set_timer(self.host, TIMER_CLOCK, delay);
@@ -673,6 +699,7 @@ pub fn run<S: PreferencesStore>(
         _class: class,
         shell: None,
         paint_state: None,
+        overlay_failures: Vec::new(),
         repaint_epoch: REPAINT_EPOCH.load(Ordering::Relaxed),
     };
     let mut runtime = Runtime::new(platform, initial);
@@ -766,6 +793,7 @@ fn pump<S: PreferencesStore>(
         return Ok(());
     }
     runtime.platform_mut().repaint_invalidated();
+    runtime.sync_overlay_failures();
     if SHOW_SETTINGS.take() {
         settings.show_or_focus(runtime)?;
     }

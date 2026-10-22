@@ -79,7 +79,10 @@ struct Fake {
     observations: BTreeMap<u64, Observation>,
     overlays: HashSet<TaskbarKey>,
     paint_result: BTreeMap<u64, PaintResult>,
+    created_bounds: Vec<PhysicalRect>,
     create_error: bool,
+    bounds_error: bool,
+    overlay_failures: Vec<(TaskbarKey, Reason)>,
     calendar: CalendarOutcome,
     menu_choice: Option<MenuCommand>,
     /// Slot width the fake renderer needs; `None` means it cannot measure.
@@ -99,7 +102,10 @@ impl Fake {
             observations: BTreeMap::new(),
             overlays: HashSet::new(),
             paint_result: BTreeMap::new(),
+            created_bounds: Vec::new(),
             create_error: false,
+            bounds_error: false,
+            overlay_failures: Vec::new(),
             calendar: CalendarOutcome::Sent,
             menu_choice: None,
             fit_needs_width: None,
@@ -148,8 +154,9 @@ impl Platform for Fake {
                 tray: None,
             })
     }
-    fn create_overlay(&mut self, key: TaskbarKey, _: PhysicalRect) -> Result<(), String> {
+    fn create_overlay(&mut self, key: TaskbarKey, bounds: PhysicalRect) -> Result<(), String> {
         self.calls.push(Call::Create(key));
+        self.created_bounds.push(bounds);
         if self.create_error {
             return Err("CreateWindowExW failed".into());
         }
@@ -158,6 +165,9 @@ impl Platform for Fake {
     }
     fn set_bounds(&mut self, key: TaskbarKey, _: PhysicalRect) -> Result<(), String> {
         self.calls.push(Call::SetBounds(key));
+        if self.bounds_error {
+            return Err("SetWindowPos failed".into());
+        }
         Ok(())
     }
     fn destroy_overlay(&mut self, key: TaskbarKey) {
@@ -219,6 +229,9 @@ impl Platform for Fake {
     }
     fn paused_changed(&mut self, paused: bool) {
         self.calls.push(Call::PausedChanged(paused));
+    }
+    fn take_overlay_failures(&mut self) -> Vec<(TaskbarKey, Reason)> {
+        std::mem::take(&mut self.overlay_failures)
     }
     fn arm_timer(&mut self, delay: Duration) {
         self.calls.push(Call::Timer(delay));
@@ -1287,7 +1300,7 @@ fn persistent_overflow_retries_are_bounded_and_respect_visibility() {
         take(&mut runtime);
         // Exercise the retry independently of observation, which would replace
         // a directly scripted visibility event with the fake's live values.
-        runtime.retry_overflow(runtime.platform.mono + RECOVERY_POLL);
+        runtime.retry_overlays(runtime.platform.mono + RECOVERY_POLL);
         assert_eq!(
             paints(&take(&mut runtime)),
             0,
@@ -1877,4 +1890,168 @@ fn only_state_transitions_are_logged_never_repaints_or_ticks() {
     );
     assert!(lines.contains(&"taskbar 1: gone".to_owned()), "{lines:?}");
     assert!(runtime.transition_lines().is_empty());
+}
+
+#[test]
+fn failed_move_hides_immediately_and_recreates_at_latest_bounds() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    take(&mut runtime);
+    runtime.platform.bounds_error = true;
+    let bounds = rect(1790, 1032, 100, 48);
+    runtime.snapshots.get_mut(&1).unwrap().clock_rect = Some(bounds);
+    let text = runtime
+        .state()
+        .preferences()
+        .format()
+        .render(runtime.platform.now)
+        .unwrap();
+    runtime.apply(vec![
+        Effect::SetBounds {
+            key: key(0, 1),
+            bounds,
+        },
+        Effect::Paint {
+            key: key(0, 1),
+            text,
+        },
+    ]);
+    let calls = take(&mut runtime);
+    assert!(calls.contains(&Call::Hide(key(0, 1))));
+    assert_eq!(
+        paints(&calls),
+        0,
+        "failed move must not expose stale bounds"
+    );
+    assert!(matches!(
+        runtime.diagnostics().taskbars[0].reason,
+        Some(Reason::PlacementFailed(_))
+    ));
+    runtime.platform.bounds_error = false;
+    runtime.retry_overlays(runtime.platform.mono);
+    let calls = take(&mut runtime);
+    assert_eq!(
+        &calls[..2],
+        &[Call::Destroy(key(0, 1)), Call::Create(key(0, 1))]
+    );
+    assert_eq!(paints(&calls), 1);
+    assert_eq!(runtime.platform.created_bounds.last(), Some(&bounds));
+    assert_eq!(runtime.diagnostics().taskbars[0].reason, None);
+}
+
+#[test]
+fn creation_and_render_failures_recover_without_text_changes() {
+    for creation in [false, true] {
+        let mut runtime = runtime(Monitors::All);
+        runtime.platform.create_error = creation;
+        if !creation {
+            runtime
+                .platform
+                .paint_result
+                .insert(1, PaintResult::Failed("device lost".into()));
+        }
+        discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+        take(&mut runtime);
+        runtime.platform.create_error = false;
+        runtime.platform.paint_result.clear();
+        advance(&mut runtime, RECOVERY_POLL);
+        assert_eq!(paints(&take(&mut runtime)), 1);
+        assert_eq!(runtime.diagnostics().taskbars[0].reason, None);
+    }
+}
+
+#[test]
+fn native_upkeep_failures_are_reported_and_retried_but_stale_reports_are_ignored() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    take(&mut runtime);
+    runtime.platform.overlay_failures = vec![
+        (key(0, 1), Reason::RenderFailed("upkeep failed".into())),
+        (key(9, 1), Reason::RenderFailed("stale".into())),
+    ];
+    runtime.sync_overlay_failures();
+    assert_eq!(
+        runtime.diagnostics().taskbars[0].reason,
+        Some(Reason::RenderFailed("upkeep failed".into()))
+    );
+    assert_eq!(take(&mut runtime), vec![Call::Hide(key(0, 1))]);
+    advance(&mut runtime, RECOVERY_POLL);
+    assert_eq!(paints(&take(&mut runtime)), 1);
+    assert_eq!(runtime.diagnostics().taskbars[0].reason, None);
+}
+
+#[test]
+fn fault_retries_are_throttled_and_do_not_revive_hidden_or_action_failed_clocks() {
+    for reason in [
+        Reason::RenderFailed("device lost".into()),
+        Reason::PlacementFailed("move failed".into()),
+        Reason::ActionFailed("input blocked".into()),
+    ] {
+        let mut runtime = runtime(Monitors::All);
+        discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+        runtime.faults.insert(key(0, 1), reason.clone());
+        runtime.platform.create_error = true;
+        runtime
+            .platform
+            .paint_result
+            .insert(1, PaintResult::Failed("still failing".into()));
+        take(&mut runtime);
+        let now = runtime.platform.mono;
+        runtime.retry_overlays(now);
+        let first = take(&mut runtime);
+        if matches!(reason, Reason::ActionFailed(_)) {
+            assert!(first.is_empty());
+        } else {
+            assert!(!first.is_empty());
+        }
+        runtime.retry_overlays(now + Duration::from_millis(100));
+        assert!(take(&mut runtime).is_empty());
+        runtime.dispatch(Event::SessionLocked);
+        take(&mut runtime);
+        runtime.retry_overlays(now + RECOVERY_POLL);
+        assert!(take(&mut runtime).is_empty());
+    }
+}
+
+#[test]
+fn settings_fit_cache_reuses_measurements_and_invalidates_changed_inputs() {
+    let mut runtime = runtime(Monitors::All);
+    discover(&mut runtime, 0, vec![bar(0, 1, true)]);
+    runtime.platform.fit_needs_width = Some(110);
+    let format = CompiledFormat::parse("%H:%M").unwrap();
+    let now = runtime.platform.now;
+    let check =
+        |runtime: &mut Runtime<Fake>, font, time| runtime.check(&format, font, Monitors::All, time);
+    assert_eq!(check(&mut runtime, 9, now).len(), 1);
+    assert_eq!(check(&mut runtime, 9, now).len(), 1);
+    assert_eq!(runtime.platform.fit_calls.len(), 1);
+    // Seconds do not change this format's rendered text.
+    check(&mut runtime, 9, now + chrono::TimeDelta::seconds(1));
+    assert_eq!(runtime.platform.fit_calls.len(), 1);
+    check(&mut runtime, 10, now);
+    assert_eq!(runtime.platform.fit_calls.len(), 2);
+    runtime.platform.font_changed = true;
+    runtime.appearance_changed();
+    check(&mut runtime, 10, now);
+    assert_eq!(runtime.platform.fit_calls.len(), 3);
+    runtime.snapshots.get_mut(&1).unwrap().dpi = 120;
+    check(&mut runtime, 10, now);
+    assert_eq!(runtime.platform.fit_calls.len(), 4);
+    runtime.snapshots.get_mut(&1).unwrap().clock_rect = Some(rect(1800, 1032, 120, 48));
+    assert!(check(&mut runtime, 10, now).is_empty());
+    assert_eq!(runtime.platform.fit_calls.len(), 5);
+    check(&mut runtime, 10, now + chrono::TimeDelta::minutes(1));
+    assert_eq!(runtime.platform.fit_calls.len(), 6);
+    runtime.check(
+        &CompiledFormat::parse("%S").unwrap(),
+        10,
+        Monitors::All,
+        now,
+    );
+    assert_eq!(runtime.platform.fit_calls.len(), 7);
+    // Unavailable measurements must not suppress a later successful check.
+    runtime.platform.fit_needs_width = None;
+    check(&mut runtime, 9, now);
+    runtime.platform.fit_needs_width = Some(140);
+    assert_eq!(check(&mut runtime, 9, now).len(), 1);
 }

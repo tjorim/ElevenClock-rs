@@ -39,7 +39,7 @@ impl fmt::Display for FormatError {
 }
 impl std::error::Error for FormatError {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CompiledFormat {
     items: Vec<Item<'static>>,
     cadence: Cadence,

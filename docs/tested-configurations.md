@@ -55,7 +55,7 @@ The script cannot see timer-wake or discovery rates.
   runtimes.
 - **Secondary taskbars** have no `TrayNotifyWnd`, so a tray re-layout there waits for the
   next discovery.
-- **Tests disturb a live desktop.** `cargo test --workspace` opens UI Automation fixture
+- **Tests disturb a live desktop.** `cargo test --workspace --locked` opens UI Automation fixture
   windows that take focus. Do not run it during interactive checks.
 - **External minimize.** A tool that minimizes the overlay from another process (some
   screen-control tools do) used to latch an overflow; the overlay now restores itself, but
