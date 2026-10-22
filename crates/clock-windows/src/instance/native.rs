@@ -53,7 +53,7 @@ fn current_user_sid() -> Result<String> {
             let mut needed = 0u32;
             let _ = GetTokenInformation(token, TokenUser, None, 0, &mut needed);
             if needed == 0 {
-                return Err(windows::core::Error::from_win32());
+                return Err(windows::core::Error::from_thread());
             }
             // u64 elements keep TOKEN_USER (pointer-aligned) correctly aligned.
             let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
@@ -69,7 +69,7 @@ fn current_user_sid() -> Result<String> {
             ConvertSidToStringSidW(user.User.Sid, &mut text)?;
             let sid = text
                 .to_string()
-                .map_err(|_| windows::core::Error::from_win32());
+                .map_err(|_| windows::core::Error::from_thread());
             let _ = LocalFree(Some(HLOCAL(text.0.cast())));
             sid
         })();

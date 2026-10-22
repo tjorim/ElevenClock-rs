@@ -68,7 +68,7 @@ impl OverlayClass {
                 ..Default::default()
             };
             if RegisterClassW(&class) == 0 {
-                return Err(windows::core::Error::from_win32());
+                return Err(windows::core::Error::from_thread());
             }
             Ok(Self(module.into()))
         }
