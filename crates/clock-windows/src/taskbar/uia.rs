@@ -1,9 +1,10 @@
 //! Locale-independent property inventory, not a supported selector. Blocking
 //! COM calls are allowed only in the development probe's isolated process.
+use crate::bindings::HWND;
+use crate::bindings::*;
 use clock_core::PhysicalRect;
 use std::time::Instant;
-use windows::Win32::{Foundation::HWND, System::Com::*, UI::Accessibility::*};
-use windows::core::Interface;
+use windows_core::Interface;
 
 #[derive(Debug)]
 pub struct Element {
@@ -49,8 +50,8 @@ impl Drop for Apartment {
 fn timed<T>(
     report: &mut Inventory,
     name: &'static str,
-    call: impl FnOnce() -> windows::core::Result<T>,
-) -> windows::core::Result<T> {
+    call: impl FnOnce() -> windows_core::Result<T>,
+) -> windows_core::Result<T> {
     let start = Instant::now();
     let result = call();
     let elapsed_micros = start.elapsed().as_micros();
@@ -72,7 +73,7 @@ unsafe fn related(
     walker: &IUIAutomationTreeWalker,
     node: &IUIAutomationElement,
     child: bool,
-) -> windows::core::Result<Option<IUIAutomationElement>> {
+) -> windows_core::Result<Option<IUIAutomationElement>> {
     let mut ptr = std::ptr::null_mut();
     let vtable = Interface::vtable(walker);
     let call = if child {
@@ -98,7 +99,7 @@ pub fn inventory(hwnd: HWND) -> Inventory {
     let start = Instant::now();
     let mut report = Inventory::default();
     // SAFETY: this helper thread has no UI message loop or existing apartment.
-    let result = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok();
+    let result = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED as u32) }.ok();
     if let Err(error) = result {
         report.failures.push(format!("CoInitializeEx: {error}"));
         return report;
@@ -107,12 +108,12 @@ pub fn inventory(hwnd: HWND) -> Inventory {
     // SAFETY: interfaces never escape this thread/process. No actions are invoked,
     // names read, or provider objects retained by application code.
     let result = unsafe {
-        (|| -> windows::core::Result<()> {
+        (|| -> windows_core::Result<()> {
             let automation: IUIAutomation = timed(&mut report, "CoCreateInstance", || {
                 CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
             })?;
             let root = timed(&mut report, "ElementFromHandle", || {
-                automation.ElementFromHandle(hwnd)
+                automation.ElementFromHandle(UIA_HWND(hwnd.0))
             })?;
             let walker = timed(&mut report, "RawViewWalker", || automation.RawViewWalker())?;
             let mut stack = vec![(root, None, 0usize)];
@@ -126,12 +127,15 @@ pub fn inventory(hwnd: HWND) -> Inventory {
                 let automation_id = timed(&mut report, "CurrentAutomationId", || {
                     node.CurrentAutomationId()
                 })?
+                .display()
                 .to_string();
-                let class =
-                    timed(&mut report, "CurrentClassName", || node.CurrentClassName())?.to_string();
+                let class = timed(&mut report, "CurrentClassName", || node.CurrentClassName())?
+                    .display()
+                    .to_string();
                 let framework = timed(&mut report, "CurrentFrameworkId", || {
                     node.CurrentFrameworkId()
                 })?
+                .display()
                 .to_string();
                 let control_type = timed(&mut report, "CurrentControlType", || {
                     node.CurrentControlType()

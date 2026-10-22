@@ -5,6 +5,7 @@
 //! styles and never uses an unconditional global topmost: z-order mirrors the
 //! visible taskbar's own band, immediately above it (R03 strategy). It is created
 //! in that band and keeps it while hidden; see `overlay::band_action` (#23).
+use crate::bindings::*;
 use crate::{
     accessibility::{ClockAccessible, is_root_object, return_object},
     interaction::{Interaction, PressTracker, ScreenPoint, post_interaction},
@@ -18,25 +19,13 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
-use windows::{
-    Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
-        Graphics::Gdi::{InvalidateRect, ValidateRect},
-        System::LibraryLoader::GetModuleHandleW,
-        UI::{
-            Accessibility::IRawElementProviderSimple,
-            Input::KeyboardAndMouse::{ReleaseCapture, SetCapture},
-            WindowsAndMessaging::*,
-        },
-    },
-    core::{Result, w},
-};
+use windows_core::{Result, w};
 
 /// Bumped by the window procedure (UI thread) on messages that invalidate pixels;
 /// the loop compares it and repaints from stored state. The callback keeps no
 /// references to loop state.
 pub static REPAINT_EPOCH: AtomicU64 = AtomicU64::new(0);
-const CLASS_NAME: windows::core::PCWSTR = w!("ElevenClock-rs.Overlay");
+const CLASS_NAME: windows_core::PCWSTR = w!("ElevenClock-rs.Overlay");
 /// How long after exposure the confirming redraw waits; upkeep runs every 2 s.
 pub const CONFIRM_DELAY: Duration = Duration::from_millis(500);
 
@@ -54,23 +43,23 @@ pub fn window_id(hwnd: HWND) -> u64 {
 }
 
 /// Registers the window class for the life of the runtime.
-pub struct OverlayClass(windows::Win32::Foundation::HINSTANCE);
+pub struct OverlayClass(crate::bindings::HINSTANCE);
 impl OverlayClass {
     pub fn register() -> Result<Self> {
         // SAFETY: standard class registration with a static procedure/name.
         unsafe {
-            let module = GetModuleHandleW(None)?;
+            let module = GetModuleHandleW(None).ok()?;
             let class = WNDCLASSW {
                 lpfnWndProc: Some(window_proc),
-                hInstance: module.into(),
+                hInstance: module,
                 lpszClassName: CLASS_NAME,
-                hCursor: LoadCursorW(None, IDC_ARROW)?,
+                hCursor: LoadCursorW(None, IDC_ARROW).ok()?,
                 ..Default::default()
             };
-            if RegisterClassW(&class) == 0 {
-                return Err(windows::core::Error::from_thread());
+            if RegisterClassW(&class).0 == 0 {
+                return Err(windows_core::Error::from_thread());
             }
-            Ok(Self(module.into()))
+            Ok(Self(module))
         }
     }
 }
@@ -133,15 +122,15 @@ fn restore_hidden(hwnd: HWND, bounds: PhysicalRect) -> Result<bool> {
     // SAFETY: `placement` is a live, correctly sized buffer; only our own window
     // is restored (without activation), hidden and moved.
     unsafe {
-        GetWindowPlacement(hwnd, &mut placement)?;
-        placement.showCmd = SW_SHOWNOACTIVATE.0 as u32;
+        GetWindowPlacement(hwnd, &mut placement).ok()?;
+        placement.showCmd = SW_SHOWNOACTIVATE as u32;
         placement.rcNormalPosition = RECT {
             left: OFFSCREEN,
             top: OFFSCREEN,
             right: OFFSCREEN + width,
             bottom: OFFSCREEN + height,
         };
-        SetWindowPlacement(hwnd, &placement)?;
+        SetWindowPlacement(hwnd, &placement).ok()?;
         let _ = ShowWindow(hwnd, SW_HIDE);
         SetWindowPos(
             hwnd,
@@ -150,15 +139,16 @@ fn restore_hidden(hwnd: HWND, bounds: PhysicalRect) -> Result<bool> {
             bounds.top(),
             width,
             height,
-            SWP_NOACTIVATE | SWP_NOZORDER,
-        )?;
+            (SWP_NOACTIVATE | SWP_NOZORDER) as u32,
+        )
+        .ok()?;
     }
     Ok(true)
 }
 
 fn topmost(hwnd: HWND) -> bool {
     // SAFETY: style query on a possibly stale handle; failure reads as zero.
-    unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0 }
+    unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST as isize != 0 }
 }
 
 /// Nearest predecessor of the taskbar in its own z-order band. Windows can list
@@ -168,9 +158,7 @@ fn relative_predecessor(root: HWND, root_topmost: bool) -> Result<Option<HWND>> 
     let mut cursor = root;
     for _ in 0..128 {
         // SAFETY: z-order walk over handles that may go stale; errors end the walk.
-        let Ok(previous) = (unsafe { GetWindow(cursor, GW_HWNDPREV) }) else {
-            return Ok(None);
-        };
+        let previous = unsafe { GetWindow(cursor, GW_HWNDPREV as u32) };
         if previous.is_invalid() {
             return Ok(None);
         }
@@ -179,8 +167,8 @@ fn relative_predecessor(root: HWND, root_topmost: bool) -> Result<Option<HWND>> 
         }
         cursor = previous;
     }
-    Err(windows::core::Error::new(
-        windows::core::HRESULT(0x80004005u32 as i32),
+    Err(windows_core::Error::new(
+        windows_core::HRESULT(0x80004005u32 as i32),
         "Taskbar predecessor inventory exceeded its bound",
     ))
 }
@@ -189,17 +177,13 @@ impl Overlay {
     pub fn create(renderer: &Renderer, taskbar: HWND, bounds: PhysicalRect) -> Result<Self> {
         // Born in the taskbar's band: Windows ignores a later HWND_TOPMOST from
         // this background process while the desktop is foreground (#23).
-        let band = if topmost(taskbar) {
-            WS_EX_TOPMOST
-        } else {
-            WINDOW_EX_STYLE(0)
-        };
+        let band = if topmost(taskbar) { WS_EX_TOPMOST } else { 0 };
         // SAFETY: class registered by OverlayClass; creates a hidden popup owned
         // by this thread. WS_EX_NOACTIVATE/TOOLWINDOW keep it out of Alt-Tab and
         // focus. It is never shown here.
         let hwnd = unsafe {
             CreateWindowExW(
-                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | band,
+                (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | band) as u32,
                 CLASS_NAME,
                 w!("ElevenClock-rs"),
                 WS_POPUP,
@@ -209,9 +193,10 @@ impl Overlay {
                 bounds.height(),
                 None,
                 None,
-                Some(GetModuleHandleW(None)?.into()),
+                Some(GetModuleHandleW(None).ok()?),
                 None,
-            )?
+            )
+            .ok()?
         };
         let accessible = ClockAccessible::new(hwnd);
         PROVIDERS.with(|providers| {
@@ -253,8 +238,9 @@ impl Overlay {
                 bounds.top(),
                 bounds.width(),
                 bounds.height(),
-                SWP_NOACTIVATE | SWP_NOZORDER,
+                (SWP_NOACTIVATE | SWP_NOZORDER) as u32,
             )
+            .ok()
         }
     }
 
@@ -354,15 +340,16 @@ impl Overlay {
                     0,
                     0,
                     0,
-                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-                )?;
+                    (SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) as u32,
+                )
+                .ok()?;
             }
             // SetWindowPos can succeed without changing the band; never show a
             // window that would sit below the taskbar.
             if topmost(self.hwnd) != root_topmost {
                 self.hide();
-                return Err(windows::core::Error::new(
-                    windows::core::HRESULT(0x80004005u32 as i32),
+                return Err(windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
                     "Taskbar-band change ignored",
                 ));
             }
@@ -374,11 +361,7 @@ impl Overlay {
         } else {
             preceding
         };
-        let keep_order = if adjacent {
-            SWP_NOZORDER
-        } else {
-            SET_WINDOW_POS_FLAGS(0)
-        };
+        let keep_order = if adjacent { SWP_NOZORDER } else { 0 };
         let b = self.bounds;
         // SAFETY: positions/shows our own window without activation.
         let positioned = unsafe {
@@ -389,8 +372,9 @@ impl Overlay {
                 b.top(),
                 b.width(),
                 b.height(),
-                SWP_NOACTIVATE | SWP_SHOWWINDOW | keep_order,
+                (SWP_NOACTIVATE | SWP_SHOWWINDOW | keep_order) as u32,
             )
+            .ok()
         };
         match positioned {
             Ok(()) => {
@@ -417,7 +401,7 @@ impl Overlay {
 unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     // SAFETY: called by the system for our own windows on the UI thread.
     unsafe {
-        match message {
+        match message as i32 {
             WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
             WM_ERASEBKGND => LRESULT(1),
             WM_GETOBJECT if is_root_object(lp) => {
@@ -460,7 +444,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                     tracker.cancel();
                     press.set(tracker);
                 });
-                if message == WM_CANCELMODE {
+                if message == WM_CANCELMODE as u32 {
                     let _ = ReleaseCapture();
                 }
                 LRESULT(0)
@@ -476,7 +460,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                 LRESULT(0)
             }
             WM_PAINT | WM_DPICHANGED | WM_DISPLAYCHANGE => {
-                if message != WM_PAINT {
+                if message != WM_PAINT as u32 {
                     crate::events::enqueue(crate::events::Signal::TopologyChanged);
                 }
                 // Drawing happens in the loop, which owns the surface; the
@@ -499,7 +483,7 @@ fn point_in_client(hwnd: HWND, lparam: LPARAM) -> bool {
     let y = i32::from((lparam.0 >> 16) as u16 as i16);
     let mut client = RECT::default();
     // SAFETY: live output buffer; a destroyed window fails and reads as outside.
-    unsafe { GetClientRect(hwnd, &mut client) }.is_ok()
+    unsafe { GetClientRect(hwnd, &mut client) }.as_bool()
         && x >= client.left
         && x < client.right
         && y >= client.top
@@ -509,9 +493,9 @@ fn point_in_client(hwnd: HWND, lparam: LPARAM) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bindings::GetUpdateRect;
     use crate::{render::WorstCase, theme::Palette};
     use clock_core::Preferences;
-    use windows::Win32::Graphics::Gdi::GetUpdateRect;
 
     /// Re-showing a hidden overlay must not trust pixels drawn while hidden or
     /// kept across the hide: it is left invalid, so WM_PAINT redraws it (#46).
@@ -522,7 +506,7 @@ mod tests {
         // destroyed below, after the overlay.
         let taskbar = unsafe {
             CreateWindowExW(
-                WS_EX_TOOLWINDOW,
+                WS_EX_TOOLWINDOW as u32,
                 w!("STATIC"),
                 w!(""),
                 WS_POPUP,
@@ -536,6 +520,7 @@ mod tests {
                 None,
             )
         }
+        .ok()
         .unwrap();
         let renderer = Renderer::new().unwrap();
         let bounds = PhysicalRect::new(-10_000, -10_000, 92, 40).unwrap();
@@ -589,7 +574,7 @@ mod tests {
         // SAFETY: STATIC is a system class; the window is destroyed below.
         let hwnd = unsafe {
             CreateWindowExW(
-                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) as u32,
                 w!("STATIC"),
                 w!(""),
                 WS_POPUP,
@@ -603,6 +588,7 @@ mod tests {
                 None,
             )
         }
+        .ok()
         .unwrap();
         let renderer = Renderer::new().unwrap();
         let mut surface = renderer.create_surface(hwnd);

@@ -1,15 +1,14 @@
 //! R03 helper-only UIA experiment. No COM object or HWND leaves this process.
 use crate::overlay::ExperimentSlot;
 use clock_core::ShellGeneration;
+use clock_windows::bindings::POINT;
+use clock_windows::bindings::*;
 use clock_windows::taskbar::{
     candidate::{self, CandidateElement},
     geometry::validate_candidate,
     probe,
 };
-use windows::{
-    Win32::{Foundation::POINT, System::Com::*, UI::Accessibility::*},
-    core::{Interface, Result},
-};
+use windows_core::{Interface, Result};
 
 /// Split (`OmniButtonLeft`) and merged (`OmniButton`) clock buttons; see
 /// [`candidate`] for which one a desktop exposes.
@@ -21,9 +20,9 @@ impl Drop for Apartment {
         unsafe { CoUninitialize() };
     }
 }
-fn rejected() -> windows::core::Error {
-    windows::core::Error::new(
-        windows::core::HRESULT(0x80004005u32 as i32),
+fn rejected() -> windows_core::Error {
+    windows_core::Error::new(
+        windows_core::HRESULT(0x80004005u32 as i32),
         "Clock identity/hit-target experiment failed closed",
     )
 }
@@ -40,7 +39,7 @@ unsafe fn clock_at(
         let mut node = automation.ElementFromPoint(point)?;
         let mut ancestry = Vec::new();
         for _ in 0..16 {
-            let class = node.CurrentClassName()?.to_string();
+            let class = node.CurrentClassName()?.display().to_string();
             if CLOCK_CLASSES.contains(&class.as_str())
                 && node.CurrentControlType()? == UIA_ButtonControlTypeId
                 && node.CurrentProcessId()? as u32 == slot.shell_pid
@@ -51,8 +50,8 @@ unsafe fn clock_at(
             }
             ancestry.push(format!("{class}: {:?}", node.CurrentBoundingRectangle()));
             node = walker.GetParentElement(&node).map_err(|error| {
-                windows::core::Error::new(
-                    windows::core::HRESULT(0x80004005u32 as i32),
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
                     format!("Clock hit ancestry {ancestry:?}; parent unavailable: {error}"),
                 )
             })?;
@@ -65,13 +64,13 @@ unsafe fn clock_at(
 /// desktop, not authorization for R02's production selector.
 pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
     let records = probe::collect(ShellGeneration(generation)).map_err(|error| {
-        windows::core::Error::new(
-            windows::core::HRESULT(0x80004005u32 as i32),
+        windows_core::Error::new(
+            windows_core::HRESULT(0x80004005u32 as i32),
             format!("R03 native/UIA inventory: {error}"),
         )
     })?;
     unsafe {
-        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
+        CoInitializeEx(None, COINIT_MULTITHREADED as u32).ok()?;
     }
     let _apartment = Apartment;
     let automation: IUIAutomation =
@@ -147,8 +146,8 @@ pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
         for (x, y) in crate::sampling::clock_hit_points(clock).ok_or_else(rejected)? {
             unsafe {
                 clock_at(&automation, POINT { x, y }, &slot).map_err(|error| {
-                    windows::core::Error::new(
-                        windows::core::HRESULT(0x80004005u32 as i32),
+                    windows_core::Error::new(
+                        windows_core::HRESULT(0x80004005u32 as i32),
                         format!("R03 clock hit at ({x}, {y}): {error}"),
                     )
                 })?;
@@ -196,7 +195,7 @@ pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
 pub fn invoke(slot: &ExperimentSlot, fallback: bool, keyboard_only: bool) -> Result<&'static str> {
     crate::overlay::check_slot(slot)?;
     unsafe {
-        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
+        CoInitializeEx(None, COINIT_MULTITHREADED as u32).ok()?;
     }
     let _apartment = Apartment;
     let automation: IUIAutomation =
@@ -236,43 +235,36 @@ pub fn invoke(slot: &ExperimentSlot, fallback: bool, keyboard_only: bool) -> Res
         win_n()?;
         return Ok("win_n_once");
     }
-    let pattern = unsafe { windows::core::IUnknown::from_raw(pattern) };
+    let pattern = unsafe { windows_core::IUnknown::from_raw(pattern) };
     let invoke: IUIAutomationInvokePattern = pattern.cast()?;
     unsafe {
-        invoke.Invoke()?;
+        invoke.Invoke().ok()?;
     }
     Ok("uia_invoke_once")
 }
 
 fn win_n() -> Result<()> {
-    use windows::Win32::UI::Input::KeyboardAndMouse::*;
+    use clock_windows::bindings::*;
     // Do not release modifiers owned by the user. A single batch, no retries.
-    for key in [
-        VK_LWIN,
-        VK_RWIN,
-        VK_CONTROL,
-        VK_SHIFT,
-        VK_MENU,
-        VIRTUAL_KEY(0x4e),
-    ] {
-        if unsafe { GetAsyncKeyState(i32::from(key.0)) } < 0 {
+    for key in [VK_LWIN, VK_RWIN, VK_CONTROL, VK_SHIFT, VK_MENU, 0x4e] {
+        if unsafe { GetAsyncKeyState(key) } < 0 {
             return Err(rejected());
         }
     }
-    let input = |key, flags| INPUT {
-        r#type: INPUT_KEYBOARD,
+    let input = |key: i32, flags: i32| INPUT {
+        r#type: INPUT_KEYBOARD as u32,
         Anonymous: INPUT_0 {
             ki: KEYBDINPUT {
-                wVk: key,
-                dwFlags: flags,
+                wVk: key as u16,
+                dwFlags: flags as u32,
                 ..Default::default()
             },
         },
     };
     let keys = [
-        input(VK_LWIN, KEYBD_EVENT_FLAGS(0)),
-        input(VIRTUAL_KEY(0x4e), KEYBD_EVENT_FLAGS(0)),
-        input(VIRTUAL_KEY(0x4e), KEYEVENTF_KEYUP),
+        input(VK_LWIN, 0),
+        input(0x4e, 0),
+        input(0x4e, KEYEVENTF_KEYUP),
         input(VK_LWIN, KEYEVENTF_KEYUP),
     ];
     let count = unsafe { SendInput(&keys, std::mem::size_of::<INPUT>() as i32) };
@@ -281,7 +273,7 @@ fn win_n() -> Result<()> {
         // shortcut or click replay. Partial cleanup is reported as failure.
         let mut cleanup = Vec::new();
         if count >= 2 {
-            cleanup.push(input(VIRTUAL_KEY(0x4e), KEYEVENTF_KEYUP));
+            cleanup.push(input(0x4e, KEYEVENTF_KEYUP));
         }
         if count >= 1 {
             cleanup.push(input(VK_LWIN, KEYEVENTF_KEYUP));

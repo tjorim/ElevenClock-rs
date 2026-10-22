@@ -54,13 +54,11 @@ original notices, not missing-notice exemptions. The checker uses no network.
 Run `python3 scripts/test-rust-license-check.py` for its positive and rejection
 regressions; the dependency CI job runs them before the inventory.
 
-`windows`, `windows-core` and `windows-numerics` move together to the 0.62 line
-(0.62.2, 0.62.2, 0.3.1; MSRV 1.82). They must stay on matching versions, so
-Dependabot updates them as one group. The 0.100 releases of the small crates are
-ignored until `windows` itself reaches 0.100 (see #74). `windows-core` 0.62 imports
-`CoTaskMemAlloc`/`CoTaskMemFree` and related COM helpers from the in-box
-`combase.dll` (which `ole32.dll` has forwarded to since Windows 8), so the release
-script's reviewed system-DLL list includes it.
+`windows-bindgen`, `windows-core` and `windows-numerics` are on the 0.100 line. The
+bindings are generated against `windows-core`, so the three must stay on matching
+versions and Dependabot updates them as one group. A version bump regenerates the
+bindings (`cargo run -p clock-bindgen`) in the same PR; CI fails when the checked-in
+file differs from a fresh generation.
 
 Criterion 0.8 (MSRV 1.86) adds `alloca`, which compiles a small C file, and
 `page_size` → `winapi`, whose `winapi-*-pc-windows-gnu` import-library crates
@@ -71,9 +69,13 @@ the Windows CI runner instead of cross-checking from Linux.
 
 ## What each dependency is for
 
-- **`windows`** (with `windows-core` and `windows-numerics`): documented Win32, COM,
-  UI Automation, registry, process and job APIs. `windows-core` is a direct dependency
-  because the `#[implement]` macro for the overlay's UIA provider names it.
+- **`windows-core`** and **`windows-numerics`**: the runtime for the generated Win32
+  bindings in `clock-windows/src/bindings/` (COM interfaces, `#[implement]` for the
+  overlay's UIA provider, Direct2D's `Vector2`). The bindings cover only the documented
+  Win32, COM, UI Automation, registry, process and job APIs listed in
+  `clock-windows/bindings.txt`.
+- **`windows-bindgen`**, development only (`clock-bindgen`): regenerates those bindings
+  from the Windows metadata it bundles. It is not a dependency of the app.
 - **`chrono`** 0.4, `std` only: datetime values in `clock-core`.
 - **`serde`** 1.0 (derive) and **`serde_json`** 1.0: the private, versioned preference
   encoding and the discovery helper's report, behind `clock-windows`. `clock-core`

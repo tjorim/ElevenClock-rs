@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/clock-core", "crates/clock-windows", "crates/clock-app"]
+members = ["crates/clock-core", "crates/clock-windows", "crates/clock-app", "crates/clock-bindgen"]
 # Bare `cargo run`/`build`/`test` target the app; pass --workspace for every crate.
 default-members = ["crates/clock-app"]
 resolver = "3"
@@ -22,4 +22,5 @@ strip = "none"
 clock-core = { path = "crates/clock-core" }
 clock-windows = { path = "crates/clock-windows" }
 chrono = { version = "0.4.42", default-features = false, features = ["std"] }
-windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging", "Win32_UI_Controls", "Win32_UI_HiDpi", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_UI_Accessibility", "Win32_System_Registry", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_Security", "Win32_UI_Input_KeyboardAndMouse", "Win32_Graphics_Direct2D", "Win32_Graphics_Direct2D_Common", "Win32_Graphics_DirectWrite", "Win32_Graphics_Dxgi_Common", "Win32_System_RemoteDesktop", "Win32_Security_Authorization", "Win32_System_ProcessStatus", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_Time", "Win32_System_SystemInformation", "Win32_System_Ole", "Win32_System_Variant", "Win32_System_DataExchange"] }
+windows-core = "0.100.0"
+windows-numerics = "0.100.0"

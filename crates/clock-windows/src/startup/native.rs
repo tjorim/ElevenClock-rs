@@ -1,18 +1,14 @@
 //! The real per-user Run key. Only this app's exact value is ever read for writing,
 //! written or deleted; HKLM, services and scheduled tasks are never involved.
 use super::{APPROVED_SUBKEY, RUN_SUBKEY, RunEntry, RunKey, StartupError, VALUE_NAME, wide_nul};
-use std::path::PathBuf;
-use windows::{
-    Win32::{
-        Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_PATH_NOT_FOUND, WIN32_ERROR},
-        System::Registry::{
-            HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE, REG_BINARY, REG_EXPAND_SZ,
-            REG_OPEN_CREATE_OPTIONS, REG_SZ, REG_VALUE_TYPE, RRF_NOEXPAND, RRF_RT_ANY, RegCloseKey,
-            RegCreateKeyExW, RegDeleteValueW, RegGetValueW, RegOpenKeyExW, RegSetValueExW,
-        },
-    },
-    core::{HRESULT, PCWSTR},
+use crate::bindings::{
+    ACCESS_MASK, ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_PATH_NOT_FOUND, HKEY,
+    HKEY_CURRENT_USER, KEY_SET_VALUE, LSTATUS, REG_BINARY, REG_EXPAND_SZ, REG_SZ, RRF_NOEXPAND,
+    RRF_RT_ANY, RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegGetValueW, RegOpenKeyExW,
+    RegSetValueExW,
 };
+use std::path::PathBuf;
+use windows_core::{PCWSTR, WIN32_ERROR};
 
 /// The running executable as an absolute path, without a `\\?\` prefix that a Run
 /// command could not use.
@@ -25,8 +21,8 @@ pub fn current_executable() -> Option<PathBuf> {
     })
 }
 
-fn describe(code: WIN32_ERROR) -> String {
-    let error = windows::core::Error::from_hresult(HRESULT::from_win32(code.0));
+fn describe(code: LSTATUS) -> String {
+    let error = windows_core::Error::from_hresult(WIN32_ERROR(code.0 as u32).to_hresult());
     let message = error.message();
     let message = message.trim();
     if message.is_empty() {
@@ -35,14 +31,14 @@ fn describe(code: WIN32_ERROR) -> String {
         format!("{message} - error {}", code.0)
     }
 }
-fn failure(action: &'static str, code: WIN32_ERROR) -> StartupError {
+fn failure(action: &'static str, code: LSTATUS) -> StartupError {
     StartupError::Registry {
         action,
         detail: describe(code),
     }
 }
-fn absent(code: WIN32_ERROR) -> bool {
-    code == ERROR_FILE_NOT_FOUND || code == ERROR_PATH_NOT_FOUND
+fn absent(code: LSTATUS) -> bool {
+    code.0 == ERROR_FILE_NOT_FOUND || code.0 == ERROR_PATH_NOT_FOUND
 }
 
 /// Registry text is little-endian UTF-16, possibly with a terminator.
@@ -73,18 +69,18 @@ fn read_raw(
     subkey: &[u16],
     name: &[u16],
     action: &'static str,
-) -> Result<Option<(REG_VALUE_TYPE, Vec<u8>)>, StartupError> {
+) -> Result<Option<(u32, Vec<u8>)>, StartupError> {
     // The value can change between the size query and the read; a few rounds settle it.
     let mut size = 0u32;
     for _ in 0..4 {
-        let mut kind = REG_VALUE_TYPE(0);
+        let mut kind = 0u32;
         // SAFETY: both pointers describe live locals; a null data pointer asks for the size.
         let status = unsafe {
             RegGetValueW(
                 HKEY_CURRENT_USER,
                 PCWSTR(subkey.as_ptr()),
                 PCWSTR(name.as_ptr()),
-                RRF_RT_ANY | RRF_NOEXPAND,
+                (RRF_RT_ANY | RRF_NOEXPAND) as u32,
                 Some(&mut kind),
                 None,
                 Some(&mut size),
@@ -104,13 +100,13 @@ fn read_raw(
                 HKEY_CURRENT_USER,
                 PCWSTR(subkey.as_ptr()),
                 PCWSTR(name.as_ptr()),
-                RRF_RT_ANY | RRF_NOEXPAND,
+                (RRF_RT_ANY | RRF_NOEXPAND) as u32,
                 Some(&mut kind),
                 Some(data.as_mut_ptr().cast()),
                 Some(&mut capacity),
             )
         };
-        if status == ERROR_MORE_DATA {
+        if status.0 == ERROR_MORE_DATA {
             size = capacity;
             continue;
         }
@@ -138,7 +134,7 @@ fn delete_value(subkey: &[u16], name: &[u16], action: &'static str) -> Result<()
             HKEY_CURRENT_USER,
             PCWSTR(subkey.as_ptr()),
             None,
-            KEY_SET_VALUE,
+            ACCESS_MASK(KEY_SET_VALUE as u32),
             &mut key,
         )
     };
@@ -214,8 +210,8 @@ impl RunKey for RegistryRunKey {
                 PCWSTR(self.run.as_ptr()),
                 None,
                 PCWSTR::null(),
-                REG_OPEN_CREATE_OPTIONS(0),
-                KEY_SET_VALUE,
+                0,
+                ACCESS_MASK(KEY_SET_VALUE as u32),
                 None,
                 &mut key,
                 None,
@@ -256,9 +252,9 @@ impl RunKey for RegistryRunKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bindings::{RegDeleteTreeW, RegSetValueExW as set_value};
     use crate::startup::{StartupController, StartupState, command_line};
     use std::path::Path;
-    use windows::Win32::System::Registry::{RegDeleteTreeW, RegSetValueExW as set_value};
 
     /// A throwaway key tree under HKCU, removed when the test ends.
     struct Scratch {
@@ -285,7 +281,7 @@ mod tests {
             RegistryRunKey::with_keys(&self.run, &self.approved, VALUE_NAME)
         }
         /// Put any value in a scratch subkey, the way other programs or Windows would.
-        fn put(&self, subkey: &str, name: &str, kind: REG_VALUE_TYPE, bytes: &[u8]) {
+        fn put(&self, subkey: &str, name: &str, kind: u32, bytes: &[u8]) {
             let subkey = wide_nul(subkey);
             let name = wide_nul(name);
             let mut key = HKEY::default();
@@ -296,8 +292,8 @@ mod tests {
                     PCWSTR(subkey.as_ptr()),
                     None,
                     PCWSTR::null(),
-                    REG_OPEN_CREATE_OPTIONS(0),
-                    KEY_SET_VALUE,
+                    0,
+                    ACCESS_MASK(KEY_SET_VALUE as u32),
                     None,
                     &mut key,
                     None,

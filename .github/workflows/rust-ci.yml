@@ -22,6 +22,10 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
+      - name: Win32 bindings match a fresh generation
+        run: |
+          cargo run -p clock-bindgen --locked
+          git diff --exit-code -- crates/clock-windows/src/bindings
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test -p clock-core --locked
       - name: Packaging script regression checks

@@ -27,6 +27,17 @@ the dependency job owns the advisory audit and license checks, with a cached,
 version-checked advisory tool. Core tests retain Linux and Windows coverage; the
 Linux test command already includes doctests.
 
+Win32 APIs come from generated bindings, not the `windows` crate. To use a new
+function, constant, struct or interface, add its name (`Windows.Win32.<Name>`) to
+`crates/clock-windows/bindings.txt` and run `cargo run -p clock-bindgen`. Interfaces
+whose methods you call must be listed themselves; ones that are only referenced come
+out without methods. Constants are plain integers (`#define` values are `i32`), so
+cast them where an API takes `u32`. A `match` on a message must use a constant that
+is in scope, otherwise the arm silently binds a new variable. The default metadata has
+no UIAutomationCore.dll exports, UIA ids or Known Folder GUIDs; those few are
+hand-written in `clock-windows/src/bindings.rs`. The `core` job fails when the
+checked-in bindings differ from a fresh generation.
+
 The [desktop workflow](../.github/workflows/runtime-lifecycle.yml) shares one
 runner per architecture/target between the taskbar discovery, lifecycle/UIA and
 overlay checks. All three combinations (native x64, native ARM64 and x64 on

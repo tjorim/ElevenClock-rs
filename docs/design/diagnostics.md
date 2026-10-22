@@ -144,8 +144,8 @@ in `clock-windows`:
 | `clock-windows/src/settings.rs`, `clock-app/resources/settings.rc` | The Support page |
 | `clock-app/src/logging.rs` | Starts logging, panic hook, start/stop lines |
 
-No dependency was added (`tracing` and `clap` are not used); the `windows` crate gains
-the `Win32_System_DataExchange` feature. `preferences_store::app_data_dir` is the one
+No dependency was added (`tracing` and `clap` are not used); the clipboard APIs are
+listed in `clock-windows/bindings.txt`. `preferences_store::app_data_dir` is the one
 Known Folder lookup, now shared by preferences and logs.
 
 ## Known limits

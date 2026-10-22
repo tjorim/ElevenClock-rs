@@ -243,9 +243,8 @@ pub struct LocalPreferencesStore {
 /// and the bounded logs both live here; never HOME or a path override.
 #[cfg(windows)]
 pub(crate) fn app_data_dir() -> io::Result<PathBuf> {
-    use windows::Win32::{
-        System::Com::CoTaskMemFree,
-        UI::Shell::{FOLDERID_LocalAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath},
+    use crate::bindings::{
+        CoTaskMemFree, FOLDERID_LocalAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
     };
     // SAFETY: API allocates a NUL-terminated path. Copy it before freeing with
     // CoTaskMemFree on every path; no native pointer escapes this function.
@@ -254,7 +253,7 @@ pub(crate) fn app_data_dir() -> io::Result<PathBuf> {
     let wide = unsafe { folder.as_wide() };
     use std::os::windows::ffi::OsStringExt;
     let path = PathBuf::from(std::ffi::OsString::from_wide(wide));
-    unsafe { CoTaskMemFree(Some(folder.0.cast())) };
+    unsafe { CoTaskMemFree(folder.0.cast()) };
     Ok(path.join("ElevenClock-rs"))
 }
 
@@ -377,13 +376,9 @@ impl LocalPreferencesStore {
 }
 #[cfg(windows)]
 fn replace(source: &Path, target: &Path) -> io::Result<()> {
+    use crate::bindings::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW};
     use std::os::windows::ffi::OsStrExt;
-    use windows::{
-        Win32::Storage::FileSystem::{
-            MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
-        },
-        core::PCWSTR,
-    };
+    use windows_core::PCWSTR;
     let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
     let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
     // SAFETY: owned NUL-terminated buffers live for the synchronous API call.
@@ -393,9 +388,10 @@ fn replace(source: &Path, target: &Path) -> io::Result<()> {
         MoveFileExW(
             PCWSTR(source.as_ptr()),
             PCWSTR(target.as_ptr()),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            (MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) as u32,
         )
     }
+    .ok()
     .map_err(io::Error::other)
 }
 #[cfg(not(windows))]

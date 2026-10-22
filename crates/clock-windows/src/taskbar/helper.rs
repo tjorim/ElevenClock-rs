@@ -14,12 +14,12 @@ use super::{
     probe,
     protocol::{self, ClockRecord, Report, ShellRecord, TaskbarRecord},
 };
-use clock_core::ShellGeneration;
-use std::io::{Read, Write};
-use windows::Win32::UI::HiDpi::{
+use crate::bindings::{
     AreDpiAwarenessContextsEqual, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
     GetThreadDpiAwarenessContext,
 };
+use clock_core::ShellGeneration;
+use std::io::{Read, Write};
 
 const HANDSHAKE_NATIVE: &[u8] = b"r08-go:native";
 const HANDSHAKE_UIA: &[u8] = b"r08-go:uia";
@@ -49,7 +49,7 @@ fn read_handshake(mut input: impl Read) -> Option<Mode> {
     }
 }
 
-fn report(generation: u64, mode: Mode) -> windows::core::Result<Report> {
+fn report(generation: u64, mode: Mode) -> windows_core::Result<Report> {
     let observations = probe::collect_with(ShellGeneration(generation), mode == Mode::Uia)?;
     let shell = observations
         .first()

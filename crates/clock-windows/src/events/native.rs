@@ -2,30 +2,20 @@
 //! the single UI thread: window procedures and out-of-context WinEvent callbacks
 //! are delivered by its message loop, so a thread-local queue needs no locking.
 use super::{Pending, Signal, WinEventKind, shell_event_for, signal_for_message};
-use std::cell::{Cell, RefCell};
-use windows::{
-    Win32::{
-        Foundation::{HWND, LPARAM, WPARAM},
-        System::RemoteDesktop::{
-            NOTIFY_FOR_THIS_SESSION, WTSRegisterSessionNotification,
-            WTSUnRegisterSessionNotification,
-        },
-        UI::{
-            Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent},
-            WindowsAndMessaging::{
-                EVENT_OBJECT_HIDE, EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_SHOW,
-                EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MOVESIZEEND,
-                GetClassNameW, OBJID_WINDOW, PostMessageW, RegisterWindowMessageW,
-                WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_APP,
-            },
-        },
-    },
-    core::{PCWSTR, Result, w},
+use crate::bindings::{
+    CheckHandle, EVENT_OBJECT_HIDE, EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_SHOW,
+    EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MOVESIZEEND, GetClassNameW,
+    HWINEVENTHOOK, HWND, LPARAM, NOTIFY_FOR_THIS_SESSION, OBJID_WINDOW, PostMessageW,
+    RegisterWindowMessageW, SetWinEventHook, UnhookWinEvent, WINEVENT_OUTOFCONTEXT,
+    WINEVENT_SKIPOWNPROCESS, WM_APP, WPARAM, WTSRegisterSessionNotification,
+    WTSUnRegisterSessionNotification,
 };
+use std::cell::{Cell, RefCell};
+use windows_core::{PCWSTR, PWSTR, Result, w};
 
 /// Posted to the host window when the queue becomes non-empty, so a callback
 /// that ran inside the message wait still wakes the loop.
-pub const WM_WAKE: u32 = WM_APP + 1;
+pub const WM_WAKE: u32 = WM_APP as u32 + 1;
 
 thread_local! {
     static QUEUE: RefCell<Pending> = RefCell::new(Pending::default());
@@ -46,7 +36,7 @@ pub fn enqueue(signal: Signal) {
             let posted = unsafe {
                 PostMessageW(Some(HWND(target as *mut _)), WM_WAKE, WPARAM(0), LPARAM(0))
             };
-            if posted.is_err() {
+            if !posted.as_bool() {
                 WAKE_POSTED.set(false);
             }
         }
@@ -79,7 +69,7 @@ fn is_taskbar(hwnd: HWND) -> bool {
     let mut class = [0u16; 32];
     // SAFETY: the buffer is writable for its advertised length; stale handles
     // simply return zero characters.
-    let length = unsafe { GetClassNameW(hwnd, &mut class) };
+    let length = unsafe { GetClassNameW(hwnd, PWSTR(class.as_mut_ptr()), class.len() as i32) };
     let class = &class[..length.max(0) as usize];
     class == "Shell_TrayWnd".encode_utf16().collect::<Vec<_>>()
         || class == "Shell_SecondaryTrayWnd".encode_utf16().collect::<Vec<_>>()
@@ -96,7 +86,7 @@ unsafe extern "system" fn win_event(
     _thread: u32,
     _time: u32,
 ) {
-    let kind = match event {
+    let kind = match event as i32 {
         EVENT_SYSTEM_FOREGROUND => WinEventKind::Foreground,
         EVENT_SYSTEM_MINIMIZEEND => WinEventKind::MinimizeEnd,
         EVENT_SYSTEM_MOVESIZEEND => WinEventKind::MoveSizeEnd,
@@ -105,7 +95,7 @@ unsafe extern "system" fn win_event(
         EVENT_OBJECT_LOCATIONCHANGE => WinEventKind::ObjectLocationChange,
         _ => return,
     };
-    let is_window = object == OBJID_WINDOW.0 && child == 0;
+    let is_window = object == OBJID_WINDOW && child == 0;
     if let Some(shell) = shell_event_for(kind, is_window, || is_taskbar(hwnd)) {
         enqueue(Signal::Shell(shell));
     }
@@ -130,7 +120,7 @@ impl Notifications {
         unsafe {
             let message = RegisterWindowMessageW(w!("TaskbarCreated"));
             if message == 0 {
-                return Err(windows::core::Error::from_thread());
+                return Err(windows_core::Error::from_thread());
             }
             TASKBAR_CREATED.set(message);
         }
@@ -146,7 +136,8 @@ impl Notifications {
         // the recovery poll observes lock state indirectly through unlock events
         // being absent; the runtime reports reduced event coverage.
         this.session =
-            unsafe { WTSRegisterSessionNotification(host, NOTIFY_FOR_THIS_SESSION) }.is_ok();
+            unsafe { WTSRegisterSessionNotification(host, NOTIFY_FOR_THIS_SESSION as u32) }
+                .as_bool();
         this.system_hooks
             .extend(hook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, 0));
         Ok(this)
@@ -184,18 +175,18 @@ impl Notifications {
     }
 }
 
-fn hook(min: u32, max: u32, pid: u32) -> Option<HWINEVENTHOOK> {
+fn hook(min: i32, max: i32, pid: u32) -> Option<HWINEVENTHOOK> {
     // SAFETY: out-of-context hook with a plain callback; installed and removed
     // on the UI thread, whose message loop delivers events.
     let handle = unsafe {
         SetWinEventHook(
-            min,
-            max,
+            min as u32,
+            max as u32,
             None,
             Some(win_event),
             pid,
             0,
-            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            (WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS) as u32,
         )
     };
     (!handle.is_invalid()).then_some(handle)
@@ -222,23 +213,23 @@ impl Drop for Notifications {
 #[cfg(test)]
 mod tests {
     use super::super::raw::*;
-    use windows::Win32::UI::WindowsAndMessaging as w;
+    use crate::bindings as w;
 
     #[test]
     fn raw_constants_match_the_windows_definitions() {
-        assert_eq!(WM_SYSCOLORCHANGE, w::WM_SYSCOLORCHANGE);
-        assert_eq!(WM_SETTINGCHANGE, w::WM_SETTINGCHANGE);
-        assert_eq!(WM_TIMECHANGE, w::WM_TIMECHANGE);
-        assert_eq!(WM_ENDSESSION, w::WM_ENDSESSION);
-        assert_eq!(WM_DISPLAYCHANGE, w::WM_DISPLAYCHANGE);
-        assert_eq!(WM_POWERBROADCAST, w::WM_POWERBROADCAST);
-        assert_eq!(WM_DPICHANGED, w::WM_DPICHANGED);
-        assert_eq!(WM_THEMECHANGED, w::WM_THEMECHANGED);
+        assert_eq!(WM_SYSCOLORCHANGE, w::WM_SYSCOLORCHANGE as u32);
+        assert_eq!(WM_SETTINGCHANGE, w::WM_SETTINGCHANGE as u32);
+        assert_eq!(WM_TIMECHANGE, w::WM_TIMECHANGE as u32);
+        assert_eq!(WM_ENDSESSION, w::WM_ENDSESSION as u32);
+        assert_eq!(WM_DISPLAYCHANGE, w::WM_DISPLAYCHANGE as u32);
+        assert_eq!(WM_POWERBROADCAST, w::WM_POWERBROADCAST as u32);
+        assert_eq!(WM_DPICHANGED, w::WM_DPICHANGED as u32);
+        assert_eq!(WM_THEMECHANGED, w::WM_THEMECHANGED as u32);
         assert_eq!(
             WM_DWMCOLORIZATIONCOLORCHANGED,
-            w::WM_DWMCOLORIZATIONCOLORCHANGED
+            w::WM_DWMCOLORIZATIONCOLORCHANGED as u32
         );
-        assert_eq!(WM_WTSSESSION_CHANGE, w::WM_WTSSESSION_CHANGE);
+        assert_eq!(WM_WTSSESSION_CHANGE, w::WM_WTSSESSION_CHANGE as u32);
         assert_eq!(PBT_APMSUSPEND, w::PBT_APMSUSPEND as usize);
         assert_eq!(PBT_APMRESUMESUSPEND, w::PBT_APMRESUMESUSPEND as usize);
         assert_eq!(PBT_APMRESUMEAUTOMATIC, w::PBT_APMRESUMEAUTOMATIC as usize);

@@ -21,19 +21,13 @@
 //! keeps its element after the overlay is destroyed gets
 //! `UIA_E_ELEMENTNOTAVAILABLE`, and `UiaDisconnectProvider` is called first so
 //! UIA drops its references.
+use crate::bindings::*;
 use crate::interaction::{Interaction, accessible_name, post_interaction};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
-use windows::{
-    Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
-        System::Variant::VARIANT,
-        UI::Accessibility::*,
-    },
-    core::{Error, HRESULT, IUnknown, IUnknownImpl, Result, implement},
-};
+use windows_core::{BSTR, Error, HRESULT, IUnknown, IUnknownImpl, Result, implement};
 
 const AUTOMATION_ID: &str = "ElevenClock-rs.Clock";
 const HELP_TEXT: &str = "Opens the calendar and notifications";
@@ -62,6 +56,29 @@ impl Shared {
     }
 }
 
+// The 0.100 VARIANT is a plain union with no constructors or Drop. A returned
+// VARIANT is an out parameter, so the caller (UIA) owns and frees any BSTR in it.
+fn scalar_variant(vt: VARENUM, fill: impl FnOnce(&mut VARIANT_0_0_0)) -> VARIANT {
+    let mut variant = VARIANT::default();
+    // SAFETY: a zeroed VARIANT is VT_EMPTY; this sets the tag and its matching field.
+    unsafe {
+        let inner = &mut variant.Anonymous.Anonymous;
+        inner.vt = VARTYPE(vt as u16);
+        fill(&mut inner.Anonymous);
+    }
+    variant
+}
+fn text_variant(text: &str) -> VARIANT {
+    scalar_variant(VT_BSTR, |value| {
+        value.bstrVal = std::mem::ManuallyDrop::new(BSTR::from(text));
+    })
+}
+fn bool_variant(flag: bool) -> VARIANT {
+    scalar_variant(VT_BOOL, |value| {
+        value.boolVal = if flag { VARIANT_TRUE } else { VARIANT_FALSE };
+    })
+}
+
 #[implement(IRawElementProviderSimple, IInvokeProvider)]
 struct ClockProvider {
     shared: Arc<Shared>,
@@ -74,7 +91,7 @@ impl IRawElementProviderSimple_Impl for ClockProvider_Impl {
         Ok(ProviderOptions_ServerSideProvider)
     }
 
-    fn GetPatternProvider(&self, pattern: UIA_PATTERN_ID) -> Result<IUnknown> {
+    fn GetPatternProvider(&self, pattern: PATTERNID) -> Result<IUnknown> {
         self.shared.ensure_alive()?;
         if pattern == UIA_InvokePatternId {
             let invoke: IInvokeProvider = self.to_interface();
@@ -85,18 +102,20 @@ impl IRawElementProviderSimple_Impl for ClockProvider_Impl {
         }
     }
 
-    fn GetPropertyValue(&self, property: UIA_PROPERTY_ID) -> Result<VARIANT> {
+    fn GetPropertyValue(&self, property: PROPERTYID) -> Result<VARIANT> {
         self.shared.ensure_alive()?;
         Ok(match property {
-            UIA_NamePropertyId => VARIANT::from(self.shared.name().as_str()),
-            UIA_AutomationIdPropertyId => VARIANT::from(AUTOMATION_ID),
-            UIA_HelpTextPropertyId => VARIANT::from(HELP_TEXT),
-            UIA_ControlTypePropertyId => VARIANT::from(UIA_ButtonControlTypeId.0),
+            UIA_NamePropertyId => text_variant(&self.shared.name()),
+            UIA_AutomationIdPropertyId => text_variant(AUTOMATION_ID),
+            UIA_HelpTextPropertyId => text_variant(HELP_TEXT),
+            UIA_ControlTypePropertyId => scalar_variant(VT_I4, |value| {
+                value.lVal = UIA_ButtonControlTypeId.0;
+            }),
             UIA_IsControlElementPropertyId
             | UIA_IsContentElementPropertyId
-            | UIA_IsEnabledPropertyId => VARIANT::from(true),
+            | UIA_IsEnabledPropertyId => bool_variant(true),
             UIA_IsKeyboardFocusablePropertyId | UIA_HasKeyboardFocusPropertyId => {
-                VARIANT::from(false)
+                bool_variant(false)
             }
             // Everything else (bounds, process, class, visibility) comes from the
             // window itself through the host provider.
@@ -193,14 +212,28 @@ pub fn is_root_object(lparam: LPARAM) -> bool {
 mod tests {
     use super::*;
     use crate::interaction::take_interactions;
-    use windows::core::Interface;
+    use windows_core::Interface;
 
     fn provider(window: usize) -> ClockAccessible {
         ClockAccessible::new(HWND(window as *mut _))
     }
-    fn property(provider: &IRawElementProviderSimple, id: UIA_PROPERTY_ID) -> Result<VARIANT> {
+    fn property(provider: &IRawElementProviderSimple, id: PROPERTYID) -> Result<VARIANT> {
         // SAFETY: calls an in-process COM object on its own thread.
         unsafe { provider.GetPropertyValue(id) }
+    }
+    /// The tag and the scalar payload; only scalar variants are read here.
+    fn scalar(value: &VARIANT) -> (VARENUM, i32) {
+        // SAFETY: reads the tag, then the field that tag selects.
+        unsafe {
+            let inner = &value.Anonymous.Anonymous;
+            let vt = VARENUM::from(inner.vt.0);
+            let payload = match vt {
+                VT_I4 => inner.Anonymous.lVal,
+                VT_BOOL => i32::from(inner.Anonymous.boolVal.0),
+                _ => 0,
+            };
+            (vt, payload)
+        }
     }
 
     #[test]
@@ -215,13 +248,13 @@ mod tests {
         );
         assert_eq!(accessible.shared.name(), "12:34, 14/10/2026");
         let control_type = property(&element, UIA_ControlTypePropertyId).unwrap();
-        assert_eq!(i32::try_from(&control_type), Ok(UIA_ButtonControlTypeId.0));
+        assert_eq!(scalar(&control_type), (VT_I4, UIA_ButtonControlTypeId.0));
         for id in [
             UIA_IsKeyboardFocusablePropertyId,
             UIA_HasKeyboardFocusPropertyId,
         ] {
             let value = property(&element, id).unwrap();
-            assert_eq!(bool::try_from(&value), Ok(false));
+            assert_eq!(scalar(&value), (VT_BOOL, i32::from(VARIANT_FALSE.0)));
         }
         // A new minute replaces the name; no event machinery exists to flood a reader.
         accessible.set_text(&["12:35".to_string()]);
@@ -265,7 +298,7 @@ mod tests {
         let name = property(&element, UIA_NamePropertyId);
         assert_eq!(name.err().map(|e| e.code()), Some(gone.code()));
         // SAFETY: as above.
-        assert_eq!(unsafe { invoke.Invoke() }.unwrap_err().code(), gone.code());
+        assert_eq!(unsafe { invoke.Invoke() }, gone.code());
         assert!(take_interactions().is_empty(), "no action after disconnect");
     }
 }

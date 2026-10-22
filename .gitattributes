@@ -4,3 +4,6 @@
 # These are original upstream notice copies verified byte-for-byte by SHA256.
 # Windows checkouts must not turn their LF bytes into CRLF.
 docs/dependency-notices/** text eol=lf
+
+# Output of `cargo run -p clock-bindgen`; review bindings.txt instead.
+crates/clock-windows/src/bindings/generated.rs linguist-generated=true

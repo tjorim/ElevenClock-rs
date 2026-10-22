@@ -38,6 +38,10 @@ mod experiment {
         overlay::{self, ExperimentSlot, Update},
     };
     use clock_core::PhysicalRect;
+    use clock_windows::bindings::{
+        AreDpiAwarenessContextsEqual, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        GetThreadDpiAwarenessContext,
+    };
     use serde_json::{Value, json};
     use std::{
         fs::{self, OpenOptions},
@@ -49,10 +53,6 @@ mod experiment {
             mpsc,
         },
         time::Duration,
-    };
-    use windows::Win32::UI::HiDpi::{
-        AreDpiAwarenessContextsEqual, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-        GetThreadDpiAwarenessContext,
     };
     type Error = Box<dyn std::error::Error>;
     fn rect(r: PhysicalRect) -> Value {

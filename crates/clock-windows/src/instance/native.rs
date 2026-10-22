@@ -1,22 +1,12 @@
 use super::{HOST_CLASS, InstanceNames, WM_SHOW_SETTINGS};
-use std::time::{Duration, Instant};
-use windows::{
-    Win32::{
-        Foundation::{
-            CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HLOCAL, LPARAM, LocalFree,
-            WPARAM,
-        },
-        Security::{
-            Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_QUERY, TOKEN_USER,
-            TokenUser,
-        },
-        System::Threading::{CreateMutexW, GetCurrentProcess, OpenProcessToken},
-        UI::WindowsAndMessaging::{
-            AllowSetForegroundWindow, FindWindowW, GetWindowThreadProcessId, PostMessageW,
-        },
-    },
-    core::{HSTRING, PWSTR, Result},
+use crate::bindings::{
+    AllowSetForegroundWindow, CheckHandle, CloseHandle, ConvertSidToStringSidW, CreateMutexW,
+    ERROR_ALREADY_EXISTS, FindWindowW, GetCurrentProcess, GetLastError, GetTokenInformation,
+    GetWindowThreadProcessId, HANDLE, LPARAM, LocalFree, OpenProcessToken, PostMessageW,
+    TOKEN_QUERY, TOKEN_USER, TokenUser, WPARAM,
 };
+use std::time::{Duration, Instant};
+use windows_core::{HSTRING, PWSTR, Result};
 
 /// Owns the per-user mutex for the life of the primary process. The mutex is
 /// never "owned" for synchronization; only its existence matters, and the kernel
@@ -48,12 +38,12 @@ fn current_user_sid() -> Result<String> {
     // is LocalFree'd after copying.
     unsafe {
         let mut token = HANDLE::default();
-        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)?;
+        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY as u32, &mut token).ok()?;
         let result = (|| {
             let mut needed = 0u32;
             let _ = GetTokenInformation(token, TokenUser, None, 0, &mut needed);
             if needed == 0 {
-                return Err(windows::core::Error::from_thread());
+                return Err(windows_core::Error::from_thread());
             }
             // u64 elements keep TOKEN_USER (pointer-aligned) correctly aligned.
             let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
@@ -63,14 +53,15 @@ fn current_user_sid() -> Result<String> {
                 Some(buffer.as_mut_ptr().cast()),
                 needed,
                 &mut needed,
-            )?;
+            )
+            .ok()?;
             let user = &*(buffer.as_ptr().cast::<TOKEN_USER>());
             let mut text = PWSTR::null();
-            ConvertSidToStringSidW(user.User.Sid, &mut text)?;
+            ConvertSidToStringSidW(user.User.Sid, &mut text).ok()?;
             let sid = text
                 .to_string()
-                .map_err(|_| windows::core::Error::from_thread());
-            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+                .map_err(|_| windows_core::Error::from_thread());
+            let _ = LocalFree(HANDLE(text.0.cast()));
             sid
         })();
         let _ = CloseHandle(token);
@@ -85,8 +76,8 @@ pub fn acquire() -> Result<Acquired> {
     // SAFETY: the name is NUL terminated by HSTRING; default security makes the
     // object accessible to this user only. No initial ownership is requested.
     let (mutex, existed) = unsafe {
-        let mutex = CreateMutexW(None, false, &HSTRING::from(names.mutex.as_str()))?;
-        (mutex, GetLastError() == ERROR_ALREADY_EXISTS)
+        let mutex = CreateMutexW(None, false, &HSTRING::from(names.mutex.as_str())).ok()?;
+        (mutex, GetLastError() == ERROR_ALREADY_EXISTS as u32)
     };
     if existed {
         // SAFETY: closing our duplicate reference to the existing object.
@@ -108,14 +99,13 @@ pub fn signal_existing(names: &InstanceNames, wait: Duration) -> bool {
         // SAFETY: lookups and a post to a window of another process of the same
         // user; a stale handle fails safely. Posting carries no pointers.
         unsafe {
-            if let Ok(host) = FindWindowW(&class, &title)
-                && !host.is_invalid()
-            {
+            let host = FindWindowW(&class, &title);
+            if !host.is_invalid() {
                 let mut pid = 0;
                 GetWindowThreadProcessId(host, Some(&mut pid));
                 // Let the existing process take the foreground for its window.
                 let _ = AllowSetForegroundWindow(pid);
-                return PostMessageW(Some(host), WM_SHOW_SETTINGS, WPARAM(0), LPARAM(0)).is_ok();
+                return PostMessageW(Some(host), WM_SHOW_SETTINGS, WPARAM(0), LPARAM(0)).as_bool();
             }
         }
         if started.elapsed() >= wait {

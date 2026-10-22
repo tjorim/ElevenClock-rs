@@ -8,20 +8,13 @@
 //! CI runs exactly that on its Windows runner.
 #![cfg(windows)]
 
+use clock_windows::bindings::{
+    CF_UNICODETEXT, CheckHandle, CloseClipboard, CreateWindowExW, DestroyWindow, EmptyClipboard,
+    GetClipboardData, GlobalLock, GlobalUnlock, HWND, OpenClipboard, WS_POPUP,
+};
 use clock_windows::support::{Clipboard, ClipboardFault, WindowsClipboard};
 use std::{sync::mpsc, thread, time::Duration};
-use windows::{
-    Win32::{
-        Foundation::HWND,
-        System::{
-            DataExchange::{CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard},
-            Memory::{GlobalLock, GlobalUnlock},
-            Ole::CF_UNICODETEXT,
-        },
-        UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WS_POPUP},
-    },
-    core::w,
-};
+use windows_core::w;
 
 /// A hidden window of the calling thread: the clipboard owner.
 struct Owner(HWND);
@@ -30,7 +23,7 @@ impl Owner {
         // SAFETY: a predefined class creates a plain window on this thread.
         let hwnd = unsafe {
             CreateWindowExW(
-                WINDOW_EX_STYLE(0),
+                0,
                 w!("STATIC"),
                 w!("clipboard test owner"),
                 WS_POPUP,
@@ -44,6 +37,7 @@ impl Owner {
                 None,
             )
         }
+        .ok()
         .expect("owner window");
         Self(hwnd)
     }
@@ -62,11 +56,10 @@ fn read(owner: &Owner) -> Option<String> {
     for _ in 0..50 {
         // SAFETY: balanced Open/Close; the locked block is only read while locked.
         unsafe {
-            if OpenClipboard(Some(owner.0)).is_ok() {
-                let text = GetClipboardData(u32::from(CF_UNICODETEXT.0))
-                    .ok()
-                    .and_then(|handle| {
-                        let global = windows::Win32::Foundation::HGLOBAL(handle.0);
+            if OpenClipboard(Some(owner.0)).as_bool() {
+                let text = GetClipboardData(CF_UNICODETEXT as u32)
+                    .valid()
+                    .and_then(|global| {
                         let pointer = GlobalLock(global).cast::<u16>();
                         if pointer.is_null() {
                             return None;
@@ -97,7 +90,7 @@ fn restore(owner: &Owner, previous: Option<String>) {
         None => {
             // SAFETY: balanced Open/Close.
             unsafe {
-                if OpenClipboard(Some(owner.0)).is_ok() {
+                if OpenClipboard(Some(owner.0)).as_bool() {
                     let _ = EmptyClipboard();
                     let _ = CloseClipboard();
                 }

@@ -177,20 +177,20 @@ fn process_alive(pid: u32) -> bool {
     }
     #[cfg(windows)]
     {
-        use windows::Win32::{
-            Foundation::{CloseHandle, STILL_ACTIVE},
-            System::Threading::{
-                GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-            },
+        use clock_windows::bindings::{
+            CheckHandle, CloseHandle, GetExitCodeProcess, OpenProcess,
+            PROCESS_QUERY_LIMITED_INFORMATION, STILL_ACTIVE,
         };
         // SAFETY: query-only handle, closed on every path.
         unsafe {
-            let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+            let Some(handle) =
+                OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION as u32, false, pid).valid()
+            else {
                 return false;
             };
             let mut code = 0u32;
             let alive =
-                GetExitCodeProcess(handle, &mut code).is_ok() && code == STILL_ACTIVE.0 as u32;
+                GetExitCodeProcess(handle, &mut code).as_bool() && code == STILL_ACTIVE as u32;
             let _ = CloseHandle(handle);
             alive
         }
@@ -244,11 +244,7 @@ fn usage() -> Usage {
     }
     #[cfg(windows)]
     {
-        use windows::Win32::System::{
-            Diagnostics::ToolHelp::*,
-            ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS},
-            Threading::{GetCurrentProcess, GetCurrentProcessId, GetProcessHandleCount},
-        };
+        use clock_windows::bindings::*;
         // SAFETY: documented query APIs with correctly sized, live buffers; the
         // snapshot handle is closed.
         unsafe {
@@ -259,21 +255,23 @@ fn usage() -> Usage {
                 ..Default::default()
             };
             GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb).unwrap();
-            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0).unwrap();
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD as u32, 0)
+                .ok()
+                .unwrap();
             let mut entry = THREADENTRY32 {
                 dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
                 ..Default::default()
             };
             let pid = GetCurrentProcessId();
             let mut threads = 0;
-            let mut more = Thread32First(snapshot, &mut entry).is_ok();
+            let mut more = Thread32First(snapshot, &mut entry).as_bool();
             while more {
                 if entry.th32OwnerProcessID == pid {
                     threads += 1;
                 }
-                more = Thread32Next(snapshot, &mut entry).is_ok();
+                more = Thread32Next(snapshot, &mut entry).as_bool();
             }
-            let _ = windows::Win32::Foundation::CloseHandle(snapshot);
+            let _ = clock_windows::bindings::CloseHandle(snapshot);
             Usage {
                 threads,
                 handles: handles as usize,

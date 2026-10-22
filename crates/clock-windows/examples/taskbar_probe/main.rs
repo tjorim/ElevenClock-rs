@@ -62,7 +62,7 @@ mod windows_probe {
             let _ = fs::remove_file(&self.0);
         }
     }
-    use windows::Win32::UI::HiDpi::{
+    use clock_windows::bindings::{
         DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
     };
 
@@ -78,7 +78,7 @@ mod windows_probe {
         // SAFETY: first native operation in a dedicated development executable.
         // If awareness cannot be established, do not report virtualized pixels.
         unsafe {
-            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)?;
+            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).ok()?;
         }
         let (build, revision) = probe::os_build()?;
         let records = probe::collect(ShellGeneration(generation))?;
