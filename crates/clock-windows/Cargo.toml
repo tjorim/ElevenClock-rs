@@ -19,7 +19,7 @@ windows.workspace = true
 windows-numerics = "0.2.0"
 # The `#[implement]` macro for the overlay's UI Automation provider names this crate
 # directly; it is the same 0.61 version `windows` already depends on.
-windows-core = "0.61.2"
+windows-core = "0.100.0"
 
 [dev-dependencies]
 tempfile = "3.23"
