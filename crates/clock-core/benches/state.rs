@@ -6,7 +6,7 @@ use clock_core::{
     DiscoveryStrategy, Event, MonitorId, Monitors, PhysicalRect, Preferences, ShellGeneration,
     State, TaskbarId, TaskbarKey, TaskbarSnapshot, TaskbarVisibility, reduce,
 };
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
 const DISPLAYS: u64 = 4;
@@ -63,23 +63,43 @@ fn benchmark(c: &mut Criterion) {
     let minute = ready("%H:%M");
     c.bench_function("state/tick_unchanged_text_4_displays", |b| {
         let event = Event::Tick(wall("2026-10-14T12:00:30+00:00"));
-        b.iter(|| reduce(black_box(minute.clone()), black_box(event.clone())))
+        b.iter_batched(
+            || (minute.clone(), event.clone()),
+            |(state, event)| reduce(black_box(state), black_box(event)),
+            BatchSize::SmallInput,
+        )
     });
     c.bench_function("state/tick_new_minute_4_displays", |b| {
         let event = Event::Tick(wall("2026-10-14T12:01:00+00:00"));
-        b.iter(|| reduce(black_box(minute.clone()), black_box(event.clone())))
+        b.iter_batched(
+            || (minute.clone(), event.clone()),
+            |(state, event)| reduce(black_box(state), black_box(event)),
+            BatchSize::SmallInput,
+        )
     });
     c.bench_function("state/discovery_unchanged_4_displays", |b| {
         let event = discovery();
-        b.iter(|| reduce(black_box(minute.clone()), black_box(event.clone())))
+        b.iter_batched(
+            || (minute.clone(), event.clone()),
+            |(state, event)| reduce(black_box(state), black_box(event)),
+            BatchSize::SmallInput,
+        )
     });
     c.bench_function("state/preferences_unchanged_4_displays", |b| {
         let event = Event::PreferencesApplied(preferences("%H:%M"));
-        b.iter(|| reduce(black_box(minute.clone()), black_box(event.clone())))
+        b.iter_batched(
+            || (minute.clone(), event.clone()),
+            |(state, event)| reduce(black_box(state), black_box(event)),
+            BatchSize::SmallInput,
+        )
     });
     c.bench_function("state/preferences_new_format_4_displays", |b| {
         let event = Event::PreferencesApplied(preferences("%H:%M:%S"));
-        b.iter(|| reduce(black_box(minute.clone()), black_box(event.clone())))
+        b.iter_batched(
+            || (minute.clone(), event.clone()),
+            |(state, event)| reduce(black_box(state), black_box(event)),
+            BatchSize::SmallInput,
+        )
     });
 }
 criterion_group! { name = benches; config = Criterion::default().sample_size(20).warm_up_time(std::time::Duration::from_millis(500)).measurement_time(std::time::Duration::from_secs(1)); targets = benchmark }
