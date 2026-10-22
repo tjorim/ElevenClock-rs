@@ -60,9 +60,9 @@ jobs:
         shell: pwsh
         run: ./scripts/test-rust-overlay.ps1 -ProbeTarget '${{ matrix.target }}' -Executable 'target/${{ matrix.target }}/debug/examples/overlay_evidence.exe'
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: failure()
         with:
           name: r08-lifecycle-${{ matrix.runner }}-${{ matrix.target }}
           retention-days: 14
           path: native-evidence/
-          if-no-files-found: error
+          if-no-files-found: warn

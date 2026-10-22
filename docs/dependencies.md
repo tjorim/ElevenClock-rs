@@ -33,8 +33,9 @@ original notices are unchanged.
 The [packaging workflow](releasing.md) includes the original inventory and
 toolchain notices in every package, plus matching vendored
 source.
-CI uploads test evidence (screenshots, JSON, logs) and one runnable development
-build (`elevenclock-dev-x64`) for testing; neither is a release package or installer.
+CI uploads one runnable development build (`elevenclock-dev-x64`) for testing, and
+test evidence (screenshots, JSON, logs) only when a run fails; neither is a release
+package or installer.
 
 The notice checker recognizes only explicit historical dual-license aliases:
 `MIT/Apache-2.0`, `Apache-2.0 / MIT` and `Unlicense/MIT`. They correspond to the

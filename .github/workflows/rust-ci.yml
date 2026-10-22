@@ -82,13 +82,13 @@ jobs:
           path: target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: failure()
         with:
-          # Evidence only (Settings/UI smoke captures).
+          # Settings/UI smoke captures, for diagnosing a failed run.
           name: windows-ui-evidence
           retention-days: 14
           path: native-evidence/
-          if-no-files-found: error
+          if-no-files-found: warn
   dependencies:
     runs-on: ubuntu-latest
     steps:

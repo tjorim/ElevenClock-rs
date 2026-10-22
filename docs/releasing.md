@@ -48,7 +48,7 @@ The PR/manual `rust-release.yml` workflow uploads these development artifacts:
 | `*-source.zip` | Actual repository sources, source-file SHA256 inventory, Cargo.lock, vendored Cargo sources and relocatable offline configuration |
 | `SHA256SUMS.txt` | Installer, both ZIPs and raw executable hashes |
 | Separate symbols artifact | Matching PDB, provenance and its own checksums |
-| Packaging evidence | Actual installer/lifecycle/Settings logs and environment limitations |
+| Packaging evidence (failed runs only) | Actual installer/lifecycle/Settings logs and environment limitations |
 
 Formatting, linting, unit tests and portable script regressions run in
 `rust-ci.yml`; the packaging workflow only builds and validates the candidate.
