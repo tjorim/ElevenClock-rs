@@ -133,7 +133,13 @@ fn taskbar(slot: &ExperimentSlot) -> Result<HWND> {
             after = Some(hwnd);
         }
     }
-    Err(windows_core::Error::from_thread())
+    // No native API failed here: a successful enumeration can simply find no
+    // matching shell epoch. LastError may still be zero or belong to an earlier
+    // call, so report the validation failure explicitly.
+    Err(windows_core::Error::new(
+        windows_core::HRESULT(0x80004005u32 as i32),
+        "Discovered taskbar is no longer current",
+    ))
 }
 
 /// Windows can enumerate windows from other z-order bands between taskbar
@@ -264,7 +270,18 @@ pub fn run(
                         continue;
                     }
                     for slot in slots {
-                        let bar = taskbar(&slot)?;
+                        let bar = match taskbar(&slot) {
+                            Ok(bar) => bar,
+                            Err(error) => {
+                                // Explorer can disappear after the helper took
+                                // its snapshot. The old windows are already gone;
+                                // reject only this stale slot and let the bounded
+                                // discovery loop find the replacement shell.
+                                let _ = observations
+                                    .try_send(format!("Discarded stale discovery slot: {error}"));
+                                continue;
+                            }
+                        };
                         let r = slot.clock;
                         // Born in the taskbar's band: promotion is ignored
                         // while the desktop is foreground (see band_action).
@@ -525,5 +542,42 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
             }
             _ => DefWindowProcW(hwnd, message, wp, lp),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    #[test]
+    fn stale_discovery_does_not_terminate_the_overlay_loop() {
+        let (updates, receiver) = mpsc::sync_channel(2);
+        let (clicks, _click_receiver) = mpsc::sync_channel(1);
+        let (observations, observation_receiver) = mpsc::sync_channel(8);
+        let stale = ExperimentSlot {
+            clock: PhysicalRect::new(10, 10, 70, 48).unwrap(),
+            taskbar: PhysicalRect::new(0, 0, 100, 48).unwrap(),
+            monitor: PhysicalRect::new(0, 0, 100, 100).unwrap(),
+            dpi: 96,
+            shell_pid: 0,
+            shell_started: 0,
+            primary: true,
+        };
+        // A queued result can become stale before the UI thread consumes it.
+        // The subsequent removal handshake must still be serviced, proving the
+        // loop survived rejection rather than merely returning success early.
+        updates.send(Update::Slots(vec![stale])).unwrap();
+        let (ack, acknowledged) = mpsc::sync_channel(1);
+        updates.send(Update::RemoveBeforeProbe(ack)).unwrap();
+        run(receiver, clicks, observations, Duration::from_millis(50)).unwrap();
+        acknowledged.try_recv().unwrap();
+        let messages: Vec<_> = observation_receiver.try_iter().collect();
+        assert!(
+            messages
+                .iter()
+                .any(|message| message.contains("Discarded stale discovery slot")
+                    && message.contains("Discovered taskbar is no longer current"))
+        );
     }
 }
