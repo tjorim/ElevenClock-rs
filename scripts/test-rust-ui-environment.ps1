@@ -234,7 +234,7 @@ $explorer = $null
 $opened = $null
 try {
     $before = @(Get-Process -Name elevenclock-rs -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-    $folder = (Resolve-Path 'rust/target/x86_64-pc-windows-msvc/release').Path
+    $folder = (Resolve-Path 'target/x86_64-pc-windows-msvc/release').Path
     Start-Process explorer.exe -ArgumentList ('"' + $folder + '"')
     $cabinet = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ClassNameProperty, 'CabinetWClass')
     $deadline = [DateTime]::UtcNow.AddSeconds(15)

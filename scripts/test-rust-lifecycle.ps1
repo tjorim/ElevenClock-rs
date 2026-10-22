@@ -9,7 +9,7 @@
 # With it, each Explorer restart also records how long the overlays took to come
 # back (#51). -RecoveryBoundSeconds turns that into a check, for a reviewed bound.
 param(
-    [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/debug/elevenclock-rs.exe',
+    [string]$Executable = 'target/x86_64-pc-windows-msvc/debug/elevenclock-rs.exe',
     [string]$OutputDirectory = 'native-evidence/lifecycle',
     [int]$ExplorerRestarts = 3,
     [int]$IdleSeconds = 20,

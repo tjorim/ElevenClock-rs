@@ -41,19 +41,19 @@ Windows development requires the MSVC toolchain and
 Windows SDK resource compiler; users do not need these developer tools.
 
 ```sh
-cargo fmt --manifest-path rust/Cargo.toml --all --check
-cargo test --manifest-path rust/Cargo.toml -p clock-core --locked
-cargo clippy --manifest-path rust/Cargo.toml -p clock-core --all-targets --locked -- -D warnings
+cargo fmt --all --check
+cargo test -p clock-core --locked
+cargo clippy -p clock-core --all-targets --locked -- -D warnings
 ```
 
 On Windows, additionally run:
 
 ```sh
-cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
-cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
-cargo test --manifest-path rust/Cargo.toml --workspace --locked
-cargo test --manifest-path rust/Cargo.toml --workspace --doc --locked
-cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_64-pc-windows-msvc --locked
+cargo check --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo test --workspace --doc --locked
+cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked
 ```
 
 Double-click the resulting `elevenclock-rs.exe` for the native
@@ -121,8 +121,8 @@ never enter an installer or support flow. R14 owns packaging and final notices.
 Portable discovery validation and the process-supervisor tests also run on Linux:
 
 ```sh
-cargo test --manifest-path rust/Cargo.toml -p clock-windows --all-targets --locked
-cargo clippy --manifest-path rust/Cargo.toml -p clock-windows --all-targets --locked -- -D warnings
+cargo test -p clock-windows --all-targets --locked
+cargo clippy -p clock-windows --all-targets --locked -- -D warnings
 ```
 
 The Windows-only FFI remains gated; only portable geometry/queue code is exposed
@@ -161,7 +161,7 @@ to hosted CI when feasible; do not defer the entire issue or block unrelated wor
 `overlay_evidence` is a development-only example in `clock-app`, never an installed
 app artifact. Its experimental overlay/interaction FFI is private to the example;
 a normal `-p clock-app` release build does not compile it. Build it with
-`cargo build --manifest-path rust/Cargo.toml -p clock-app --example overlay_evidence`.
+`cargo build -p clock-app --example overlay_evidence`.
 See the [coverage migration](windows-evidence/overlay-retirement.md). Core models
 and the R02 production-selector gate remain unchanged. Historical hosted results
 and the P1 no-go are in [overlay evidence](windows-evidence/overlay-spike.md). The hosted workflow uses
@@ -191,7 +191,7 @@ discovery helper is the same executable started with a private marker
 ([ADR 0002](adr/0002-same-executable-discovery-helper.md)); it is not a user command.
 
 ```sh
-cargo test --manifest-path rust/Cargo.toml -p clock-windows --locked
+cargo test -p clock-windows --locked
 ```
 
 There is no feature flag or support gate for overlays: the experimental candidate is
@@ -213,7 +213,7 @@ The real-clipboard tests overwrite the clipboard text while they run (and restor
 they are ignored by default; CI runs them on its Windows runner:
 
 ```sh
-cargo test --manifest-path rust/Cargo.toml -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1
+cargo test -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1
 ```
 
 See the [R11 record](design/diagnostics.md) for behaviour, limits and the unchecked

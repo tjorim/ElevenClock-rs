@@ -26,13 +26,13 @@ try {
     # A target-qualified build leaves host proc macros dynamically linked.
     if ($env:CARGO_ENCODED_RUSTFLAGS) { throw 'CARGO_ENCODED_RUSTFLAGS must be unset' }
     $env:RUSTFLAGS = '-C target-feature=+crt-static'
-    & cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_64-pc-windows-msvc --target-dir rust/target/packaging --locked
+    & cargo build -p clock-app --release --target x86_64-pc-windows-msvc --target-dir target/packaging --locked
     if ($LASTEXITCODE -ne 0) { throw 'Locked release build failed' }
-    $exe = 'rust/target/packaging/x86_64-pc-windows-msvc/release/elevenclock-rs.exe'
+    $exe = 'target/packaging/x86_64-pc-windows-msvc/release/elevenclock-rs.exe'
     if ((Get-AuthenticodeSignature -LiteralPath $exe).Status -ne 'NotSigned') { throw 'Candidate signing status differs from the unsigned package notice' }
     $sdk = Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin/*/x64/mt.exe' | Sort-Object FullName -Descending | Select-Object -First 1
     if (!$sdk) { throw 'Windows SDK manifest tool unavailable' }
-    $manifest = Join-Path $root 'rust/target/packaging/verified-app.manifest'
+    $manifest = Join-Path $root 'target/packaging/verified-app.manifest'
     & $sdk.FullName "-inputresource:$exe;#1" "-out:$manifest"
     if ($LASTEXITCODE -ne 0) { throw 'Missing embedded manifest' }
     [xml]$xml = Get-Content -LiteralPath $manifest -Raw

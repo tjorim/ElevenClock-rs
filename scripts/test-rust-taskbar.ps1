@@ -1,6 +1,6 @@
 # Development-only harness for ephemeral Windows desktops; never installed.
 param(
-    [string]$Executable = 'rust/target/x86_64-pc-windows-msvc/debug/examples/taskbar_probe.exe',
+    [string]$Executable = 'target/x86_64-pc-windows-msvc/debug/examples/taskbar_probe.exe',
     [string]$OutputDirectory = 'native-evidence/r02',
     [string]$ProbeTarget = 'x86_64-pc-windows-msvc',
     [switch]$RestartExplorer,

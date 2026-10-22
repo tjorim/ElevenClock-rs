@@ -9,7 +9,7 @@ version = "0.1.0"
 publish = false
 # Original Rust implementation (Apache-2.0). The inherited GPLv3 Python app was removed at cutover.
 license = "Apache-2.0"
-license-file = "../LICENSE"
+license-file = "LICENSE"
 
 [profile.release]
 # Retain matching PDBs as separate development artifacts, never in the installer.

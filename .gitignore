@@ -1,5 +1,5 @@
 # Rust build output
-rust/target/
+/target/
 dist/
 native-evidence/
 

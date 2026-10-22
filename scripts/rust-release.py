@@ -128,11 +128,11 @@ def prepare(out, mode):
     symbols.mkdir()
     source = out / "source"
     source.mkdir()
-    version = tomllib.loads((ROOT / "rust/Cargo.toml").read_text())["workspace"]["package"]["version"]
+    version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
     name = f"ElevenClock-rs-{version}-{run('git', 'rev-parse', '--short=12', 'HEAD')}-x64"
     if mode == "Development":
         name += "-dev"
-    binary_dir = ROOT / "rust/target/packaging" / TARGET / "release"
+    binary_dir = ROOT / "target/packaging" / TARGET / "release"
     binary = binary_dir / "elevenclock-rs.exe"
     imports = inspect_pe(binary.read_bytes())
     shutil.copy2(binary, payload / binary.name)
@@ -145,7 +145,7 @@ def prepare(out, mode):
     spec = importlib.util.spec_from_file_location("license_check", ROOT / "scripts/rust-license-check.py")
     checker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(checker)
-    metadata = json.loads(run("cargo", "metadata", "--manifest-path", "rust/Cargo.toml", "--locked", "--offline", "--format-version", "1"))
+    metadata = json.loads(run("cargo", "metadata", "--locked", "--offline", "--format-version", "1"))
     notices = io.StringIO()
     if checker.inventory(metadata, out=notices):
         raise ValueError("Dependency license inventory failed")
@@ -170,7 +170,7 @@ def prepare(out, mode):
         source_hashes[relative] = digest(file)
     # Matching-source companion: include locked dependency sources and
     # Cargo's exact offline replacement config, rather than only a GitHub URL.
-    config = run("cargo", "vendor", "--manifest-path", "rust/Cargo.toml", "--locked", "--offline", "--versioned-dirs", str(source / "vendor"))
+    config = run("cargo", "vendor", "--locked", "--offline", "--versioned-dirs", str(source / "vendor"))
     # Cargo emits an absolute path; make the source archive relocatable.
     config = config.replace(str(source / "vendor").replace("\\", "\\\\"), "vendor")
     config = config.replace((source / "vendor").as_posix(), "vendor")
@@ -187,7 +187,7 @@ def prepare(out, mode):
         "modified": dirty, "mode": mode, "target": TARGET,
         "rustc": run("rustc", "-Vv"), "cargo": run("cargo", "-V"),
         "rustflags": "-C target-feature=+crt-static", "signing": "unsigned",
-        "exe_sha256": digest(binary), "lock_sha256": digest(ROOT / "rust/Cargo.lock"),
+        "exe_sha256": digest(binary), "lock_sha256": digest(ROOT / "Cargo.lock"),
         "source_manifest_sha256": digest(source / "source-files.json"), "gates": gates,
         "source_archive": name + "-source.zip",
     }

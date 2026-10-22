@@ -9,7 +9,7 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=resources/settings.rc");
     println!("cargo:rerun-if-changed=resources/app.manifest");
-    println!("cargo:rerun-if-changed=../../../assets/icon.ico");
+    println!("cargo:rerun-if-changed=../../assets/icon.ico");
     // Development examples need the same DPI/security manifest; these resources
     // are linked into examples separately and never add examples to app payloads.
     #[cfg(windows)]

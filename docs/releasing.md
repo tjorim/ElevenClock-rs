@@ -19,13 +19,13 @@ On native Windows with MSVC/SDK, stable Rust, Python 3.11+ (development only) an
 [Inno Setup 6.7.3](https://jrsoftware.org/isdl.php), run from the repository root:
 
 ```powershell
-cargo fetch --manifest-path rust/Cargo.toml --locked
+cargo fetch --locked
 ./scripts/package-rust-release.ps1
 ```
 
 The output directory must be new; choose another with `-OutputDirectory dist/name`.
 Use `-Python <path>` or `-Iscc <path>` if needed. The driver builds `clock-app` with
-`--locked`, `x86_64-pc-windows-msvc`, a separate `rust/target/packaging` directory,
+`--locked`, `x86_64-pc-windows-msvc`, a separate `target/packaging` directory,
 and [`-C target-feature=+crt-static`](https://doc.rust-lang.org/reference/linkage.html#static-and-dynamic-c-runtimes).
 No global flags or developer build defaults change. The release profile retains PDBs.
 
@@ -54,7 +54,7 @@ To rebuild offline, extract the source ZIP, **change to its root**, and run:
 
 ```powershell
 $env:RUSTFLAGS = '-C target-feature=+crt-static'
-cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_64-pc-windows-msvc --locked --offline
+cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked --offline
 ```
 
 MSVC/SDK and the recorded Rust toolchain remain build prerequisites. This supplies

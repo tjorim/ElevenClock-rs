@@ -30,6 +30,10 @@ Each design file still ends with the verification that was done when it was writ
 the checks that were left open. Treat those sections as history; the current state of a
 release gate is in `windows-evidence/`.
 
+The Cargo workspace lived under `rust/` until the cutover moved it to the repository root.
+Commands and paths recorded before then (`--manifest-path rust/Cargo.toml`, `rust/target/…`)
+are kept as they were run; today drop the `--manifest-path` and the `rust/` prefix.
+
 ## `windows-evidence/`
 
 | Topic | File | Raw artifacts |

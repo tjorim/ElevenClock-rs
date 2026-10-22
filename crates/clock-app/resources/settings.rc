@@ -4,7 +4,7 @@
 
 // Control ids are shared with crates/clock-windows/src/settings.rs.
 1 RT_MANIFEST "resources/app.manifest"
-102 ICON "../../../assets/icon.ico"
+102 ICON "../../assets/icon.ico"
 
 // The Settings window. Dialog units follow the dialog font, so everything scales
 // with the display (the manifest declares per-monitor DPI v2). The tab strip is only
