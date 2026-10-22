@@ -20,7 +20,7 @@ material, and no upstream permission is claimed.
 - Dependency licenses and original notices are unchanged and inventoried separately
   ([dependency policy](dependencies.md)).
 - Apache 2.0 for this code grants no rights to the ElevenClock name; see the
-  [product name review](product-name.md).
+  [product name](product-name.md).
 
 ## Supporting review
 

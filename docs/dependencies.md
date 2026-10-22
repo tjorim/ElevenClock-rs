@@ -29,12 +29,13 @@ The root LICENSE and workspace metadata declare Apache 2.0 for the original Rust
 implementation. [Licensing](licensing.md) explains that scope. The GPLv3 Python code and inherited artwork were removed at
 cutover and remain in Git history ([migration guide](migration.md#legacy-reference));
 the active icon is [original Apache-licensed artwork](../assets/README.md). Dependency licenses and
-original notices are unchanged. The [product-name review](product-name.md) is still incomplete.
+original notices are unchanged.
 The [packaging workflow](releasing.md) includes the original inventory and
-toolchain notices in unsigned development candidates, plus matching vendored
+toolchain notices in every package, plus matching vendored
 source.
-CI uploads test evidence (screenshots, JSON, logs) and one runnable development
-build (`elevenclock-dev-x64`) for testing; neither is a release package or installer.
+CI uploads one runnable development build (`elevenclock-dev-x64`) for testing, and
+test evidence (screenshots, JSON, logs) only when a run fails; neither is a release
+package or installer.
 
 The notice checker recognizes only explicit historical dual-license aliases:
 `MIT/Apache-2.0`, `Apache-2.0 / MIT` and `Unlicense/MIT`. They correspond to the

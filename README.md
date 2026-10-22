@@ -2,22 +2,27 @@
 
 ![ElevenClock-rs icon](assets/icon.png)
 
-A customizable clock for the Windows 11 taskbar. It shows your own date and time
+A customizable clock for the Windows 11 taskbar ([website](https://tjorim.github.io/ElevenClock-rs/)). It shows your own date and time
 format, such as the ISO week date `2642.2` (2026, week 42, Tuesday), in place of the
 taskbar clock on one or every display. The Windows clock is never changed or
 disabled; it sits underneath, so exiting always brings it straight back.
 
-> **Release status: no supported release yet.** Installers built from this
-> repository are unsigned development candidates until the
-> [pre-release checklist](docs/releasing.md) is done. See
-> [tested configurations](docs/tested-configurations.md) for what has been tested.
+- **Light.** About 3 MiB of memory and around 0.01% CPU while running
+  ([measured](docs/tested-configurations.md#resource-use)). There is no busy
+  loop: the clock updates only when its text changes, plus a cheap taskbar check
+  every 2 seconds.
+- **Self-contained.** One native executable: no Python, Qt or Visual C++ runtime to
+  install.
+- **Stays out of the way.** Installs for your account without administrator rights,
+  starts at sign-in only if you turn that on, and never connects to the internet.
 
 ## Install
 
 You need stock Windows 11 on an x64 PC. No administrator rights are needed.
 
-1. Download `ElevenClock-rs-…-setup.exe`. Windows may warn that the download is
-   unsigned.
+1. Download `ElevenClock-rs-…-x64-setup.exe` from the
+   [latest release](https://github.com/tjorim/ElevenClock-rs/releases/latest).
+   Windows may warn that the download is not code-signed.
 2. Run it. It installs for your account only.
 3. Open **ElevenClock-rs** from the Start menu.
 
@@ -25,7 +30,7 @@ If you used the original ElevenClock, quit it and switch it off in
 **Windows Settings > Apps > Startup** first. The [migration guide](docs/migration.md)
 explains this and what changed.
 
-A portable ZIP is also built: extract it to a folder you can write to and
+The release also has a portable ZIP: extract it to a folder you can write to and
 double-click `elevenclock-rs.exe`.
 
 ## Use
@@ -91,6 +96,30 @@ for Windows 11, begun as a fork of it; the `-rs` suffix is the usual marker for 
 port. It is an independent project maintained by tjorim; affiliation with or
 endorsement by the original ElevenClock project is not claimed.
 
+Thanks to Martí Climent and the ElevenClock contributors for the original app, which
+inspired this one.
+
+## AI assistance
+
+ElevenClock-rs is developed with help from AI coding agents. They write and revise
+much of the code, tests and documentation under the maintainer's direction; the
+maintainer reviews and merges every change. The same CI checks and Windows testing
+apply whoever wrote the change.
+
+## Code signing policy
+
+Releases are currently unsigned. Once approved, Windows releases will use free code
+signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/). Every signed build comes from this
+repository's GitHub Actions workflow, and each release is approved by hand.
+
+- Committers and reviewers: [tjorim](https://github.com/tjorim)
+- Approvers: [tjorim](https://github.com/tjorim)
+
+**Privacy policy:** This program will not transfer any information to other networked
+systems unless specifically requested by the user or the person installing or
+operating it.
+
 ## License
 
 The Rust implementation, its tooling and the [application artwork](assets/README.md)
@@ -100,5 +129,5 @@ contributors. Third-party dependencies keep their own licenses; see
 
 The original Python ElevenClock is GPLv3. It is no longer in this tree and is not
 part of ElevenClock-rs releases; the [migration guide](docs/migration.md#legacy-reference)
-links the commits that contain it. [Licensing](docs/licensing.md) documents the Apache 2.0 decision, and the
-[product name review](docs/product-name.md) records the remaining name checks.
+links the commits that contain it. [Licensing](docs/licensing.md) documents the Apache 2.0 decision, and
+[product name](docs/product-name.md) records the name and distribution channels.

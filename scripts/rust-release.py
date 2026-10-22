@@ -104,8 +104,7 @@ def prepare(out, mode):
     if mode == "Distribution":
         if dirty:
             raise ValueError("Distribution requires a clean source checkout")
-        # The candidate readme deliberately says development/blocked. A release
-        # decision must update this wording, not merely flip a boolean.
+        # Development checkouts may carry blocked wording; a release must not.
         if "Distribution is blocked" in (ROOT / "packaging/PACKAGE-README.txt").read_text():
             raise ValueError("Distribution requires reviewed release notice wording")
     out.mkdir(parents=True)
@@ -116,9 +115,10 @@ def prepare(out, mode):
     source = out / "source"
     source.mkdir()
     version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
-    name = f"ElevenClock-rs-{version}-{run('git', 'rev-parse', '--short=12', 'HEAD')}-x64"
-    if mode == "Development":
-        name += "-dev"
+    if mode == "Distribution":
+        name = f"ElevenClock-rs-{version}-x64"
+    else:
+        name = f"ElevenClock-rs-{version}-{run('git', 'rev-parse', '--short=12', 'HEAD')}-x64-dev"
     binary_dir = ROOT / "target/packaging" / TARGET / "release"
     binary = binary_dir / "elevenclock-rs.exe"
     imports = inspect_pe(binary.read_bytes())

@@ -1,12 +1,10 @@
 # Product name and listings
 
-Reviewed 2026-10-16 for keeping **ElevenClock-rs**, as requested by the owner.
-Distribution scope confirmed by the owner: **GitHub releases first; winget later**.
-Microsoft Store publication/reservation is outside the current release plan.
-Status: **technical identities and listing draft prepared; name review incomplete.**
-This is the open item before a public release (see [releasing](releasing.md)).
-No name reservation, trademark registration, winget submission or Store submission
-was made. Public availability checks do not reserve a name or establish rights.
+The owner keeps the name **ElevenClock-rs**: a community open-source Rust rewrite of
+ElevenClock, credited to the original and not presented as an official successor.
+No trademark clearance is sought. Distribution is **GitHub releases first; winget
+later**; the Microsoft Store is outside the current plan. No name reservation, winget
+submission or Store submission has been made.
 
 ## Existing use and package separation
 
@@ -37,35 +35,6 @@ uses `Publisher.Package` identifiers; the proposed ID follows that form and is
 distinct from upstream's. An AppUserModelID is not a winget registration or a
 Microsoft Store identity, even when the strings match.
 
-## Trademark search performed and its limits
-
-Read-only searches were performed in the official USPTO search UI and EUIPN's
-TMview UI. No class or territory restriction was added; default search behavior
-and status selections were retained.
-
-| Source and query | Observed result | Interpretation |
-| --- | --- | --- |
-| [USPTO](https://tmsearch.uspto.gov/), Wordmark `ElevenClock` | No results found; live/dead counts zero | No result for that basic query, not a finding that the name is free to use |
-| USPTO, Wordmark `"Eleven Clock"` | 2,103 results; first visible result was cancelled `ELEVEN O' CLOCK`, serial 76345392, tea | The basic search broadens/tokenizes the query; these results were not exhaustively reviewed |
-| USPTO, Wordmark `ElevenClock-rs` | 985 results | Broad/tokenized result set, not 985 exact-name conflicts; not exhaustively reviewed |
-| [TMview Contains `ElevenClock`](https://www.tmdn.org/tmview/#/tmview/results?page=1&pageSize=30&criteria=C&basicSearch=ElevenClock) | No rows found | No result for this query in the aggregator; not registry clearance |
-| [TMview Contains `Eleven Clock`](https://www.tmdn.org/tmview/#/tmview/results?page=1&pageSize=30&criteria=C&basicSearch=Eleven%20Clock) | Multiple similar/broad matches; first page inspected | Includes registered `ELEVEN O'CLOCK` for class 30, EU application 002288454, and other marks; no full similarity assessment completed |
-| [Direct BOIP register](https://www.boip.int/en/trademarks-register) | reCAPTCHA blocked access before searching | No direct Benelux result obtained; no challenge was solved or bypassed |
-
-TMview itself states that it is not an official register and its information has
-no legal effect. Indexed web searches for ElevenClock on USPTO/BOIP/EUIPO/WIPO
-domains did not supply an authoritative software-name registration result; that
-absence is not a substitute for register searches. No WIPO-specific search or
-exhaustive national-register/similar-spelling search was completed.
-
-The concrete existing same-category use is upstream's Windows taskbar-clock
-product. Keeping its full name with `-rs` can still suggest affiliation or an
-official successor; the suffix alone does not settle that question. This is a
-review inference, not a finding of infringement. USPTO explains that
-[similarity and related goods/services matter](https://www.uspto.gov/trademarks/search/likelihood-confusion).
-The Apache license for our implementation does not grant rights to someone
-else's product name.
-
 ## Listing copy and intended identity
 
 Use the following as a reviewable draft, subject to actual release validation:
@@ -90,34 +59,12 @@ Do not claim monitor/OS compatibility beyond [tested configurations](tested-conf
 Use the original icon and current-app screenshots only, not upstream imagery. Do not use upstream's Store badges,
 package IDs, publisher identity or `elevenclock` moniker for this app.
 
-## Remaining work before a public release
+## Later channels
 
-- [ ] Complete and record a focused similar-name/software-goods review for the
-  intended distribution territories, including the direct Benelux search that
-  could not be performed here. Record the disposition of relevant hits, not just
-  search counts. The current searches do not establish clearance.
-- [ ] Record the owner's decision on keeping this name in light of upstream's
-  same-category use. Written upstream agreement on the name is one practical way
-  to address the relationship; no such agreement exists yet.
-  If relying on another basis, record that basis and any qualified advice obtained.
-Deferred channel work (not a prerequisite for a GitHub-only release):
-
-- [ ] If Microsoft Store distribution is later chosen, check **ElevenClock-rs** in the
-  owner's Partner Center account and record the result. A public Store search
-  cannot reveal other developers' unpublished reservations. Reservation/submission
-  is a separate owner-authorized action, not performed in this review.
-- [ ] Before winget submission, recheck the proposed ID and moniker, use the
-  actual released installer URL/SHA256/version, verify silent per-user install and
-  uninstall detection, and validate the manifest against that artifact. No fake
-  installer URL/hash or submission-ready manifest is created before a release.
-
-Microsoft's [MSI/EXE name-reservation instructions](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msi/reserve-your-apps-name)
-require a unique name and a Partner Center availability check; a name can be
-reserved even when no public listing exists. They recommend distinctive names
-and avoiding trailing differentiators. This is a reason to check acceptance of
-`ElevenClock-rs`, not a claim that the hyphenated name is automatically prohibited.
-The current MSI/EXE route does not require inventing a Store product ID or MSIX
-identity here; retain the native installer identity until a channel decision.
-
-This record covers the repository identity inventory and a preliminary
-listing/search pass; it does not claim complete legal or Store review.
+- **winget:** recheck the proposed ID and moniker, use the actual released installer
+  URL/SHA256/version, verify silent per-user install and uninstall detection, and
+  validate the manifest against that artifact.
+- **Microsoft Store**, if chosen: check **ElevenClock-rs** in the owner's Partner
+  Center account first. Microsoft's [name-reservation instructions](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msi/reserve-your-apps-name)
+  require a unique name and recommend avoiding trailing differentiators, so the
+  hyphenated name may need checking. Keep the native installer identity until then.

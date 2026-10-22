@@ -1,8 +1,8 @@
-ElevenClock-rs - unsigned development candidate
+ElevenClock-rs
 
-This build is for development validation. Distribution is blocked until the
-licensing and Windows acceptance gates in the matching source are resolved.
-It is not a supported release. Windows may warn about this unsigned download.
+A customizable clock for the Windows 11 taskbar (stock Windows 11 x64).
+The executable and installer are not code-signed, so Windows may warn about
+the download.
 
 Installer: installs for the current user, without elevation, to
 %LOCALAPPDATA%\Programs\ElevenClock-rs. Open ElevenClock-rs from Start.
@@ -21,16 +21,13 @@ installation and configuration are never removed. A portable copy's startup
 registration is preserved when it points outside this installation.
 
 No Python or Qt runtime is included. The MSVC CRT is statically linked; Windows
-system DLL imports are listed in runtime-dependencies.json. A clean Windows 11
-standard-account run without developer runtimes is still required before release.
-No elevated prerequisite installer is run.
+system DLL imports are listed in runtime-dependencies.json. No elevated
+prerequisite installer is run.
 
-LICENSE.txt contains Apache License 2.0 for the independently authored Rust
-implementation and original application artwork. The inherited GPLv3 Python
-app (credits: Marti Climent and Xavier Delugo) is not part of this package or
-its source companion; it remains in the project's Git history.
-The owner decision and remaining product-name review are recorded in
-docs/licensing.md and docs/product-name.md in the matching source.
+LICENSE.txt contains Apache License 2.0 for the Rust implementation and the
+application artwork. ElevenClock-rs is inspired by the original ElevenClock by
+Marti Climent; its GPLv3 Python app is not part of this package or its source
+companion and remains in the project's Git history.
 THIRD-PARTY-NOTICES.txt and RUST-COPYRIGHT.html retain dependency/toolchain notices.
 Matching source, vendored Cargo dependencies, provenance and SHA256 checksums
-accompany this candidate as separate artifacts. Keep them together.
+are published alongside this release.
