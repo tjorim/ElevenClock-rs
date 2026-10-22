@@ -48,8 +48,8 @@ Removed, with no replacement planned:
 ## Supported Windows
 
 Stock Windows 11 on x64, with the taskbar at the bottom of the screen. The exact
-builds that were tested are listed in the
-[acceptance record](windows-evidence/acceptance.md).
+builds that were tested are listed in
+[tested configurations](tested-configurations.md).
 
 Not supported: Windows 10, ARM64 devices (no ARM64 package is built), Windows Insider
 builds, taskbar replacements such as ExplorerPatcher or StartAllBack, and taskbars on
@@ -71,14 +71,16 @@ is, it draws nothing there and the Windows clock stays visible.
 ## Legacy reference
 
 The Python/Qt app, its build scripts and workflows, its translations and artwork, and
-the rewrite planning documents were removed from the tree at cutover (R15). Nothing
-was deleted from Git history.
+the rewrite planning documents were removed from the tree at cutover; the development
+evidence (Windows run records, screenshots, measurements) followed later. Nothing was
+deleted from Git history.
 
 | What | Commit |
 | --- | --- |
 | Upstream ElevenClock the rewrite started from | [`f967218e95b6`](https://github.com/marticliment/ElevenClock/tree/f967218e95b6f3c15e26f840e6090a6720528e39) |
 | Last `main` with the Python app at the repository root | [`b4da4b549f3c`](https://github.com/tjorim/ElevenClock-rs/tree/b4da4b549f3cf3b246eb81efdbb49a4e827fcf41) |
 | Last commit with the Python app under `legacy/` and the rewrite plan under `docs/rewrite/` | [`0ac31152e265`](https://github.com/tjorim/ElevenClock-rs/tree/0ac31152e265bb5d6e02fcac18404362453670d2) |
+| Last commit with the development evidence under `docs/windows-evidence/` | [`1a08a7a776b0`](https://github.com/tjorim/ElevenClock-rs/tree/1a08a7a776b0e8474beb604affc243da40d501e2/docs/windows-evidence) |
 
 That code keeps its GPLv3 license and original notices (`legacy/LICENSE` at
 `0ac31152e265`). It is not part of ElevenClock-rs releases.

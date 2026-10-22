@@ -1,10 +1,4 @@
-# R12 opt-in per-user login startup
-
-Status: **implemented and exercised against the real app on a real Windows 11
-desktop at 100% scale** (Windows 11 Home 10.0.26200, release build of this branch, no
-hosted CI run yet). A real sign-out/sign-in, a standard (non-administrator) account,
-DPI above 100%, high contrast and Narrator speech were **not** exercised; they stay
-unchecked at the end.
+# Opt-in login startup
 
 ## App identity and the owned registry value
 
@@ -19,7 +13,7 @@ The legacy ElevenClock writes `elevenClock` to the same key. Registry value name
 case-insensitive, so the Rust app's name differs by more than case
 (`startup::tests::value_name_never_collides_with_the_legacy_app`). Nothing else is ever
 written, deleted or read for writing: no HKLM, no service, no scheduled task, no UAC.
-`--startup` is the private marker R08 already owns (`instance::STARTUP_MARKER`): it
+`--startup` is the runtime's private launch marker (`instance::STARTUP_MARKER`): it
 starts the clock quietly, never opens Settings, and does nothing when an instance is
 already running (the existing per-user mutex).
 
@@ -67,7 +61,7 @@ box when it is clear) writes. Startup is never enabled on the user's behalf.
 - Failures keep the OS and the UI in step: the controller never assumes success; the
   window reads the state back and shows that.
 
-## Installer cooperation and uninstall contract (R14)
+## Installer cooperation and uninstall contract
 
 - The installer registers nothing itself: startup stays an in-app, opt-in choice.
 - **Uninstall removes only the Rust-owned registration:** delete the `ElevenClockRust`
@@ -80,62 +74,6 @@ box when it is clear) writes. Startup is never enabled on the user's behalf.
   uninstaller should delete the value only when it names the installed executable.
 - The installed and portable copies share the value name on purpose: only one app
   identity can start at sign-in, and the page shows which copy owns it.
-
-## What was run
-
-On the machine above, from the repository root (every command exited 0):
-
-```text
-cargo fmt --manifest-path rust/Cargo.toml --all --check
-cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
-cargo test --manifest-path rust/Cargo.toml --workspace --locked
-cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_64-pc-windows-msvc --locked
-./scripts/test-rust-settings.ps1
-```
-
-- **Unit tests** (`startup::tests`, 18): quoting, spaces, Unicode, UNC, unquotable and
-  over-long paths, shell-style splitting, every state, case-insensitive paths, failed
-  write / failed removal / unreadable key, repair only on request.
-- **Real-registry tests** (`startup::native::tests`, 7, against a throwaway
-  `HKCU\Software\ElevenClock-rs-tests\...` tree that each test deletes): enable and
-  disable touch only `ElevenClockRust` (a legacy-named `elevenClock` value and an
-  unrelated value beside it are unchanged), a Unicode path with spaces round-trips
-  through the registry, an off flag written the way Task Manager writes it (`03`) is
-  seen and cleared, an enabled flag (`02`) is not "off", a value of the wrong type is
-  reported as unrecognised, a moved copy is stale until repaired, a real existing file is
-  "another copy".
-- **Native Settings harness** (`scripts/test-rust-settings.ps1`, new step 8a, drives the
-  real window with the Windows input queue and reads the real `HKCU` value; it saves and
-  restores the user's own value and flag):
-  - startup defaults off, the checkbox is clear, Repair is disabled;
-  - Tab reaches the checkbox, then the status; Shift+Tab returns;
-  - Space on the checkbox registers exactly `"<exe>" --startup` and a neighbouring Run
-    value is unchanged; Space again removes only `ElevenClockRust`;
-  - a logon-style launch (`elevenclock-rs.exe --startup`, as Windows would run it) while
-    the app is running exits 0, leaves one process and opens no second Settings window;
-  - a stale `"C:\Gone Away\Eleven Clock\elevenclock-rs.exe" --startup` is reported with
-    that path, **not** repaired by showing the page, repaired by the Repair button, which
-    then disables itself with the keyboard focus kept on the page;
-  - a `StartupApproved` flag of `03` shows as off with the Windows wording; ticking the
-    box turns it on and deletes the flag; the run ends with startup off and the user's
-    original registration restored.
-
-## Still unchecked (need a person or another account)
-
-- [ ] **Manual logon test:** with startup enabled, sign out and in; exactly one
-      ElevenClock-rs process starts, the clock appears and Settings does not open. The
-      same launch was exercised above by running the registered command while the app
-      was running, which proves the single-instance path but not Windows' logon.
-- [ ] A **standard, non-administrator account** enables and disables startup with no UAC
-      prompt. The code only opens `HKCU` for `KEY_SET_VALUE` and uses no elevation, and
-      the run above was an ordinary user session, but it was this machine's own account.
-- [ ] A failed registry write against real Windows (for example a Group Policy that
-      locks the Run key). The failure path is covered with a fake key; making the real
-      key unwritable would risk the user's own registry.
-- [ ] Look at the page at 125%, 150%, 200% and in high contrast; Narrator reads the
-      result line and the states.
-- [ ] Cleanup after the manual logon test: turn startup off in Settings (or delete
-      `ElevenClockRust` under the Run key).
 
 ## Known limits
 

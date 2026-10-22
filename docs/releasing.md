@@ -1,15 +1,17 @@
-# Native x64 packaging (R14)
+# Packaging and releasing
 
-The installer and ZIP are **unsigned development candidates**. Distribution is
-blocked by [#32's remaining product-name review](https://github.com/tjorim/ElevenClock-rs/issues/32),
-the open [R13 acceptance gates](windows-evidence/acceptance.md), and clean Windows
-standard-account installation/runtime validation. A closed tracker is not evidence
-that its acceptance matrix passed. Actual results are in the
-[packaging evidence record](windows-evidence/packaging.md).
+The installer and ZIP are **unsigned development candidates**. What has been tested is in
+[tested configurations](tested-configurations.md).
 
-The release decision is recorded in the [acceptance record](windows-evidence/acceptance.md),
-not in a configuration file. Releasing means rewording `packaging/PACKAGE-README.txt`
-(see below) in a reviewed change that links that decision.
+## Before a public release
+
+- [ ] Finish the [product name review](product-name.md).
+- [ ] Install and run on a clean Windows 11 x64 standard account without developer
+      runtimes (VC redistributables, Python, Qt), including a real sign-out/sign-in with
+      startup enabled.
+- [ ] Decide on signing and the release identity.
+- [ ] Reword `packaging/PACKAGE-README.txt` so it no longer says "Distribution is
+      blocked" (see below), in a reviewed change.
 
 ## Build and artifacts
 
@@ -72,9 +74,7 @@ New AppId: `{97911B67-52D7-4D9B-B833-29303BC540A7}`; legacy AppId:
 `{D62480B8-71F1-48CE-BEEC-9D3E172C87B5}`. Install binaries under
 `%LOCALAPPDATA%\Programs\ElevenClock-rs`, data under
 `%LOCALAPPDATA%\ElevenClock-rs`, shortcut in the current user's Start menu.
-The issue's original directory wording is superseded by its
-[follow-up](https://github.com/tjorim/ElevenClock-rs/issues/15#issuecomment-6185565842).
-The R12 registry value **remains `ElevenClockRust`**.
+The startup registry value is **`ElevenClockRust`**.
 
 Inno uses `PrivilegesRequired=lowest` with no elevation override; packaging verifies
 the executable's `asInvoker` / `uiAccess=false` manifest. Startup stays off unless
@@ -97,19 +97,18 @@ Windows 11 x64 without VC developer runtimes, Python or Qt. Any missing runtime 
 admin requirement blocks distribution pending review of supported app-local or
 linking alternatives. No elevated prerequisite is silently run.
 
-The [owner decision and provenance record](windows-evidence/licensing-provenance.md)
-document Apache 2.0 for the independently authored Rust implementation and original
+[Licensing](licensing.md) documents Apache 2.0 for the independently authored Rust implementation and original
 replacement icon. The packaging script copies the root Apache LICENSE into
 `LICENSE.txt` for both installer and portable ZIP. The inherited Python application
 and imagery, with GPLv3 and the original credits to Martí Climent and Xavier
 Delugo, were removed from the tree at cutover. They are no longer in the source
 companion and were never installed; they remain in Git history (see the
 [migration guide](migration.md#legacy-reference)). The stale upstream Apache
-README sentence does not relicense that legacy material. Product-name review remains open in
-[#32](https://github.com/tjorim/ElevenClock-rs/issues/32). The full dependency
+README sentence does not relicense that legacy material. The
+[product-name review](product-name.md) is still incomplete. The full dependency
 inventory supplies original notices (including build/test dependencies); Rust's
 COPYRIGHT.html supplies toolchain notices. Hash-checked supplemental notices retain
-LF bytes on Windows. The remaining name review and Windows gates block distribution.
+LF bytes on Windows. The remaining name review blocks distribution.
 
 ## Lifecycle and rollback
 
@@ -140,7 +139,7 @@ Support version; choose startup again in Settings if wanted. Private data remain
 if the older version cannot read it, use its native Reset to defaults, not manual
 preference edits. Verify Exit reveals the Windows clock. There is **no earlier
 supported Rust installer**; development-build A → B → uninstall → A mechanics now
-passed on a standard Windows 11 account (see the evidence record), while cross-version
+passed on a standard Windows 11 account, while cross-version
 release compatibility remains unverified. Returning
 to the native clock immediately requires only Exit/uninstall: the underlying clock
 was never disabled. Start legacy ElevenClock only after the Rust app has exited.

@@ -70,8 +70,7 @@ jobs:
       - name: High contrast, keyboard and real display-scaling feasibility
         shell: powershell
         run: ./scripts/test-rust-ui-environment.ps1
-      # A build you can run. The overlay is live (work in progress, P1 still
-      # NO-GO, see #23), so expect rough edges. x64 only; not a release package.
+      # A build you can run. x64 only; not a release package.
       - uses: actions/upload-artifact@v7
         with:
           name: elevenclock-rs-dev-x64

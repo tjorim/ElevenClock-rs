@@ -1,22 +1,18 @@
 # Rust dependency policy
 
-R01 uses `windows` 0.61 for documented Win32 controls and safe boundary types,
-`chrono` 0.4 with only `std` for datetime contracts, and build-only
-`embed-resource` 3 for the dialog, application icon and DPI-v2 manifest. Optional
-serialization, logging and error dependencies belong to their owning issues.
-No command parser, async runtime or web UI runtime is required.
+No command parser, async runtime or web UI runtime is used. What each dependency is
+for is listed [below](#what-each-dependency-is-for).
 
 Commit Cargo.lock and use --locked for all checks/builds. New dependencies must
 explain product need, maintenance, feature selection and license impact.
-Until the rewrite lands in main, update in a dedicated PR targeting rust-rewrite;
-afterwards, target the default branch. Run the Linux and Windows
+Update in a dedicated PR against the default branch. Run the Linux and Windows
 jobs and the advisory/license inventory checks. Do not raise the declared
 `rust-version` merely to absorb an update; record the justification if it changes.
 Transitive updates need the same checks. No audit failure is silently suppressed;
 any exception needs a reviewed, dated rationale and remediation issue.
 
 Dependabot follows the default branch for both GitHub Actions and the root Cargo
-workspace. It takes effect when this configuration lands on that branch. GitHub Actions updates are checked daily
+workspace. GitHub Actions updates are checked daily
 and Cargo updates weekly, with separate dependency PRs and the default open-PR
 limit.
 
@@ -30,33 +26,15 @@ The inventory script is development-only. Release packaging must retain applicab
 notices and satisfy the selected terms for each dependency.
 
 The root LICENSE and workspace metadata declare Apache 2.0 for the original Rust
-implementation. The [owner decision and provenance record](windows-evidence/licensing-provenance.md)
-explain that scope. The GPLv3 Python code and inherited artwork were removed at
+implementation. [Licensing](licensing.md) explains that scope. The GPLv3 Python code and inherited artwork were removed at
 cutover and remain in Git history ([migration guide](migration.md#legacy-reference));
 the active icon is [original Apache-licensed artwork](../assets/README.md). Dependency licenses and
-original notices are unchanged. Product-name review in #32 remains open.
-The [packaging workflow](releasing.md) now includes the original inventory and
+original notices are unchanged. The [product-name review](product-name.md) is still incomplete.
+The [packaging workflow](releasing.md) includes the original inventory and
 toolchain notices in unsigned development candidates, plus matching vendored
-source. Distribution remains blocked by #32 and the Windows acceptance gates.
+source.
 CI uploads test evidence (screenshots, JSON, logs) and one runnable development
 build (`elevenclock-dev-x64`) for testing; neither is a release package or installer.
-
-R02 adds **development-only** `serde_json` 1.0 for the probe's structured evidence
-and generation-envelope tests. It uses the maintained Serde JSON implementation
-with default std support and no derive requirement; the locked version is checked
-on MSRV 1.90.0 and stable. Its new lock entries are serde, serde_json, itoa and
-zmij (MIT/Apache-2.0 alternatives); existing metadata dependencies are reused.
-It is a dev-dependency of clock-windows and does not enter clock-app's normal
-dependency graph. The Windows bindings enable documented COM, UIA, registry,
-process and job APIs; no additional runtime package, command parser or async
-runtime is introduced. The license check covers these developer
-dependencies too.
-
-R04 adds development-only **proptest** (locked 1.12.0) for generated formatter
-validation and **Criterion** 0.8.2 (default features disabled) for parse/render
-measurements. Both compile on MSRV 1.90 and stable 1.99. Neither changes the
-normal app/core runtime dependency graph. Their MIT/Apache-2.0 alternatives and
-transitive original notices are retained by the same inventory gate.
 
 The notice checker recognizes only explicit historical dual-license aliases:
 `MIT/Apache-2.0`, `Apache-2.0 / MIT` and `Unlicense/MIT`. They correspond to the
@@ -76,21 +54,6 @@ original notices, not missing-notice exemptions. The checker uses no network.
 Run `python3 scripts/test-rust-license-check.py` for its positive and rejection
 regressions; the dependency CI job runs them before the inventory.
 
-R05 promotes **serde_json** 1.0 to a runtime dependency of clock-windows and adds
-**serde** 1.0 with derive for the private, versioned preference encoding. These
-maintained MIT/Apache-2.0 crates keep serialization behind the Windows adapter;
-core remains free of persistence/schema dependencies. **tempfile** 3 is a
-development-only dependency for isolated filesystem failure tests. All packages
-were already locked by earlier developer dependencies; no package versions or
-MSRV change. The same full license inventory applies to the new runtime graph.
-
-R09 adds **windows-core** 0.61.2 as a direct dependency of clock-windows: the
-`#[implement]` macro that builds the overlay's UI Automation provider names that crate
-in its expansion. It is the version `windows` 0.61 already locks, so no package, license
-or MSRV change; only the clock-windows dependency edge in `Cargo.lock` is new. The shared
-`windows` dependency also enables `Win32_System_Ole` and `Win32_System_Variant`, which the
-UIA provider interfaces require.
-
 `windows`, `windows-core` and `windows-numerics` move together to the 0.62 line
 (0.62.2, 0.62.2, 0.3.1; MSRV 1.82). They must stay on matching versions, so
 Dependabot updates them as one group. The 0.100 releases of the small crates are
@@ -105,3 +68,17 @@ publish no license files; their original notices are supplemented under
 [dependency-notices](dependency-notices/README.md). Because `alloca` needs the
 MSVC toolchain for `x86_64-pc-windows-msvc`, the Windows-target clippy runs on
 the Windows CI runner instead of cross-checking from Linux.
+
+## What each dependency is for
+
+- **`windows`** (with `windows-core` and `windows-numerics`): documented Win32, COM,
+  UI Automation, registry, process and job APIs. `windows-core` is a direct dependency
+  because the `#[implement]` macro for the overlay's UIA provider names it.
+- **`chrono`** 0.4, `std` only: datetime values in `clock-core`.
+- **`serde`** 1.0 (derive) and **`serde_json`** 1.0: the private, versioned preference
+  encoding and the discovery helper's report, behind `clock-windows`. `clock-core`
+  stays free of persistence dependencies.
+- **`embed-resource`** 3, build only: the dialog, application icon and DPI-v2 manifest.
+- Development only: **`tempfile`** 3 (filesystem failure tests), **proptest** 1.12
+  (generated formatter inputs) and **Criterion** 0.8 (parse/render measurements). None
+  of them enters the app's normal dependency graph; the license check covers them too.

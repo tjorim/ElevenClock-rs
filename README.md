@@ -8,9 +8,9 @@ taskbar clock on one or every display. The Windows clock is never changed or
 disabled; it sits underneath, so exiting always brings it straight back.
 
 > **Release status: no supported release yet.** Installers built from this
-> repository are unsigned development candidates while the remaining
-> [release gates](docs/releasing.md) are open. See the
-> [acceptance record](docs/windows-evidence/acceptance.md) for what has been tested.
+> repository are unsigned development candidates until the
+> [pre-release checklist](docs/releasing.md) is done. See
+> [tested configurations](docs/tested-configurations.md) for what has been tested.
 
 ## Install
 
@@ -100,6 +100,5 @@ contributors. Third-party dependencies keep their own licenses; see
 
 The original Python ElevenClock is GPLv3. It is no longer in this tree and is not
 part of ElevenClock-rs releases; the [migration guide](docs/migration.md#legacy-reference)
-links the commits that contain it. The [provenance record](docs/windows-evidence/licensing-provenance.md)
-documents the Apache 2.0 decision, and the [name and listing review](docs/windows-evidence/product-name-and-listings.md)
-records the remaining product-name checks.
+links the commits that contain it. [Licensing](docs/licensing.md) documents the Apache 2.0 decision, and the
+[product name review](docs/product-name.md) records the remaining name checks.

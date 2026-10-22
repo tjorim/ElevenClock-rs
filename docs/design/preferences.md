@@ -1,9 +1,9 @@
-# R05 preference persistence handoff
+# Saved preferences
 
 ## Contracts and encoding
 
 `clock-core::Preferences` is an editable Settings draft. `validate` checks 6–24
-integer pt and the R04 formatter, normalizing CRLF. `ValidatedPreferences` has
+integer pt and the format string, normalizing CRLF. `ValidatedPreferences` has
 private fields and carries the compiled format. Runtime consumers borrow it;
 `draft()` returns a separate editable copy. Initial preferences are primary,
 9 pt, system theme and `%H:%M\n%g%V.%u`.
@@ -14,7 +14,7 @@ missing data or an error. `load_error()` is the recoverable Settings status.
 save leaves active preferences and first-run completion unchanged. The caller
 retains its editable draft. `reset_draft()` only stages defaults, and does not
 reset first-run state. `complete_first_run()` persists internal onboarding state;
-login startup is deliberately absent and remains owned by Windows/R12.
+login startup is deliberately absent and remains owned by Windows ([startup](startup.md)).
 
 The production store resolves `FOLDERID_LocalAppData` with
 `SHGetKnownFolderPath`, then uses a dedicated `ElevenClockRust` directory. It
@@ -47,51 +47,16 @@ Windows operation handles first creation and existing-target replacement on the
 same volume without a truncate-in-place window. Failures remove the temporary
 file best-effort. A process kill may leave an ignored temporary file; it cannot
 be mistaken for committed preferences. There is no watcher, reload operation,
-per-monitor override or file export. R08's single-instance coordinator must
-serialize app access; this store does not claim multi-writer transactions.
+per-monitor override or file export. The runtime's single-instance coordinator
+serializes app access; this store does not claim multi-writer transactions.
 
 The public safe storage trait supports in-memory tests; filesystem path injection
-is private to unit tests. Settings controls/wiring remain R10's responsibility.
+is private to unit tests.
 
-## Verification
+## Tests
 
-The existing `rust-ci.yml` Windows MSRV/stable workspace test jobs execute the
-real persistence tests automatically, including first create/replacement,
+The Windows job in `rust-ci.yml` runs the real persistence tests, including first create/replacement,
 locked-target (delete sharing denied), read-only denied-target and injected
-pre-replacement failure. These tests require no interactive desktop and are not
-deferred to the manual backlog. Portable tests cover defaults, invalid stored
+pre-replacement failure. These tests need no interactive desktop. Portable tests cover defaults, invalid stored
 values, unsupported versions, corrupt/oversized data, preservation/recovery,
 active rollback, reset draft and first-run persistence.
-
-Local results and hosted Windows results are recorded below. Cross-target checks
-are type checks, not actual Windows persistence evidence. The end-to-end Settings
-Apply/Cancel/Reset and first-run desktop journey remains unchecked until R10/R13;
-R05 exposes the contract and does not implement those controls.
-
-Local Linux/MSRV 1.90.0 checks (2026-10-14):
-
-- `cargo +1.90.0 fmt --manifest-path rust/Cargo.toml --all --check`: passed.
-- `cargo +1.90.0 clippy --manifest-path rust/Cargo.toml -p clock-core -p clock-windows --all-targets --locked -- -D warnings`: passed.
-- `cargo +1.90.0 test --manifest-path rust/Cargo.toml -p clock-core -p clock-windows --all-targets --locked`: 31 tests passed; one intentionally ignored subprocess fixture; benchmark smoke passed.
-- `cargo +1.90.0 test --manifest-path rust/Cargo.toml -p clock-core -p clock-windows --doc --locked`: two doc tests passed.
-- `cargo +1.90.0 check --manifest-path rust/Cargo.toml -p clock-windows --all-targets --target x86_64-pc-windows-msvc --locked`: passed (type check only).
-- `cargo +1.90.0 clippy --manifest-path rust/Cargo.toml -p clock-windows --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings`: passed (type check only).
-- `python3 scripts/test-rust-license-check.py`: nine passed.
-- `cargo +1.90.0 metadata --manifest-path rust/Cargo.toml --locked --format-version 1` followed by `python3 scripts/rust-license-check.py`: passed with complete original-notice inventory.
-
-- [x] Actual Windows MSRV and stable workspace tests: both passed in [run 38549658168](https://github.com/tjorim/ElevenClock/actions/runs/38549658168).
-- [ ] Windows persistence review before merge.
-- [ ] Interactive Settings/onboarding journey after R10 integration.
-
-Hosted native evidence, 2026-10-14, source commit
-`181533467587dfb1c7fd8fc52f26a4e88698bdf7`:
-
-- Windows Server 2025 x64, OS 10.0.26100, hosted image `20260925.250.1`.
-- [MSRV 1.90.0 job](https://github.com/tjorim/ElevenClock/actions/runs/38549658168/job/115804233090) and [stable job](https://github.com/tjorim/ElevenClock/actions/runs/38549658168/job/115804233032): workspace formatting, check, warnings-denied Clippy, tests/doc tests and native release build all passed. Existing native dialog/focus checks passed; stable's high-contrast/scaling harness passed.
-- Each Windows library suite passed all 19 tests, including all 12 preference-store tests: real first create/replacement, Known Folders, locked/denied replacement, pre-replacement failure, preservation/recovery, invalid values, incompatible versions, reset and first-run persistence. These are actual filesystem API results, not a desktop preference UI claim.
-- Both Linux toolchain jobs and the advisory/original-license inventory job passed.
-- The separate R03 overlay workflow failed its `Wait-Overlay` visibility check on Windows Server. The overlay prototype does not consume the new preference API; prior R03/R04 runs also fail this workflow. No shell/prototype code was changed by R05. Its existing P1 gate remains separate and unresolved (see #23); this failure is not counted as passing evidence.
-
-R10 must validate selected-monitor text/layout before calling Apply. The final
-follow-up changes only the validation-error wording (also used for unsaved
-Settings drafts) and this evidence record; persistence logic is unchanged.

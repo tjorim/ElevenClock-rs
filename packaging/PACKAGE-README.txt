@@ -30,7 +30,7 @@ implementation and original application artwork. The inherited GPLv3 Python
 app (credits: Marti Climent and Xavier Delugo) is not part of this package or
 its source companion; it remains in the project's Git history.
 The owner decision and remaining product-name review are recorded in
-docs/windows-evidence/licensing-provenance.md in the matching source (#32).
+docs/licensing.md and docs/product-name.md in the matching source.
 THIRD-PARTY-NOTICES.txt and RUST-COPYRIGHT.html retain dependency/toolchain notices.
 Matching source, vendored Cargo dependencies, provenance and SHA256 checksums
 accompany this candidate as separate artifacts. Keep them together.

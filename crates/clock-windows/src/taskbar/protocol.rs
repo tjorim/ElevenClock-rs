@@ -93,9 +93,8 @@ fn rejected(why: &str) -> DiscoveryFailure {
     DiscoveryFailure::Rejected(why.into())
 }
 
-/// Decide a taskbar's clock rectangle: geometric validation only, the
-/// identity of the candidate remains experimental. The decision is the parent's,
-/// not the helper's.
+/// Decide a taskbar's clock rectangle: geometric validation of the candidate.
+/// The decision is the parent's, not the helper's.
 fn clock_rect(
     snapshot: &TaskbarSnapshot,
     generation: ShellGeneration,

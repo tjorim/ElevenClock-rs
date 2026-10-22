@@ -1,15 +1,8 @@
-# R11 in-app support status, Copy diagnostics and bounded local logs
-
-Status: **implemented and exercised against the real app on a real Windows 11
-desktop at 100% scale** (Windows 11 Home 10.0.26200, two 1280×720 displays, release
-build of this branch, no hosted CI run yet). Narrator speech, DPI above 100%, high
-contrast and a clipboard held by a third-party program were **not** exercised; they
-stay unchecked at the end.
+# Support status, Copy diagnostics and local logs
 
 ## What the user gets
 
-Settings → **Support** (reachable by `Ctrl+PageDown` or the tab strip) replaces the R10
-placeholder:
+Settings → **Support** (reachable by `Ctrl+PageDown` or the tab strip) looks like this:
 
 ![Support page](images/diagnostics/support-page.png)
 
@@ -136,10 +129,9 @@ starts from a fresh look at the disk. Only the primary instance logs. Lines pass
 2026-10-16T07:12:48Z ElevenClock-rs stopped
 ```
 
-## Where the code is (and one deliberate deviation from the issue)
+## Where the code is
 
-The issue names `clock-app/src/{diagnostics,logging}.rs`. The dependency direction is
-app → windows, but Settings (in `clock-windows`) must show the report and the runtime
+The dependency direction is app → windows, but Settings (in `clock-windows`) must show the report and the runtime
 (in `clock-windows`) produces the transition lines, so the report and the writer live
 in `clock-windows`:
 
@@ -155,59 +147,6 @@ in `clock-windows`:
 No dependency was added (`tracing` and `clap` are not used); the `windows` crate gains
 the `Win32_System_DataExchange` feature. `preferences_store::app_data_dir` is the one
 Known Folder lookup, now shared by preferences and logs.
-
-## Verification
-
-Run on Windows 11 (10.0.26200), stable Rust 1.99.1, this branch:
-
-| Command | Result |
-| --- | --- |
-| `cargo fmt --manifest-path rust/Cargo.toml --all --check` | clean |
-| `cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings` | clean |
-| `cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked` | all pass; `clock-windows` lib 176 passed (R11 adds 17 `support`, 2 Windows build/architecture, 7 `logging` and 6 runtime tests) |
-| `cargo test --manifest-path rust/Cargo.toml --workspace --doc --locked` | pass |
-| `cargo test -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1` | 2 passed: exact multi-line Unicode round trip; a clipboard held by another thread makes `set_text` return `Busy` in well under 500 ms, `replaced == false`, and the old text is still there afterwards |
-| `scripts/test-rust-settings.ps1` | passes, now including the Support step below |
-| PE header of the release `elevenclock-rs.exe` | subsystem 2 (Windows GUI): no console is created or attached |
-
-The Support step of the harness drives the real window with the Windows input queue:
-status shows version, `Windows 10.0.<build>` and `Status:`; the report has every field
-and contains neither `%USERNAME%`, `%USERPROFILE%` nor `C:\Users`; Tab order on the page
-is 1501 → 1502 → 1503 → 1504; `Alt+F` runs Refresh status and "Status refreshed." appears;
-opening and refreshing Support leaves a sentinel clipboard value alone; `Copy
-diagnostics` reports success and the clipboard equals the previewed text exactly; the log
-exists, records the start, holds no user name, and no file exceeds 1 MiB. The clipboard is
-restored afterwards. The unit tests cover report layout (golden text), redaction, status
-wording for every state, refresh with success, helper deadline, a helper that never
-answers, discovery off and a finished app, log rotation and every disk-error path.
-
-Added after the first pass, in the same Support step of `scripts/test-rust-settings.ps1`
-(run locally at 100% on the machine above; CI repeats it at 100/125/150/200% and in high
-contrast through `test-rust-ui-environment.ps1`, which launches this script per case):
-
-- **Layout:** every Support control lies inside its page and no two overlap, so nothing is
-  clipped or covered at any scale.
-- **Accessible names** (the default IAccessible a reader queries): status = "Status:",
-  refresh = "Refresh status", report = "Report text that Copy diagnostics will copy:",
-  copy = "Copy diagnostics"; all keyboard-focusable.
-- **Announcements:** a WinEvent hook sees the result line raise `EVENT_SYSTEM_ALERT` twice
-  for Refresh status (started, finished) and once for the copy result. This proves the
-  event is sent, not what a particular reader says.
-- **Clipboard held by another process:** a separate PowerShell process holds the clipboard
-  open; Copy reports "Another program is using the clipboard...", "Your clipboard was not
-  changed.", returns well inside 3 s with the window still enabled, and the sentinel text
-  is intact once the holder lets go. This replaces the thread-based stand-in in the manual
-  list.
-
-## Still unchecked (need a person at a desktop)
-
-- [ ] Narrator itself reads the result line and the fields in a sensible order (the data
-      and events it relies on are verified above; its speech is not).
-- [ ] Look at the page at 125%, 150%, 200% and in high contrast. CI captures it and checks
-      layout; a person has not looked at the pictures. Running that matrix locally changes
-      the display scale of the machine, so it was left to CI.
-- [ ] A real taskbar with an unverifiable clock (a Windows build where discovery fails)
-      to read the "Windows clock in use" wording in place. The wording is unit-tested.
 
 ## Known limits
 

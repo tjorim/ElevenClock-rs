@@ -39,8 +39,8 @@ jobs:
       - name: R02 actual shell discovery, screenshots, restart and helper lifetime
         shell: pwsh
         run: ./scripts/test-rust-taskbar.ps1 -RestartExplorer -PrepareHostedDesktop -ProbeTarget '${{ matrix.target }}' -Executable 'target/${{ matrix.target }}/debug/examples/taskbar_probe.exe'
-      # -ObserveOverlays only records overlay counts; the overlay is live (work in
-      # progress, P1 still NO-GO), so those counts are evidence, not acceptance.
+      # -ObserveOverlays only records overlay counts; those counts are evidence,
+      # not a pass/fail check.
       - name: Lifecycle, second launch, close-to-background, Exit and Explorer restarts
         shell: pwsh
         run: ./scripts/test-rust-lifecycle.ps1 -Executable 'target/${{ matrix.target }}/debug/elevenclock-rs.exe' -OutputDirectory 'native-evidence/lifecycle' -ObserveOverlays
