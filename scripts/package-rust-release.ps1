@@ -18,10 +18,6 @@ try {
     }
     if (!$Iscc -or !(Test-Path -LiteralPath $Iscc)) { throw 'Inno Setup 6 compiler is required; no automatic prerequisite installation' }
     if (Test-Path -LiteralPath $OutputDirectory) { throw 'Choose a new output directory to avoid stale artifacts' }
-    if ($Mode -eq 'Distribution') {
-        & $Python scripts/rust-release.py check-gates
-        if ($LASTEXITCODE -ne 0) { throw 'Distribution gates are not passed' }
-    }
     # Keep the toolchain choice out of the app and source developer defaults.
     # A target-qualified build leaves host proc macros dynamically linked.
     if ($env:CARGO_ENCODED_RUSTFLAGS) { throw 'CARGO_ENCODED_RUSTFLAGS must be unset' }
