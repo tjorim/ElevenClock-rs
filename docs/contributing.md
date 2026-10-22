@@ -29,9 +29,10 @@ Linux test command already includes doctests.
 
 Win32 APIs come from generated bindings, not the `windows` crate. To use a new
 function, constant, struct or interface, add its name (`Windows.Win32.<Name>`) to
-`crates/clock-windows/bindings.txt` and run `cargo run -p clock-bindgen`. Interfaces
-whose methods you call must be listed themselves; ones that are only referenced come
-out without methods. Constants are plain integers (`#define` values are `i32`), so
+`crates/clock-windows/bindings.txt` and run `cargo run -p clock-bindgen`. COM
+interfaces list only the methods called (`Windows.Win32.IFoo::{A, B}`), with inherited
+methods on the base interface that declares them; an interface that is only referenced
+comes out without methods. Constants are plain integers (`#define` values are `i32`), so
 cast them where an API takes `u32`. A `match` on a message must use a constant that
 is in scope, otherwise the arm silently binds a new variable. The default metadata has
 no UIAutomationCore.dll exports, UIA ids or Known Folder GUIDs; those few are

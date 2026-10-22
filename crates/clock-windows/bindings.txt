@@ -1,5 +1,5 @@
 // Win32 APIs used by clock-windows and clock-app; one name per line, sorted.
-// Interfaces whose methods are called (including inherited ones) must be listed.
+// COM interfaces list only the methods called (`IFoo::{A, B}`), inherited ones on their base.
 // After editing, run `cargo run -p clock-bindgen` to regenerate src/bindings/generated.rs.
 Windows.Win32.AllowSetForegroundWindow
 Windows.Win32.AppendMenuW
@@ -149,18 +149,18 @@ Windows.Win32.ICC_TAB_CLASSES
 Windows.Win32.ICC_UPDOWN_CLASS
 Windows.Win32.ICON_BIG
 Windows.Win32.ICON_SMALL
-Windows.Win32.ID2D1Factory
-Windows.Win32.ID2D1HwndRenderTarget
-Windows.Win32.ID2D1RenderTarget
+Windows.Win32.ID2D1Factory::{CreateHwndRenderTarget}
+Windows.Win32.ID2D1HwndRenderTarget::{Resize}
+Windows.Win32.ID2D1RenderTarget::{BeginDraw, Clear, CreateSolidColorBrush, DrawTextLayout, EndDraw, GetPixelSize, SetTextAntialiasMode}
 Windows.Win32.ID2D1Resource
 Windows.Win32.ID2D1SolidColorBrush
 Windows.Win32.IDCANCEL
 Windows.Win32.IDC_ARROW
 Windows.Win32.IDI_APPLICATION
 Windows.Win32.IDOK
-Windows.Win32.IDWriteFactory
-Windows.Win32.IDWriteTextFormat
-Windows.Win32.IDWriteTextLayout
+Windows.Win32.IDWriteFactory::{CreateTextFormat, CreateTextLayout}
+Windows.Win32.IDWriteTextFormat::{SetParagraphAlignment, SetTextAlignment, SetWordWrapping}
+Windows.Win32.IDWriteTextLayout::{GetMetrics}
 Windows.Win32.IDYES
 Windows.Win32.IInvokeProvider
 Windows.Win32.IMAGE_ICON
@@ -168,11 +168,11 @@ Windows.Win32.INITCOMMONCONTROLSEX
 Windows.Win32.INPUT
 Windows.Win32.INPUT_KEYBOARD
 Windows.Win32.IRawElementProviderSimple
-Windows.Win32.IUIAutomation
-Windows.Win32.IUIAutomationElement
-Windows.Win32.IUIAutomationElementArray
-Windows.Win32.IUIAutomationInvokePattern
-Windows.Win32.IUIAutomationTreeWalker
+Windows.Win32.IUIAutomation::{CreateTrueCondition, ElementFromHandle, ElementFromPoint, RawViewWalker}
+Windows.Win32.IUIAutomationElement::{CurrentAutomationId, CurrentBoundingRectangle, CurrentClassName, CurrentControlType, CurrentFrameworkId, CurrentIsOffscreen, CurrentProcessId, FindAll, GetCurrentPattern, SetFocus}
+Windows.Win32.IUIAutomationElementArray::{GetElement, Length}
+Windows.Win32.IUIAutomationInvokePattern::{Invoke}
+Windows.Win32.IUIAutomationTreeWalker::{GetFirstChildElement, GetNextSiblingElement, GetParentElement}
 Windows.Win32.InitCommonControlsEx
 Windows.Win32.InvalidateRect
 Windows.Win32.IsChild
