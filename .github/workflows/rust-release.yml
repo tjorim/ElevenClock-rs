@@ -90,11 +90,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: elevenclock-rs-unsigned-x64-candidate
           path: release
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: elevenclock-rs-x64-debug-symbols
           path: symbols

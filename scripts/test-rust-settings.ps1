@@ -445,9 +445,15 @@ while (-not [Holder.Clip]::OpenClipboard([IntPtr]::Zero)) {
     if ([DateTime]::UtcNow -ge $deadline) { exit 2 }
     Start-Sleep -Milliseconds 50
 }
-Set-Content -Path $Flag -Value 'held'
-Start-Sleep -Seconds 5
-[Holder.Clip]::CloseClipboard() | Out-Null
+try {
+    Set-Content -Path $Flag -Value 'held'
+    # Keep ownership until the parent finishes its assertions, with a bounded fallback
+    # if the parent exits unexpectedly.
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    while ((Test-Path $Flag) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
+} finally {
+    [Holder.Clip]::CloseClipboard() | Out-Null
+}
 '@
     $holder = Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $holderScript, $flag -PassThru -WindowStyle Hidden
     try {
@@ -455,6 +461,10 @@ Start-Sleep -Seconds 5
         while (-not (Test-Path $flag) -and -not $holder.HasExited -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
         $holderExit = if ($holder.HasExited) { "exit code $($holder.ExitCode)" } else { 'still running' }
         Assert (Test-Path $flag) "The clipboard holder did not take the clipboard ($holderExit)"
+        # Starting the holder can deactivate Settings. BM_CLICK can be ignored for
+        # an inactive dialog, so restore activation before testing the copy action.
+        Foreground $window
+        Assert (-not $holder.HasExited) 'The clipboard holder exited before Copy'
         $held = [Diagnostics.Stopwatch]::StartNew()
         Click (Control $window $PAGE.Support 1504)   # includes a 500 ms settle
         $busy = [SettingsNative]::Text($feedback)
@@ -462,10 +472,12 @@ Start-Sleep -Seconds 5
         Assert ($busy -like '*Your clipboard was not changed.') "A held clipboard must not be cleared: '$busy'"
         Assert ($held.Elapsed.TotalSeconds -lt 3) 'Copy blocked the window while the clipboard was held'
         Assert ([SettingsNative]::IsWindowEnabled((Control $window $PAGE.Support 1504))) 'The window must stay usable while the clipboard is held'
-        $holder.WaitForExit(15000) | Out-Null
+        Remove-Item $flag -Force
+        Assert ($holder.WaitForExit(15000)) 'The clipboard holder did not release the clipboard'
         Assert ((Get-Clipboard -Raw).Trim() -eq $sentinel) 'The old clipboard contents must survive a failed copy'
     } finally {
         if (-not $holder.HasExited) { $holder.Kill() }
+        $holder.Dispose()
         Remove-Item $flag, $holderScript -Force -ErrorAction SilentlyContinue
     }
     $report = [SettingsNative]::Text((Control $window $PAGE.Support 1503))
