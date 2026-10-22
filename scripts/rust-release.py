@@ -14,16 +14,12 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = "x86_64-pc-windows-msvc"
+# In-box DLLs the release executable imports, besides api-ms-win-* API sets. Keep
+# this to what is actually imported: a new entry is a reviewed native dependency.
 SYSTEM_DLLS = {
-    "advapi32.dll", "bcrypt.dll", "bcryptprimitives.dll", "combase.dll", "comctl32.dll",
-    "comdlg32.dll", "crypt32.dll", "d2d1.dll", "dwrite.dll", "dwmapi.dll",
-    "dxgi.dll", "gdi32.dll", "imm32.dll", "iphlpapi.dll", "kernel32.dll",
-    "kernelbase.dll", "msimg32.dll", "netapi32.dll", "ntdll.dll", "ole32.dll",
-    "oleacc.dll", "oleaut32.dll", "powrprof.dll", "propsys.dll", "psapi.dll",
-    "rpcrt4.dll", "secur32.dll", "setupapi.dll", "shell32.dll", "shlwapi.dll",
-    "synchronization.dll", "uiautomationcore.dll", "user32.dll", "userenv.dll",
-    "usp10.dll", "uxtheme.dll", "version.dll", "winhttp.dll", "winmm.dll",
-    "winspool.drv", "ws2_32.dll", "wtsapi32.dll",
+    "advapi32.dll", "bcryptprimitives.dll", "comctl32.dll", "d2d1.dll", "dwrite.dll",
+    "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll",
+    "uiautomationcore.dll", "user32.dll", "wtsapi32.dll",
 }
 
 
