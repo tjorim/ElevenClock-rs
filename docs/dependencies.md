@@ -94,7 +94,10 @@ UIA provider interfaces require.
 `windows`, `windows-core` and `windows-numerics` move together to the 0.62 line
 (0.62.2, 0.62.2, 0.3.1; MSRV 1.82). They must stay on matching versions, so
 Dependabot updates them as one group. The 0.100 releases of the small crates are
-ignored until `windows` itself reaches 0.100 (see #74).
+ignored until `windows` itself reaches 0.100 (see #74). `windows-core` 0.62 imports
+`CoTaskMemAlloc`/`CoTaskMemFree` and related COM helpers from the in-box
+`combase.dll` (which `ole32.dll` has forwarded to since Windows 8), so the release
+script's reviewed system-DLL list includes it.
 
 Criterion 0.8 (MSRV 1.86) adds `alloca`, which compiles a small C file, and
 `page_size` → `winapi`, whose `winapi-*-pc-windows-gnu` import-library crates

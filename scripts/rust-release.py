@@ -15,7 +15,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = "x86_64-pc-windows-msvc"
 SYSTEM_DLLS = {
-    "advapi32.dll", "bcrypt.dll", "bcryptprimitives.dll", "comctl32.dll",
+    "advapi32.dll", "bcrypt.dll", "bcryptprimitives.dll", "combase.dll", "comctl32.dll",
     "comdlg32.dll", "crypt32.dll", "d2d1.dll", "dwrite.dll", "dwmapi.dll",
     "dxgi.dll", "gdi32.dll", "imm32.dll", "iphlpapi.dll", "kernel32.dll",
     "kernelbase.dll", "msimg32.dll", "netapi32.dll", "ntdll.dll", "ole32.dll",
