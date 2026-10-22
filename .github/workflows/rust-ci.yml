@@ -1,0 +1,109 @@
+name: Rust foundation
+on:
+  push:
+    branches: [main, rust-rewrite]
+    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
+  pull_request:
+    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
+  workflow_dispatch:
+concurrency:
+  group: rust-foundation-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  # Everything that does not need a Windows machine runs here, once. The Windows-only
+  # code is type-checked and linted through the MSVC target; nothing in it is executed.
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
+      - run: cargo test -p clock-core --locked
+      - name: Packaging script regression checks
+        run: python3 scripts/test-rust-release.py
+      - name: Overlay harness wait regression checks
+        shell: pwsh
+        run: ./scripts/test-rust-overlay-harness.ps1
+  # Only what needs Windows: executing the Windows-only tests, the release build with its
+  # native resources, and the desktop smoke checks.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --all-targets --locked
+      # The real Windows clipboard, including contention (R11). Ignored by default
+      # because it overwrites the clipboard text while it runs.
+      - run: cargo test -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1
+      - run: cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked
+      - name: Check GUI subsystem and linked native resources
+        shell: pwsh
+        run: |
+          $exe = 'target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe'
+          $bytes = [IO.File]::ReadAllBytes($exe)
+          $pe = [BitConverter]::ToInt32($bytes, 0x3c)
+          if ([BitConverter]::ToUInt16($bytes, $pe + 0x5c) -ne 2) { throw 'Expected Windows GUI subsystem' }
+          $sdk = Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin/*/x64/mt.exe' | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$sdk) { throw 'Windows SDK manifest tool unavailable' }
+          & $sdk.FullName "-inputresource:$exe;#1" '-out:app.manifest'
+          if ($LASTEXITCODE -ne 0) { throw 'Missing embedded manifest' }
+          if (!(Select-String -Path app.manifest -Pattern 'PerMonitorV2' -Quiet)) { throw 'Missing DPI-v2 manifest' }
+          # Dialog and icon resources must be present in the PE resource table.
+          $utf16 = [Text.Encoding]::Unicode.GetString($bytes)
+          if (!$utf16.Contains('ElevenClock-rs Settings')) { throw 'Missing Settings dialog resource' }
+      - name: Native dialog launch, focus, capture and close smoke check
+        shell: pwsh
+        run: ./scripts/test-rust-settings.ps1
+      - name: High contrast, keyboard and real display-scaling feasibility
+        shell: powershell
+        run: ./scripts/test-rust-ui-environment.ps1
+      # A build you can run. The overlay is live (work in progress, P1 still
+      # NO-GO, see #23), so expect rough edges. x64 only; not a release package.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: elevenclock-rs-dev-x64
+          retention-days: 30
+          path: target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          # Evidence only (Settings/UI smoke captures).
+          name: windows-ui-evidence
+          retention-days: 14
+          path: native-evidence/
+          if-no-files-found: error
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: cargo-audit-0.22.2
+      - name: Install pinned advisory checker if not cached
+        run: |
+          if [ "$(cargo audit --version 2>/dev/null)" != "cargo-audit 0.22.2" ]; then
+            cargo install cargo-audit --locked --version 0.22.2
+          fi
+      - name: Advisory audit (failures are never ignored)
+        run: cargo audit --deny warnings
+      # Gates every PR. The inventory is regenerated on demand (see
+      # docs/dependencies.md); it is not uploaded as an artifact.
+      - name: License inventory and original-notice check
+        run: |
+          python3 scripts/test-rust-license-check.py
+          cargo metadata --locked --format-version 1 > dependency-metadata.json
+          python3 scripts/rust-license-check.py dependency-metadata.json > /dev/null

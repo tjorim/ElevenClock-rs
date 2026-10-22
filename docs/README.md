@@ -1,0 +1,55 @@
+# Documentation
+
+Docs for ElevenClock-rs. Using the app is covered in the [README](../README.md); moving
+from the original Python ElevenClock is covered in the [migration guide](migration.md).
+
+| Folder / file | What it is | Changes when |
+| --- | --- | --- |
+| [`migration.md`](migration.md) | Moving from the Python ElevenClock, removed features, rollback and where the legacy code lives in Git | Support or the legacy reference changes |
+| [`contributing.md`](contributing.md) | Workspace layout, commands, CI and the contracts contributors must keep | The workflow changes |
+| [`dependencies.md`](dependencies.md), [`dependency-notices/`](dependency-notices) | Dependency policy and bundled third-party notices | A dependency is added, removed or updated |
+| [`releasing.md`](releasing.md) | Native x64 packaging, installer ownership and release gates | Packaging changes |
+| [`design/`](design) | How each part behaves and why: the interfaces, states and limits a reader needs | The behaviour changes |
+| [`adr/`](adr) | Architecture decisions that were weighed and settled | A decision is made or superseded |
+| [`windows-evidence/`](windows-evidence) | Dated records from real Windows runs: environments, screenshots, measurements, and the acceptance results (`acceptance.md`) | A new run happens. Never edited to say something that was not observed |
+
+## `design/`
+
+| Topic | File |
+| --- | --- |
+| Clock state, scheduling and effects (pure core) | [`state-and-scheduling.md`](design/state-and-scheduling.md) |
+| Saved preferences: encoding, validation, recovery | [`preferences.md`](design/preferences.md) |
+| DirectWrite rendering, DPI, theme, overflow | [`rendering.md`](design/rendering.md) |
+| Runtime, monitors, Explorer recovery, shutdown | [`lifecycle.md`](design/lifecycle.md) |
+| Clock actions, tray, keyboard and accessibility | [`interaction.md`](design/interaction.md) |
+| Settings window and the preference flow | [`settings.md`](design/settings.md) |
+| Support status, Copy diagnostics, local logs | [`diagnostics.md`](design/diagnostics.md) |
+| Opt-in login startup and the uninstall contract | [`startup.md`](design/startup.md) |
+
+Each design file still ends with the verification that was done when it was written and
+the checks that were left open. Treat those sections as history; the current state of a
+release gate is in `windows-evidence/`.
+
+The Cargo workspace lived under `rust/` until the cutover moved it to the repository root.
+Commands and paths recorded before then (`--manifest-path rust/Cargo.toml`, `rust/target/…`)
+are kept as they were run; today drop the `--manifest-path` and the `rust/` prefix.
+
+## `windows-evidence/`
+
+| Topic | File | Raw artifacts |
+| --- | --- | --- |
+| Taskbar discovery | [`discovery.md`](windows-evidence/discovery.md) | [`discovery-hosted/`](windows-evidence/discovery-hosted) |
+| UIA/COM lifetime and Explorer restart | [`uia-lifetime-hosted/README.md`](windows-evidence/uia-lifetime-hosted/README.md) | Per-target CI step logs and extracted evidence in the same folder |
+| Overlay feasibility and recovery | [`overlay-spike.md`](windows-evidence/overlay-spike.md) | [`overlay-hosted/`](windows-evidence/overlay-hosted), [`overlay-recovery-hosted/`](windows-evidence/overlay-recovery-hosted) |
+| Native Settings foundation (DPI, high contrast, keyboard) | [`settings-foundation.md`](windows-evidence/settings-foundation.md) | [`settings-foundation-matrix/`](windows-evidence/settings-foundation-matrix) |
+| Packaging and installer lifecycle | [`packaging.md`](windows-evidence/packaging.md) | `native-evidence/packaging/` (generated CI artifact) |
+| Licensing provenance and artwork | [`licensing-provenance.md`](windows-evidence/licensing-provenance.md) | [`assets/`](../assets); inherited artwork in Git history ([migration guide](migration.md#legacy-reference)) |
+| Product name and listing review | [`product-name-and-listings.md`](windows-evidence/product-name-and-listings.md) | Linked public listings and trademark search outcomes |
+
+Screenshots used by a design file live next to it, in [`design/images/`](design/images).
+
+## Naming
+
+Files are named by topic, not by issue number. Issue IDs (R01 to R15) appear inside the
+text as cross-references only. They belong to the rewrite plan, which was removed at
+cutover; it remains in Git history ([migration guide](migration.md#legacy-reference)).

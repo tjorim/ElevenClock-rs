@@ -1,6 +1,12 @@
 version: 2
+# Updates target the default branch (main), which builds only the Rust app.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"

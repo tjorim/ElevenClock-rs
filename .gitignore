@@ -1,34 +1,13 @@
-bug.png
-ElevenClock.exe
-elevenclock_bin/
-ElevenClockBin/
-elevenclock\__init__.spec
-elevenclock\lang\__pycache__\*
-*.pyc
-*.pyo
-__init__
-ElevenClock.zip
-*.code-workspace
-elevenclock/.vscode/launch.json
-elevenclock/lang/lang_backup*
+# Rust build output
+/target/
+dist/
+native-evidence/
 
-# generate_release.py
-RELEASE.md
+# Development scripts (Python helpers under scripts/)
+__pycache__/
 
-# Virtual environments
-venv/
-env/
-
-# Intellij Cache and Settings folder
+# Editors
 .idea/
-elevenclock.py
-compile.py
-build_BETA.bat
-APIKEY.txt
-ElevenClock.Installer.exe
-__init__.exe
-ElevenClock.Installer.exe.zip
-.vscode/launch.json
 .vs/
-scripts/APIKEY.txt
-sign.cmd.lnk
+.vscode/
+*.code-workspace

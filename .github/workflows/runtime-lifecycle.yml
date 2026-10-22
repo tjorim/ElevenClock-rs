@@ -1,0 +1,68 @@
+name: R08 hosted runtime lifecycle (includes R02 and R03 desktop evidence)
+on:
+  pull_request:
+    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', 'scripts/test-rust-lifecycle.ps1', 'scripts/test-rust-taskbar.ps1', 'scripts/test-rust-overlay*.ps1', '.github/workflows/runtime-lifecycle.yml']
+  workflow_dispatch:
+concurrency:
+  group: r08-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  lifecycle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+          - runner: windows-11-arm
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: desktop-${{ matrix.runner }}-${{ matrix.target }}
+      # Share the probe build and desktop preparation for R02/R03/R08. Build the
+      # development example separately; experimental FFI is private to that target.
+      - run: cargo +stable build -p clock-app -p clock-windows --bins --example taskbar_probe --target ${{ matrix.target }} --locked
+      - run: cargo +stable build -p clock-app --example overlay_evidence --target ${{ matrix.target }} --locked
+      # R02 evidence (formerly its own workflow): prepares the hosted desktop, then
+      # real shell discovery, screenshots, Explorer restart and helper lifetime.
+      - name: R02 actual shell discovery, screenshots, restart and helper lifetime
+        shell: pwsh
+        run: ./scripts/test-rust-taskbar.ps1 -RestartExplorer -PrepareHostedDesktop -ProbeTarget '${{ matrix.target }}' -Executable 'target/${{ matrix.target }}/debug/examples/taskbar_probe.exe'
+      # -ObserveOverlays only records overlay counts; the overlay is live (work in
+      # progress, P1 still NO-GO), so those counts are evidence, not acceptance.
+      - name: Lifecycle, second launch, close-to-background, Exit and Explorer restarts
+        shell: pwsh
+        run: ./scripts/test-rust-lifecycle.ps1 -Executable 'target/${{ matrix.target }}/debug/elevenclock-rs.exe' -OutputDirectory 'native-evidence/lifecycle' -ObserveOverlays
+      # Real UI Automation calls against a controlled provider (hung, killed mid-call,
+      # retained elements) and, with ELEVENCLOCK_RS_UIA_EXPLORER, against real Explorer
+      # killed while a taskbar call is outstanding. Evidence JSON is uploaded.
+      - name: UIA lifetime evidence (controlled provider and real Explorer restart)
+        shell: pwsh
+        env:
+          ELEVENCLOCK_RS_UIA_EXPLORER: '1'
+          ELEVENCLOCK_RS_EVIDENCE_DIR: native-evidence/uia
+        run: cargo +stable test -p clock-windows --test uia_lifetime --target ${{ matrix.target }} --locked
+      # Run last because the overlay harness changes display scaling. Still collect
+      # R03 evidence if an earlier desktop check fails; the job remains failed.
+      - name: R03 overlay, hit targets, calendar, visibility and recovery
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./scripts/test-rust-overlay.ps1 -ProbeTarget '${{ matrix.target }}' -Executable 'target/${{ matrix.target }}/debug/examples/overlay_evidence.exe'
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: r08-lifecycle-${{ matrix.runner }}-${{ matrix.target }}
+          retention-days: 14
+          path: native-evidence/
+          if-no-files-found: error

@@ -1,0 +1,35 @@
+{
+    "capturedUtc":  "2026-10-21T17:28:58.2462067Z",
+    "executables":  [
+                        {
+                            "path":  "rust\\target\\release\\elevenclock-rs.exe",
+                            "sha256":  "ADD4B581A32F9AE83BD339548CE8436A1C358F25772F45D5AE36DE0E0F48EEDE",
+                            "fileVersion":  null,
+                            "lastWriteUtc":  "2026-10-21T17:06:01.7792977Z"
+                        }
+                    ],
+    "checkoutCommit":  "246a5a439c6f27ebc032a69c4988b376fd9c1ef0",
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "windows":  {
+                    "edition":  "Core",
+                    "build":  "26300",
+                    "ubr":  9711,
+                    "displayVersion":  "26H2",
+                    "architecture":  "AMD64"
+                },
+    "cpu":  "AMD Ryzen 7 5800H with Radeon Graphics",
+    "logicalProcessors":  8,
+    "machine":  "QEMU Standard PC (Q35 + ICH9, 2009)",
+    "theme":  {
+                  "appsUseLightTheme":  1,
+                  "systemUsesLightTheme":  1
+              },
+    "systemDpi":  120,
+    "monitors":  [
+                     {
+                         "device":  "\\\\.\\DISPLAY1",
+                         "primary":  true,
+                         "bounds":  "1536x1106 at (0, 0)"
+                     }
+                 ]
+}

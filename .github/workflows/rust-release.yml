@@ -1,0 +1,71 @@
+name: Rust x64 packaging candidate
+on:
+  pull_request:
+    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', 'packaging/**', 'scripts/package-rust-release.ps1', 'scripts/rust-release.py', 'scripts/test-rust-release.py', 'scripts/rust-license-check.py', 'scripts/test-rust-license-check.py', 'scripts/test-rust-installer.ps1', '.github/workflows/rust-release.yml', '.gitattributes', 'LICENSE', 'docs/dependency-notices/**']
+  workflow_dispatch:
+concurrency:
+  group: rust-packaging-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      # Shared lint, unit tests and script regressions run in rust-ci.yml.
+      - name: Prepare locked dependency cache (including source-only targets)
+        run: cargo fetch --locked
+      - name: Install pinned development compiler
+        shell: pwsh
+        run: |
+          # Use the upstream release: this version is not available in Chocolatey.
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $download
+          $expected = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
+          if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+            throw 'Inno Setup compiler download checksum mismatch'
+          }
+          $compilerDir = Join-Path $env:RUNNER_TEMP 'InnoSetup6'
+          $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$compilerDir`"")
+          $installer = Start-Process -FilePath $download -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
+          if ($installer.ExitCode -ne 0) { throw "Compiler installation failed: $($installer.ExitCode)" }
+          if (!(Test-Path -LiteralPath "$compilerDir/ISCC.exe")) { throw 'Inno Setup compiler missing after installation' }
+      - name: Build unsigned development candidate (distribution remains gated)
+        shell: pwsh
+        run: ./scripts/package-rust-release.ps1 -Iscc "$env:RUNNER_TEMP/InnoSetup6/ISCC.exe"
+      - name: Installer and portable lifecycle (disposable hosted account)
+        shell: powershell
+        run: ./scripts/test-rust-installer.ps1 -DisposableAccount
+      - uses: actions/upload-artifact@v7
+        with:
+          name: elevenclock-rs-unsigned-x64-candidate
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            dist/candidate/*-setup.exe
+            dist/candidate/*-portable.zip
+            dist/candidate/*-source.zip
+            dist/candidate/SHA256SUMS.txt
+            dist/candidate/payload/elevenclock-rs.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: elevenclock-rs-x64-debug-symbols
+          retention-days: 30
+          if-no-files-found: error
+          path: dist/candidate/symbols/
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-packaging-evidence
+          retention-days: 30
+          if-no-files-found: warn
+          path: native-evidence/packaging/
