@@ -10,7 +10,7 @@ from the original Python ElevenClock is covered in the [migration guide](migrati
 | [`contributing.md`](contributing.md) | Workspace layout, commands, CI and the contracts contributors must keep | The workflow changes |
 | [`dependencies.md`](dependencies.md), [`dependency-notices/`](dependency-notices) | Dependency policy and bundled third-party notices | A dependency is added, removed or updated |
 | [`releasing.md`](releasing.md) | Native x64 packaging, installer ownership and the pre-release checklist | Packaging changes |
-| [`licensing.md`](licensing.md), [`product-name.md`](product-name.md) | The Apache 2.0 decision and artwork provenance; the product name and listing review | The license or name decision changes |
+| [`licensing.md`](licensing.md), [`product-name.md`](product-name.md) | The Apache 2.0 decision and artwork provenance; the product name, listing copy and distribution channels | The license or name decision changes |
 | [`design/`](design) | How each part behaves and why: the interfaces, states and limits a reader needs | The behaviour changes |
 | [`adr/`](adr) | Architecture decisions that were weighed and settled | A decision is made or superseded |
 

@@ -1,5 +1,7 @@
-name: Rust x64 packaging candidate
+name: Rust x64 packaging and release
 on:
+  push:
+    tags: ['v*']
   pull_request:
     paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', 'packaging/**', 'scripts/package-rust-release.ps1', 'scripts/rust-release.py', 'scripts/test-rust-release.py', 'scripts/rust-license-check.py', 'scripts/test-rust-license-check.py', 'scripts/test-rust-installer.ps1', '.github/workflows/rust-release.yml', '.gitattributes', 'LICENSE', 'docs/dependency-notices/**']
   workflow_dispatch:
@@ -39,9 +41,20 @@ jobs:
           $installer = Start-Process -FilePath $download -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
           if ($installer.ExitCode -ne 0) { throw "Compiler installation failed: $($installer.ExitCode)" }
           if (!(Test-Path -LiteralPath "$compilerDir/ISCC.exe")) { throw 'Inno Setup compiler missing after installation' }
-      - name: Build unsigned development candidate (distribution remains gated)
+      - name: Build unsigned package (Distribution mode for release tags)
         shell: pwsh
-        run: ./scripts/package-rust-release.ps1 -Iscc "$env:RUNNER_TEMP/InnoSetup6/ISCC.exe"
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $mode = 'Development'
+          if ($env:REF_TYPE -eq 'tag') {
+            $version = (cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json).packages |
+              Where-Object name -eq 'clock-app' | Select-Object -ExpandProperty version
+            if ($env:REF_NAME -ne "v$version") { throw "Tag $env:REF_NAME does not match workspace version $version" }
+            $mode = 'Distribution'
+          }
+          ./scripts/package-rust-release.ps1 -Iscc "$env:RUNNER_TEMP/InnoSetup6/ISCC.exe" -Mode $mode
       - name: Installer and portable lifecycle (disposable hosted account)
         shell: powershell
         run: ./scripts/test-rust-installer.ps1 -DisposableAccount
@@ -69,3 +82,41 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           path: native-evidence/packaging/
+  publish:
+    needs: package
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: elevenclock-rs-unsigned-x64-candidate
+          path: release
+      - uses: actions/download-artifact@v7
+        with:
+          name: elevenclock-rs-x64-debug-symbols
+          path: symbols
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          name="ElevenClock-rs-${TAG#v}-x64"
+          (cd symbols && zip -q -r "../release/$name-symbols.zip" .)
+          cat > notes.md <<NOTES
+          Download \`$name-setup.exe\` to install for your account (no administrator
+          rights needed), or \`$name-portable.zip\` to run without installing.
+          Requires stock Windows 11 x64. The files are not code-signed, so Windows may
+          warn about the download. Verify downloads against \`SHA256SUMS.txt\`.
+
+          See the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/README.md)
+          for usage, and the [migration guide](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/migration.md)
+          if you used the original ElevenClock.
+          NOTES
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "ElevenClock-rs ${TAG#v}" --notes-file notes.md \
+            "release/$name-setup.exe" "release/$name-portable.zip" \
+            "release/$name-source.zip" "release/$name-symbols.zip" release/SHA256SUMS.txt

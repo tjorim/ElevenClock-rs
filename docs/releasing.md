@@ -1,17 +1,27 @@
 # Packaging and releasing
 
-The installer and ZIP are **unsigned development candidates**. What has been tested is in
-[tested configurations](tested-configurations.md).
+Releases are unsigned GitHub releases: the installer, the portable ZIP, matching
+source, debug symbols and `SHA256SUMS.txt`. What has been tested is in
+[tested configurations](tested-configurations.md). Signing and winget come later;
+the name and channels are in [product name](product-name.md).
 
-## Before a public release
+## Publishing a release
 
-- [ ] Finish the [product name review](product-name.md).
-- [ ] Install and run on a clean Windows 11 x64 standard account without developer
-      runtimes (VC redistributables, Python, Qt), including a real sign-out/sign-in with
-      startup enabled.
-- [ ] Decide on signing and the release identity.
-- [ ] Reword `packaging/PACKAGE-README.txt` so it no longer says "Distribution is
-      blocked" (see below), in a reviewed change.
+1. Set `version` in the root `Cargo.toml` and merge that change to `main`.
+2. Tag the merge commit `v<version>` and push the tag:
+
+   ```sh
+   git tag v0.1.0 && git push origin v0.1.0
+   ```
+
+3. `rust-release.yml` checks that the tag matches the workspace version, builds in
+   `-Mode Distribution`, runs the installer lifecycle test, then creates the GitHub
+   release with the artifacts. A failed build publishes nothing; fix it, delete the
+   tag and push it again.
+
+Before tagging, install and use the exact build on a clean Windows 11 x64 account.
+Release artifacts are named `ElevenClock-rs-<version>-x64-*`; development builds add
+the commit and `-dev`.
 
 ## Build and artifacts
 
@@ -61,12 +71,10 @@ MSVC/SDK and the recorded Rust toolchain remain build prerequisites. This suppli
 matching source, not a byte-for-byte reproducibility guarantee. Without `.git`, the
 rebuilt Support commit says `unknown`; original provenance stays in the JSON file.
 
-`-Mode Distribution` rejects a dirty checkout and a `PACKAGE-README.txt` that still
-says "Distribution is blocked"; that wording is the only switch, and it changes only
-through a reviewed source change. The workflow has read-only
-repository permissions, no release/tag/publish step, no signing identity and no
-automatic product prerequisite installer. A future signed/versioned release needs
-an authorized release action and consistent notices.
+`-Mode Distribution` rejects a dirty checkout and a `PACKAGE-README.txt` that
+says "Distribution is blocked". Pull requests and manual runs build in Development
+mode with read-only permissions; only a `v*` tag runs the `publish` job, which has
+`contents: write` and no signing identity. No product prerequisite installer is run.
 
 ## Identity and ownership
 
@@ -93,9 +101,8 @@ The PE gate rejects non-x64/console binaries, dynamic CRT imports including CRT 
 sets, unknown DLLs and delay imports requiring review. Static CRT avoids adopting
 an elevated VC redistributable installer. Import inspection does not prove clean
 Windows launch: COM/DirectWrite can load further system components. Test on stock
-Windows 11 x64 without VC developer runtimes, Python or Qt. Any missing runtime or
-admin requirement blocks distribution pending review of supported app-local or
-linking alternatives. No elevated prerequisite is silently run.
+Windows 11 x64 without VC developer runtimes, Python or Qt. A missing runtime or admin
+requirement found later is a release blocker. No elevated prerequisite is silently run.
 
 [Licensing](licensing.md) documents Apache 2.0 for the independently authored Rust implementation and original
 replacement icon. The packaging script copies the root Apache LICENSE into
@@ -104,11 +111,10 @@ and imagery, with GPLv3 and the original credits to Martí Climent and Xavier
 Delugo, were removed from the tree at cutover. They are no longer in the source
 companion and were never installed; they remain in Git history (see the
 [migration guide](migration.md#legacy-reference)). The stale upstream Apache
-README sentence does not relicense that legacy material. The
-[product-name review](product-name.md) is still incomplete. The full dependency
+README sentence does not relicense that legacy material. The full dependency
 inventory supplies original notices (including build/test dependencies); Rust's
 COPYRIGHT.html supplies toolchain notices. Hash-checked supplemental notices retain
-LF bytes on Windows. The remaining name review blocks distribution.
+LF bytes on Windows.
 
 ## Lifecycle and rollback
 
