@@ -130,7 +130,7 @@ impl Notifications {
         unsafe {
             let message = RegisterWindowMessageW(w!("TaskbarCreated"));
             if message == 0 {
-                return Err(windows::core::Error::from_win32());
+                return Err(windows::core::Error::from_thread());
             }
             TASKBAR_CREATED.set(message);
         }

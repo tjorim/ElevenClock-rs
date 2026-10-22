@@ -178,10 +178,10 @@ fn native_epoch(hwnd: HWND) -> windows::core::Result<NativeEpoch> {
     unsafe {
         let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
         if !GetMonitorInfoW(monitor, &mut info).as_bool() {
-            return Err(windows::core::Error::from_win32());
+            return Err(windows::core::Error::from_thread());
         }
         let monitor_rect =
-            physical_rect(info.rcMonitor).ok_or_else(windows::core::Error::from_win32)?;
+            physical_rect(info.rcMonitor).ok_or_else(windows::core::Error::from_thread)?;
         Ok((
             hwnd,
             shell_identity(hwnd)?,
@@ -255,7 +255,7 @@ pub fn collect_with(
     for (index, hwnd) in handles.into_iter().enumerate() {
         let started = Instant::now();
         let identity = shell_identity(hwnd)?;
-        let taskbar_rect = bounds(hwnd).ok_or_else(windows::core::Error::from_win32)?;
+        let taskbar_rect = bounds(hwnd).ok_or_else(windows::core::Error::from_thread)?;
         // SAFETY: monitor handle used only on this thread; info has the correct size.
         let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL) };
         let mut info = MONITORINFO {
@@ -263,10 +263,10 @@ pub fn collect_with(
             ..Default::default()
         };
         if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
-            return Err(windows::core::Error::from_win32());
+            return Err(windows::core::Error::from_thread());
         }
         let monitor_rect =
-            physical_rect(info.rcMonitor).ok_or_else(windows::core::Error::from_win32)?;
+            physical_rect(info.rcMonitor).ok_or_else(windows::core::Error::from_thread)?;
         let monitor_index = if let Some(i) = monitors.iter().position(|m| *m == monitor) {
             i
         } else {

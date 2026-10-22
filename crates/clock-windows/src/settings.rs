@@ -438,7 +438,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 dwICC: ICC_STANDARD_CLASSES | ICC_TAB_CLASSES | ICC_UPDOWN_CLASS,
             };
             if !InitCommonControlsEx(&controls).as_bool() {
-                return Err(windows::core::Error::from_win32().into());
+                return Err(windows::core::Error::from_thread().into());
             }
             Ok(Self {
                 module: module.into(),

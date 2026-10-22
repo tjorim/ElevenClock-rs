@@ -119,7 +119,7 @@ pub(crate) fn send_win_n() -> CalendarOutcome {
     if inserted == batch.len() {
         return CalendarOutcome::Sent;
     }
-    let error = windows::core::Error::from_win32();
+    let error = windows::core::Error::from_thread();
     let cleanup: Vec<INPUT> = cleanup_after(inserted).into_iter().map(input).collect();
     if !cleanup.is_empty() {
         // SAFETY: as above. Releases only keys whose injected key-down was accepted.

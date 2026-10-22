@@ -563,7 +563,7 @@ impl HostWindow {
                 ..Default::default()
             };
             if RegisterClassW(&class) == 0 {
-                return Err(windows::core::Error::from_win32());
+                return Err(windows::core::Error::from_thread());
             }
             let hwnd = CreateWindowExW(
                 WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,

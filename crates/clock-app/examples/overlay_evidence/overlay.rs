@@ -140,7 +140,7 @@ fn taskbar(slot: &ExperimentSlot) -> Result<HWND> {
             after = Some(hwnd);
         }
     }
-    Err(windows::core::Error::from_win32())
+    Err(windows::core::Error::from_thread())
 }
 
 /// Windows can enumerate windows from other z-order bands between taskbar
@@ -210,7 +210,7 @@ pub fn run(
             ..Default::default()
         };
         if RegisterClassW(&class) == 0 {
-            return Err(windows::core::Error::from_win32());
+            return Err(windows::core::Error::from_thread());
         }
         let _class_owner = WindowClass {
             instance: module.into(),

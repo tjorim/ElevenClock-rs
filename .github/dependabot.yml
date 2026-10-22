@@ -10,3 +10,15 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # `windows`, `windows-core` and `windows-numerics` must move in lockstep:
+      # mixing versions gives two incompatible `windows_core::Interface` traits.
+      windows:
+        patterns: ["windows", "windows-*"]
+    ignore:
+      # Published ahead of `windows` itself (still on 0.62). Drop once
+      # `windows` 0.100 ships so the group can move all three together.
+      - dependency-name: "windows-core"
+        versions: [">=0.100"]
+      - dependency-name: "windows-numerics"
+        versions: [">=0.100"]

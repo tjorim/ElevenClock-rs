@@ -35,6 +35,42 @@
         }
       ],
       "supplemental": []
+    },
+    {
+      "name": "winapi-i686-pc-windows-gnu",
+      "version": "0.4.0",
+      "license": "MIT/Apache-2.0",
+      "bundled": [],
+      "supplemental": [
+        {
+          "path": "winapi-i686-pc-windows-gnu-0.4.0/LICENSE-MIT",
+          "sha256": "5b19674a1db628a475850a131956ed49521b744e3dda8f5a94141f9aba681219",
+          "source": "https://github.com/retep998/winapi-rs/blob/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/LICENSE-MIT"
+        },
+        {
+          "path": "winapi-i686-pc-windows-gnu-0.4.0/LICENSE-APACHE",
+          "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+          "source": "https://github.com/retep998/winapi-rs/blob/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/LICENSE-APACHE"
+        }
+      ]
+    },
+    {
+      "name": "winapi-x86_64-pc-windows-gnu",
+      "version": "0.4.0",
+      "license": "MIT/Apache-2.0",
+      "bundled": [],
+      "supplemental": [
+        {
+          "path": "winapi-x86_64-pc-windows-gnu-0.4.0/LICENSE-MIT",
+          "sha256": "5b19674a1db628a475850a131956ed49521b744e3dda8f5a94141f9aba681219",
+          "source": "https://github.com/retep998/winapi-rs/blob/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/LICENSE-MIT"
+        },
+        {
+          "path": "winapi-x86_64-pc-windows-gnu-0.4.0/LICENSE-APACHE",
+          "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+          "source": "https://github.com/retep998/winapi-rs/blob/9497609ef44cc9bcd16cd2411c0ee6ccaf5483aa/LICENSE-APACHE"
+        }
+      ]
     }
   ]
 }
