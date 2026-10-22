@@ -14,6 +14,11 @@ One window, four pages (a tab strip; `Ctrl+Tab`, `Ctrl+Shift+Tab` and
 
 Buttons: **Exit ElevenClock-rs**, **Reset to defaults**, **OK**, **Cancel**, **Apply**.
 
+The window uses the Windows 11 text font (Segoe UI Variable) and the Mica material
+behind its title bar, through the documented `DWMWA_SYSTEMBACKDROP_TYPE`. The client
+area keeps standard themed controls, so it follows high contrast and screen readers
+unchanged; Windows builds without Mica simply show the plain title bar.
+
 ![First launch](images/settings/first-run.png)
 
 ### Flow

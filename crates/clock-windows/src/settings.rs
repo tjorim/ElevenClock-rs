@@ -320,6 +320,20 @@ unsafe extern "system" fn dialog_proc(
                     SendMessageW(hwnd, WM_SETICON as u32, WPARAM(size as usize), lparam);
                 }
             }
+            // The Windows 11 Mica material behind the title bar, like other modern
+            // windows. The client area keeps its normal (themed, high contrast aware)
+            // painting. Builds before 22H2 reject the attribute and keep the plain
+            // title bar, so the result is deliberately ignored.
+            let backdrop = DWMSBT_MAINWINDOW;
+            // SAFETY: `backdrop` is a live DWM_SYSTEMBACKDROP_TYPE of the given size.
+            let _ = unsafe {
+                DwmSetWindowAttribute(
+                    hwnd,
+                    DWMWA_SYSTEMBACKDROP_TYPE as u32,
+                    (&backdrop as *const DWM_SYSTEMBACKDROP_TYPE).cast(),
+                    std::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as u32,
+                )
+            };
             1 // Dialog manager sets focus to the first tab stop (the page tabs).
         }
         WM_COMMAND => {

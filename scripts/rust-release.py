@@ -17,7 +17,7 @@ TARGET = "x86_64-pc-windows-msvc"
 # In-box DLLs the release executable imports, besides api-ms-win-* API sets. Keep
 # this to what is actually imported: a new entry is a reviewed native dependency.
 SYSTEM_DLLS = {
-    "advapi32.dll", "bcryptprimitives.dll", "comctl32.dll", "d2d1.dll", "dwrite.dll",
+    "advapi32.dll", "bcryptprimitives.dll", "comctl32.dll", "d2d1.dll", "dwmapi.dll", "dwrite.dll",
     "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll",
     "uiautomationcore.dll", "user32.dll", "wtsapi32.dll",
 }

@@ -244,6 +244,16 @@ pub unsafe fn DispatchMessageW(lpmsg: *const MSG) -> LRESULT {
     unsafe { DispatchMessageW(lpmsg) }
 }
 #[inline]
+pub unsafe fn DwmSetWindowAttribute(
+    hwnd: HWND,
+    dwattribute: u32,
+    pvattribute: *const core::ffi::c_void,
+    cbattribute: u32,
+) -> windows_core::HRESULT {
+    windows_core::link!("dwmapi.dll" "system" fn DwmSetWindowAttribute(hwnd : HWND, dwattribute : u32, pvattribute : *const core::ffi::c_void, cbattribute : u32) -> windows_core::HRESULT);
+    unsafe { DwmSetWindowAttribute(hwnd, dwattribute, pvattribute, cbattribute) }
+}
+#[inline]
 pub unsafe fn EmptyClipboard() -> windows_core::BOOL {
     windows_core::link!("user32.dll" "system" fn EmptyClipboard() -> windows_core::BOOL);
     unsafe { EmptyClipboard() }
@@ -1398,6 +1408,10 @@ pub type DLGPROC = Option<
 pub struct DPI_AWARENESS_CONTEXT(pub *mut core::ffi::c_void);
 pub const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: DPI_AWARENESS_CONTEXT =
     DPI_AWARENESS_CONTEXT(-4 as _);
+pub const DWMSBT_MAINWINDOW: DWM_SYSTEMBACKDROP_TYPE = 2;
+pub const DWMWA_SYSTEMBACKDROP_TYPE: DWMWINDOWATTRIBUTE = 38;
+pub type DWMWINDOWATTRIBUTE = i32;
+pub type DWM_SYSTEMBACKDROP_TYPE = i32;
 pub type DWRITE_FACTORY_TYPE = i32;
 pub const DWRITE_FACTORY_TYPE_SHARED: DWRITE_FACTORY_TYPE = 0;
 pub type DWRITE_FONT_STRETCH = i32;
