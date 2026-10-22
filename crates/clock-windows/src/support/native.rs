@@ -1,22 +1,14 @@
 //! Windows side of Support: the OS build and the clipboard.
 use super::{APP_COMMIT, Clipboard, ClipboardError, ClipboardFault, Environment};
-use std::{thread, time::Duration};
-use windows::{
-    Win32::{
-        Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND},
-        System::{
-            DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData},
-            Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock},
-            Ole::CF_UNICODETEXT,
-            Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW},
-            SystemInformation::{
-                GetNativeSystemInfo, PROCESSOR_ARCHITECTURE_AMD64, PROCESSOR_ARCHITECTURE_ARM64,
-                PROCESSOR_ARCHITECTURE_INTEL, SYSTEM_INFO,
-            },
-        },
-    },
-    core::{PCWSTR, w},
+use crate::bindings::{
+    CF_UNICODETEXT, CheckHandle, CloseClipboard, EmptyClipboard, GMEM_MOVEABLE,
+    GetNativeSystemInfo, GlobalAlloc, GlobalFree, GlobalLock, GlobalUnlock, HGLOBAL,
+    HKEY_LOCAL_MACHINE, HWND, OpenClipboard, PROCESSOR_ARCHITECTURE_AMD64,
+    PROCESSOR_ARCHITECTURE_ARM64, PROCESSOR_ARCHITECTURE_INTEL, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+    RegGetValueW, SYSTEM_INFO, SetClipboardData,
 };
+use std::{thread, time::Duration};
+use windows_core::{PCWSTR, w};
 
 /// Another program may hold the clipboard for a moment. Wait a little, never long:
 /// this runs on the UI thread, so the whole wait is capped at about 40 ms.
@@ -47,10 +39,12 @@ impl Prepared {
         // SAFETY: a fresh movable block of exactly `bytes`, locked only while the
         // copy runs, then unlocked; on any failure the block is freed here.
         unsafe {
-            let handle = GlobalAlloc(GMEM_MOVEABLE, bytes).map_err(|_| failed)?;
+            let handle = GlobalAlloc(GMEM_MOVEABLE as u32, bytes)
+                .ok()
+                .map_err(|_| failed)?;
             let target = GlobalLock(handle).cast::<u16>();
             if target.is_null() {
-                let _ = GlobalFree(Some(handle));
+                let _ = GlobalFree(handle);
                 return Err(failed);
             }
             std::ptr::copy_nonoverlapping(units.as_ptr(), target, units.len());
@@ -70,7 +64,7 @@ impl Clipboard for WindowsClipboard {
         for attempt in 0..OPEN_ATTEMPTS {
             // SAFETY: opens the clipboard for our live window; paired with the
             // CloseClipboard below on this same thread.
-            if unsafe { OpenClipboard(Some(self.owner)) }.is_ok() {
+            if unsafe { OpenClipboard(Some(self.owner)) }.as_bool() {
                 opened = true;
                 break;
             }
@@ -81,7 +75,7 @@ impl Clipboard for WindowsClipboard {
         if !opened {
             // SAFETY: Windows never received the block, so it is still ours.
             unsafe {
-                let _ = GlobalFree(Some(prepared.0));
+                let _ = GlobalFree(prepared.0);
             }
             return Err(ClipboardError {
                 fault: ClipboardFault::Busy,
@@ -91,16 +85,14 @@ impl Clipboard for WindowsClipboard {
         // SAFETY: the clipboard is open on this thread. A successful
         // SetClipboardData takes ownership of the block; otherwise it is freed.
         let result = unsafe {
-            if EmptyClipboard().is_err() {
-                let _ = GlobalFree(Some(prepared.0));
+            if !EmptyClipboard().as_bool() {
+                let _ = GlobalFree(prepared.0);
                 Err(ClipboardError {
                     fault: ClipboardFault::Rejected,
                     replaced: false,
                 })
-            } else if SetClipboardData(u32::from(CF_UNICODETEXT.0), Some(HANDLE(prepared.0.0)))
-                .is_err()
-            {
-                let _ = GlobalFree(Some(prepared.0));
+            } else if SetClipboardData(CF_UNICODETEXT as u32, Some(prepared.0)).is_invalid() {
+                let _ = GlobalFree(prepared.0);
                 Err(ClipboardError {
                     fault: ClipboardFault::Rejected,
                     replaced: true,
@@ -128,7 +120,7 @@ fn registry_text(name: PCWSTR) -> Option<String> {
             HKEY_LOCAL_MACHINE,
             VERSION_KEY,
             name,
-            RRF_RT_REG_SZ,
+            RRF_RT_REG_SZ as u32,
             None,
             Some(buffer.as_mut_ptr().cast()),
             Some(&mut bytes),
@@ -152,7 +144,7 @@ fn registry_number(name: PCWSTR) -> Option<u32> {
             HKEY_LOCAL_MACHINE,
             VERSION_KEY,
             name,
-            RRF_RT_REG_DWORD,
+            RRF_RT_REG_DWORD as u32,
             None,
             Some(std::ptr::from_mut(&mut value).cast()),
             Some(&mut bytes),
@@ -184,11 +176,11 @@ fn os_architecture() -> &'static str {
     unsafe { GetNativeSystemInfo(&mut info) };
     // SAFETY: the architecture field is valid in every variant of the union.
     let architecture = unsafe { info.Anonymous.Anonymous.wProcessorArchitecture };
-    if architecture == PROCESSOR_ARCHITECTURE_AMD64 {
+    if architecture == PROCESSOR_ARCHITECTURE_AMD64 as u16 {
         "x64"
-    } else if architecture == PROCESSOR_ARCHITECTURE_ARM64 {
+    } else if architecture == PROCESSOR_ARCHITECTURE_ARM64 as u16 {
         "ARM64"
-    } else if architecture == PROCESSOR_ARCHITECTURE_INTEL {
+    } else if architecture == PROCESSOR_ARCHITECTURE_INTEL as u16 {
         "x86"
     } else {
         "unknown"

@@ -45,12 +45,9 @@ pub fn local_snapshot(filetime: i64, utc: Civil, local: Civil) -> Option<DateTim
 
 #[cfg(windows)]
 pub fn local_now() -> DateTime<FixedOffset> {
-    use windows::Win32::{
-        Foundation::{FILETIME, SYSTEMTIME},
-        System::{
-            SystemInformation::GetSystemTimePreciseAsFileTime,
-            Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime},
-        },
+    use crate::bindings::{
+        FILETIME, FileTimeToSystemTime, GetSystemTimePreciseAsFileTime, SYSTEMTIME,
+        SystemTimeToTzSpecificLocalTime,
     };
     let civil = |t: SYSTEMTIME| Civil {
         year: i32::from(t.wYear),
@@ -66,8 +63,8 @@ pub fn local_now() -> DateTime<FixedOffset> {
         let ticks = (i64::from(ft.dwHighDateTime) << 32) | i64::from(ft.dwLowDateTime);
         let mut utc = SYSTEMTIME::default();
         let mut local = SYSTEMTIME::default();
-        (FileTimeToSystemTime(&ft, &mut utc).is_ok()
-            && SystemTimeToTzSpecificLocalTime(None, &utc, &mut local).is_ok())
+        (FileTimeToSystemTime(&ft, &mut utc).as_bool()
+            && SystemTimeToTzSpecificLocalTime(None, &utc, &mut local).as_bool())
         .then(|| local_snapshot(ticks, civil(utc), civil(local)))
         .flatten()
     };

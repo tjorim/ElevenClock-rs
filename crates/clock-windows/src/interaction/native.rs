@@ -4,27 +4,15 @@ use super::{
     CalendarOutcome, HeldKeys, Interaction, InteractionQueue, Key, KeyEvent, MenuCommand,
     ScreenPoint, WIN_N, cleanup_after, menu_items,
 };
+use crate::bindings::*;
 use std::sync::{
     Mutex,
     atomic::{AtomicIsize, Ordering},
 };
-use windows::{
-    Win32::{
-        Foundation::{HWND, LPARAM, POINT, WPARAM},
-        UI::{
-            Input::KeyboardAndMouse::*,
-            WindowsAndMessaging::{
-                AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, MF_STRING, PostMessageW,
-                SetForegroundWindow, SetMenuDefaultItem, TPM_BOTTOMALIGN, TPM_RETURNCMD,
-                TPM_RIGHTBUTTON, TrackPopupMenuEx, WM_APP, WM_NULL,
-            },
-        },
-    },
-    core::HSTRING,
-};
+use windows_core::HSTRING;
 
 /// Posted to the host window when an interaction is queued from any thread.
-pub const WM_INTERACTION: u32 = WM_APP + 4;
+pub const WM_INTERACTION: u32 = WM_APP as u32 + 4;
 
 /// Shared with the UI Automation provider, whose methods run on a thread of
 /// UIA's choosing: the queue is the only state that crosses threads.
@@ -72,9 +60,9 @@ pub(crate) fn take_interactions() -> Vec<Interaction> {
         .unwrap_or_default()
 }
 
-fn down(key: VIRTUAL_KEY) -> bool {
+fn down(key: i32) -> bool {
     // SAFETY: a stateless keyboard query. The high bit means "currently down".
-    unsafe { GetAsyncKeyState(i32::from(key.0)) < 0 }
+    unsafe { GetAsyncKeyState(key) < 0 }
 }
 pub(crate) fn held_keys() -> HeldKeys {
     HeldKeys {
@@ -82,25 +70,21 @@ pub(crate) fn held_keys() -> HeldKeys {
         ctrl: down(VK_CONTROL),
         shift: down(VK_SHIFT),
         alt: down(VK_MENU),
-        n: down(VIRTUAL_KEY(0x4e)),
+        n: down(0x4e),
     }
 }
 
 fn input(event: KeyEvent) -> INPUT {
     let key = match event.key {
         Key::Win => VK_LWIN,
-        Key::N => VIRTUAL_KEY(0x4e),
+        Key::N => 0x4e,
     };
     INPUT {
-        r#type: INPUT_KEYBOARD,
+        r#type: INPUT_KEYBOARD as u32,
         Anonymous: INPUT_0 {
             ki: KEYBDINPUT {
-                wVk: key,
-                dwFlags: if event.up {
-                    KEYEVENTF_KEYUP
-                } else {
-                    KEYBD_EVENT_FLAGS(0)
-                },
+                wVk: key as u16,
+                dwFlags: if event.up { KEYEVENTF_KEYUP as u32 } else { 0 },
                 ..Default::default()
             },
         },
@@ -119,7 +103,7 @@ pub(crate) fn send_win_n() -> CalendarOutcome {
     if inserted == batch.len() {
         return CalendarOutcome::Sent;
     }
-    let error = windows::core::Error::from_thread();
+    let error = windows_core::Error::from_thread();
     let cleanup: Vec<INPUT> = cleanup_after(inserted).into_iter().map(input).collect();
     if !cleanup.is_empty() {
         // SAFETY: as above. Releases only keys whose injected key-down was accepted.
@@ -143,16 +127,16 @@ pub(crate) fn show_menu(
     // SAFETY: creates, uses and destroys one menu on this thread; every string
     // outlives its call; the host window is ours.
     unsafe {
-        let menu = CreatePopupMenu().ok()?;
+        let menu = CreatePopupMenu().valid()?;
         let mut built = true;
         for item in menu_items(paused) {
             built &= AppendMenuW(
                 menu,
-                MF_STRING,
+                MF_STRING as u32,
                 item.command.id() as usize,
                 &HSTRING::from(item.label),
             )
-            .is_ok();
+            .as_bool();
         }
         if !built {
             let _ = DestroyMenu(menu);
@@ -172,14 +156,14 @@ pub(crate) fn show_menu(
         let _ = SetForegroundWindow(host);
         let chosen = TrackPopupMenuEx(
             menu,
-            (TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN).0,
+            (TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN) as u32,
             point.x,
             point.y,
             host,
             None,
         );
         // Documented follow-up that lets the previous foreground window recover.
-        let _ = PostMessageW(Some(host), WM_NULL, WPARAM(0), LPARAM(0));
+        let _ = PostMessageW(Some(host), WM_NULL as u32, WPARAM(0), LPARAM(0));
         let _ = DestroyMenu(menu);
         MenuCommand::from_id(chosen.0 as u32)
     }

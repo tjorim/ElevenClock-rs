@@ -11,6 +11,7 @@
 //! after the message returns, with the runtime in hand. That keeps callbacks
 //! re-entrancy free (Apply may show a message box and call back into the runtime)
 //! and lets the same loop that serves the clock serve this window.
+use crate::bindings::*;
 use crate::{
     logging,
     preferences_store::{PreferenceSession, PreferencesStore},
@@ -23,27 +24,7 @@ use crate::{
 };
 use clock_core::{Monitors, Theme, format::PRESETS};
 use std::{cell::Cell, cell::RefCell, fmt, time::Instant};
-use windows::{
-    Win32::{
-        Foundation::{HINSTANCE, HWND, LPARAM, POINT, RECT, WPARAM},
-        Graphics::Gdi::ScreenToClient,
-        System::LibraryLoader::GetModuleHandleW,
-        UI::{
-            Accessibility::NotifyWinEvent,
-            Controls::{
-                EM_LIMITTEXT, EM_SETSEL, ICC_STANDARD_CLASSES, ICC_TAB_CLASSES, ICC_UPDOWN_CLASS,
-                INITCOMMONCONTROLSEX, InitCommonControlsEx, NMHDR, TCIF_TEXT, TCITEMW,
-                TCM_GETCURSEL, TCM_INSERTITEMW, TCM_SETCURSEL, TCN_SELCHANGE, UDM_SETBUDDY,
-                UDM_SETRANGE32,
-            },
-            Input::KeyboardAndMouse::{
-                GetFocus, GetKeyState, SetFocus, VK_CONTROL, VK_NEXT, VK_PRIOR, VK_SHIFT, VK_TAB,
-            },
-            WindowsAndMessaging::*,
-        },
-    },
-    core::{PCWSTR, PWSTR, w},
-};
+use windows_core::{PCWSTR, PWSTR, w};
 
 // Resource ids shared with `settings.rc`, the hosted UI checks and the tests.
 const DIALOG: usize = 101;
@@ -96,7 +77,7 @@ const EN_CHANGE: u32 = 0x0300;
 #[derive(Debug)]
 pub struct PlatformError {
     context: &'static str,
-    source: windows::core::Error,
+    source: windows_core::Error,
 }
 impl fmt::Display for PlatformError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -104,20 +85,20 @@ impl fmt::Display for PlatformError {
     }
 }
 impl std::error::Error for PlatformError {}
-impl From<windows::core::Error> for PlatformError {
-    fn from(source: windows::core::Error) -> Self {
+impl From<windows_core::Error> for PlatformError {
+    fn from(source: windows_core::Error) -> Self {
         Self::new("ElevenClock-rs could not start", source)
     }
 }
 impl PlatformError {
-    pub fn new(context: &'static str, source: windows::core::Error) -> Self {
+    pub fn new(context: &'static str, source: windows_core::Error) -> Self {
         Self { context, source }
     }
     /// An error with no underlying Win32 failure, such as an unresponsive peer.
     pub fn message(context: &'static str) -> Self {
         Self::new(
             context,
-            windows::core::Error::new(windows::core::HRESULT(0x80004005u32 as i32), "Failed"),
+            windows_core::Error::new(windows_core::HRESULT(0x80004005u32 as i32), "Failed"),
         )
     }
     pub fn show(&self) {
@@ -128,7 +109,7 @@ impl PlatformError {
                 None,
                 PCWSTR(text.as_ptr()),
                 w!("ElevenClock-rs"),
-                MB_OK | MB_ICONERROR,
+                (MB_OK | MB_ICONERROR) as u32,
             );
         }
     }
@@ -156,7 +137,7 @@ thread_local! {
 /// message (assistive technology and automation setting a control's text) never
 /// makes `GetMessageW` return on its own; this posted message does, so the loop
 /// services the queue promptly.
-const WM_WAKE_SERVICE: u32 = WM_APP + 10;
+const WM_WAKE_SERVICE: u32 = WM_APP as u32 + 10;
 
 fn queue(event: UiEvent) {
     EVENTS.with_borrow_mut(|events| events.push(event));
@@ -185,7 +166,7 @@ fn open_dialog() -> Option<HWND> {
 fn item(parent: HWND, id: i32) -> HWND {
     // SAFETY: plain lookup; a missing control yields a null handle that every
     // helper below tolerates.
-    unsafe { GetDlgItem(Some(parent), id) }.unwrap_or_default()
+    unsafe { GetDlgItem(Some(parent), id) }
 }
 fn page(dialog: HWND, page: i32) -> HWND {
     item(dialog, page)
@@ -196,14 +177,15 @@ fn control(dialog: HWND, page_id: i32, id: i32) -> HWND {
 fn send(hwnd: HWND, message: u32, wparam: usize, lparam: isize) -> isize {
     // SAFETY: documented control messages with plain-integer or live-pointer
     // arguments; a null or stale handle only fails the call.
-    unsafe { SendMessageW(hwnd, message, Some(WPARAM(wparam)), Some(LPARAM(lparam))) }.0
+    unsafe { SendMessageW(hwnd, message, WPARAM(wparam), LPARAM(lparam)) }.0
 }
 fn get_text(hwnd: HWND) -> String {
     // SAFETY: the buffer is sized from the reported length plus the terminator.
     unsafe {
         let length = GetWindowTextLengthW(hwnd).max(0) as usize;
         let mut buffer = vec![0u16; length + 1];
-        let copied = GetWindowTextW(hwnd, &mut buffer).max(0) as usize;
+        let copied =
+            GetWindowTextW(hwnd, PWSTR(buffer.as_mut_ptr()), buffer.len() as i32).max(0) as usize;
         String::from_utf16_lossy(&buffer[..copied])
     }
 }
@@ -231,30 +213,35 @@ fn enable(dialog: HWND, hwnd: HWND, enabled: bool) {
     // control cannot keep the keyboard, so focus moves on first.
     unsafe {
         if !enabled && GetFocus() == hwnd {
-            send(dialog, WM_NEXTDLGCTL, item(dialog, IDOK.0).0 as usize, 1);
+            send(
+                dialog,
+                WM_NEXTDLGCTL as u32,
+                item(dialog, IDOK).0 as usize,
+                1,
+            );
         }
-        let _ = windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow(hwnd, enabled);
+        let _ = crate::bindings::EnableWindow(hwnd, enabled);
     }
 }
 fn checked(hwnd: HWND, on: bool) {
-    send(hwnd, BM_SETCHECK, usize::from(on), 0);
+    send(hwnd, BM_SETCHECK as u32, usize::from(on), 0);
 }
 
 fn add_string(combo: HWND, text: &str) {
     let buffer = wide(text);
-    send(combo, CB_ADDSTRING, 0, buffer.as_ptr() as isize);
+    send(combo, CB_ADDSTRING as u32, 0, buffer.as_ptr() as isize);
 }
 
 /// Tell assistive technology that this status text just changed. Static controls
 /// have no live region; an alert event is how a screen reader is told to speak.
 fn announce(hwnd: HWND) {
     // SAFETY: notification only; no pointers.
-    unsafe { NotifyWinEvent(EVENT_SYSTEM_ALERT, hwnd, OBJID_CLIENT.0, 0) };
+    unsafe { NotifyWinEvent(EVENT_SYSTEM_ALERT as u32, hwnd, OBJID_CLIENT, 0) };
 }
 
 fn show_selected_page(dialog: HWND) {
     let tab = item(dialog, ID_TAB);
-    let selected = send(tab, TCM_GETCURSEL, 0, 0);
+    let selected = send(tab, TCM_GETCURSEL as u32, 0, 0);
     for (index, id) in PAGES.iter().enumerate() {
         // SAFETY: shows or hides our own child dialogs.
         unsafe {
@@ -271,7 +258,7 @@ fn show_selected_page(dialog: HWND) {
 }
 fn select_page(dialog: HWND, id: i32) {
     if let Some(index) = PAGES.iter().position(|page| *page == id) {
-        send(item(dialog, ID_TAB), TCM_SETCURSEL, index, 0);
+        send(item(dialog, ID_TAB), TCM_SETCURSEL as u32, index, 0);
         show_selected_page(dialog);
     }
 }
@@ -282,7 +269,7 @@ fn layout_pages(dialog: HWND) {
     let mut rect = RECT::default();
     // SAFETY: reads a live child's rectangle and converts its corner.
     unsafe {
-        if GetWindowRect(anchor, &mut rect).is_err() {
+        if !GetWindowRect(anchor, &mut rect).as_bool() {
             return;
         }
         let mut corner = POINT {
@@ -300,7 +287,7 @@ fn layout_pages(dialog: HWND) {
                 corner.y,
                 rect.right - rect.left,
                 rect.bottom - rect.top,
-                SWP_NOZORDER | SWP_NOACTIVATE,
+                (SWP_NOZORDER | SWP_NOACTIVATE) as u32,
             );
         }
     }
@@ -324,13 +311,13 @@ unsafe extern "system" fn dialog_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> isize {
-    match message {
+    match message as i32 {
         WM_INITDIALOG => {
             OPEN.set(hwnd.0 as isize);
             // SAFETY: shared icons returned by LoadIconW must NOT be destroyed.
             unsafe {
                 for size in [ICON_BIG, ICON_SMALL] {
-                    SendMessageW(hwnd, WM_SETICON, Some(WPARAM(size as usize)), Some(lparam));
+                    SendMessageW(hwnd, WM_SETICON as u32, WPARAM(size as usize), lparam);
                 }
             }
             1 // Dialog manager sets focus to the first tab stop (the page tabs).
@@ -377,7 +364,7 @@ unsafe extern "system" fn page_proc(
     wparam: WPARAM,
     _lparam: LPARAM,
 ) -> isize {
-    match message {
+    match message as i32 {
         // Not handled: focus stays where the user left it.
         WM_INITDIALOG => 0,
         WM_COMMAND => {
@@ -431,17 +418,17 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         // SAFETY: null module name resolves this executable; the initialized
         // stack structure lives for the call; resources are compiled into the app.
         unsafe {
-            let module = GetModuleHandleW(None)?;
-            let icon = LoadIconW(Some(module.into()), PCWSTR(102_usize as *const u16))?;
+            let module = GetModuleHandleW(None).ok()?;
+            let icon = LoadIconW(Some(module), PCWSTR(102_usize as *const u16)).ok()?;
             let controls = INITCOMMONCONTROLSEX {
                 dwSize: std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32,
-                dwICC: ICC_STANDARD_CLASSES | ICC_TAB_CLASSES | ICC_UPDOWN_CLASS,
+                dwICC: (ICC_STANDARD_CLASSES | ICC_TAB_CLASSES | ICC_UPDOWN_CLASS) as u32,
             };
             if !InitCommonControlsEx(&controls).as_bool() {
-                return Err(windows::core::Error::from_thread().into());
+                return Err(windows_core::Error::from_thread().into());
             }
             Ok(Self {
-                module: module.into(),
+                module,
                 icon: icon.0 as isize,
                 controller: SettingsController::new(session),
                 status: String::new(),
@@ -496,7 +483,8 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 Some(dialog_proc),
                 LPARAM(self.icon),
             )
-        }?;
+        }
+        .ok()?;
         if let Err(error) = self.build(dialog) {
             // SAFETY: tears down the half-built window we just created.
             unsafe {
@@ -529,7 +517,8 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                     Some(page_proc),
                     LPARAM(0),
                 )
-            }?;
+            }
+            .ok()?;
             // SAFETY: gives the page its id and puts it right after the previous
             // control in z-order, which is also its place in the tab order.
             unsafe {
@@ -541,19 +530,19 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                     0,
                     0,
                     0,
-                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                    (SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) as u32,
                 );
             }
             after = hwnd;
             let mut title = wide(PAGE_TITLES[index]);
             let entry = TCITEMW {
-                mask: TCIF_TEXT,
+                mask: TCIF_TEXT as u32,
                 pszText: PWSTR(title.as_mut_ptr()),
                 ..Default::default()
             };
             send(
                 tab,
-                TCM_INSERTITEMW,
+                TCM_INSERTITEMW as u32,
                 index,
                 &entry as *const TCITEMW as isize,
             );
@@ -576,14 +565,14 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             add_string(theme, label);
         }
         let font = control(dialog, PAGE_APPEARANCE, ID_FONT);
-        send(font, EM_LIMITTEXT, 3, 0);
+        send(font, EM_LIMITTEXT as u32, 3, 0);
         let spin = control(dialog, PAGE_APPEARANCE, ID_FONT_SPIN);
-        send(spin, UDM_SETBUDDY, font.0 as usize, 0);
+        send(spin, UDM_SETBUDDY as u32, font.0 as usize, 0);
         // The arrows are a separate accessible object; give them a name of their own.
         set_text(spin, "Change maximum font size");
         send(
             spin,
-            UDM_SETRANGE32,
+            UDM_SETRANGE32 as u32,
             usize::from(FONT_MIN),
             isize::from(FONT_MAX),
         );
@@ -623,7 +612,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             };
             send(
                 control(dialog, PAGE_APPEARANCE, ID_THEME),
-                CB_SETCURSEL,
+                CB_SETCURSEL as u32,
                 theme,
                 0,
             );
@@ -653,7 +642,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             let preset = evaluation.preset.unwrap_or(PRESETS.len());
             send(
                 control(dialog, PAGE_DATE, ID_PRESET),
-                CB_SETCURSEL,
+                CB_SETCURSEL as u32,
                 preset,
                 0,
             );
@@ -910,8 +899,8 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             }
             UiEvent::Close => self.finish(dialog),
             UiEvent::Command { id, code } => match (id, code) {
-                (id, _) if id == IDCANCEL.0 => self.finish(dialog),
-                (id, _) if id == IDOK.0 => self.apply(dialog, runtime, true),
+                (id, _) if id == IDCANCEL => self.finish(dialog),
+                (id, _) if id == IDOK => self.apply(dialog, runtime, true),
                 (ID_APPLY, _) => self.apply(dialog, runtime, false),
                 (ID_RESET, _) => {
                     self.controller.reset_to_defaults();
@@ -926,7 +915,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 (ID_STARTUP_CHECK, 0) => {
                     let on = send(
                         control(dialog, PAGE_STARTUP, ID_STARTUP_CHECK),
-                        BM_GETCHECK,
+                        BM_GETCHECK as u32,
                         0,
                         0,
                     ) == 1; // BST_CHECKED
@@ -942,8 +931,13 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 (ID_STARTUP_REPAIR, 0) => self.change_startup(dialog, StartupAction::Repair),
                 (ID_SUPPORT_REFRESH, _) => self.start_refresh(dialog, runtime),
                 (ID_SUPPORT_COPY, _) => self.copy_report(dialog),
-                (ID_PRESET, code) if code == CBN_SELCHANGE => {
-                    let selected = send(control(dialog, PAGE_DATE, ID_PRESET), CB_GETCURSEL, 0, 0);
+                (ID_PRESET, code) if code == CBN_SELCHANGE as u32 => {
+                    let selected = send(
+                        control(dialog, PAGE_DATE, ID_PRESET),
+                        CB_GETCURSEL as u32,
+                        0,
+                        0,
+                    );
                     // "Custom format" (the last entry) changes nothing.
                     if usize::try_from(selected).is_ok_and(|i| self.controller.select_preset(i)) {
                         self.sync_all(dialog);
@@ -968,10 +962,10 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                     self.controller.set_monitors(Monitors::All);
                     edited(self, runtime);
                 }
-                (ID_THEME, code) if code == CBN_SELCHANGE => {
+                (ID_THEME, code) if code == CBN_SELCHANGE as u32 => {
                     let theme = match send(
                         control(dialog, PAGE_APPEARANCE, ID_THEME),
-                        CB_GETCURSEL,
+                        CB_GETCURSEL as u32,
                         0,
                         0,
                     ) {
@@ -1061,12 +1055,12 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         {
             send(
                 target,
-                EM_SETSEL,
+                EM_SETSEL as u32,
                 selection.start,
                 isize::try_from(selection.end).unwrap_or(isize::MAX),
             );
         } else if id == ID_FONT {
-            send(target, EM_SETSEL, 0, -1);
+            send(target, EM_SETSEL as u32, 0, -1);
         }
     }
 
@@ -1092,25 +1086,25 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             let ours = message.hwnd == dialog || IsChild(dialog, message.hwnd).as_bool();
             // Ctrl+Tab, Ctrl+Shift+Tab and Ctrl+PageUp/PageDown switch pages, as in
             // property sheets. A multi-line edit would otherwise swallow them.
-            if ours && message.message == WM_KEYDOWN && GetKeyState(i32::from(VK_CONTROL.0)) < 0 {
+            if ours && message.message == WM_KEYDOWN as u32 && GetKeyState(VK_CONTROL) < 0 {
                 let key = message.wParam.0;
-                let step = if key == usize::from(VK_TAB.0) {
-                    Some(if GetKeyState(i32::from(VK_SHIFT.0)) < 0 {
+                let step = if key == VK_TAB as usize {
+                    Some(if GetKeyState(VK_SHIFT) < 0 {
                         PAGES.len() - 1
                     } else {
                         1
                     })
-                } else if key == usize::from(VK_NEXT.0) {
+                } else if key == VK_NEXT as usize {
                     Some(1)
-                } else if key == usize::from(VK_PRIOR.0) {
+                } else if key == VK_PRIOR as usize {
                     Some(PAGES.len() - 1)
                 } else {
                     None
                 };
                 if let Some(step) = step {
                     let tab = item(dialog, ID_TAB);
-                    let current = send(tab, TCM_GETCURSEL, 0, 0).max(0) as usize;
-                    send(tab, TCM_SETCURSEL, (current + step) % PAGES.len(), 0);
+                    let current = send(tab, TCM_GETCURSEL as u32, 0, 0).max(0) as usize;
+                    send(tab, TCM_SETCURSEL as u32, (current + step) % PAGES.len(), 0);
                     show_selected_page(dialog);
                     queue(UiEvent::PageChanged);
                     let _ = SetFocus(Some(tab));
@@ -1141,7 +1135,7 @@ fn confirm_recovery(dialog: HWND) -> bool {
                  of the damaged data and save your new settings. Continue?"
             ),
             w!("ElevenClock-rs"),
-            MB_YESNO | MB_ICONQUESTION,
+            (MB_YESNO | MB_ICONQUESTION) as u32,
         ) == IDYES
     }
 }

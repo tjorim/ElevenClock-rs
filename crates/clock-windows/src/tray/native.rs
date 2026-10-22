@@ -1,16 +1,10 @@
 //! `Shell_NotifyIconW` registration (Windows, UI thread only).
 use super::WM_TRAYICON;
-use crate::interaction::tray_tooltip;
-use windows::Win32::{
-    Foundation::HWND,
-    UI::{
-        Shell::{
-            NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
-            NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW, Shell_NotifyIconW,
-        },
-        WindowsAndMessaging::HICON,
-    },
+use crate::bindings::{
+    HICON, HWND, NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+    NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW, Shell_NotifyIconW,
 };
+use crate::interaction::tray_tooltip;
 
 /// Identifies this app's single icon among those owned by the host window.
 const ICON_ID: u32 = 1;
@@ -44,7 +38,7 @@ impl Tray {
             cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
             hWnd: self.host,
             uID: ICON_ID,
-            uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP,
+            uFlags: (NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP) as u32,
             uCallbackMessage: WM_TRAYICON,
             hIcon: self.icon,
             ..Default::default()
@@ -70,12 +64,12 @@ impl Tray {
             // After an Explorer restart the old entry is gone and ADD succeeds. If
             // it still exists (a repeated restore request), ADD fails and MODIFY
             // refreshes it instead of stacking a second icon.
-            let added = Shell_NotifyIconW(NIM_ADD, &data).as_bool()
-                || Shell_NotifyIconW(NIM_MODIFY, &data).as_bool();
+            let added = Shell_NotifyIconW(NIM_ADD as u32, &data).as_bool()
+                || Shell_NotifyIconW(NIM_MODIFY as u32, &data).as_bool();
             if added {
                 // Version 4 delivers keyboard selection and the anchor point.
-                data.Anonymous.uVersion = NOTIFYICON_VERSION_4;
-                let _ = Shell_NotifyIconW(NIM_SETVERSION, &data);
+                data.Anonymous.uVersion = NOTIFYICON_VERSION_4 as u32;
+                let _ = Shell_NotifyIconW(NIM_SETVERSION as u32, &data);
             }
             self.registered = added;
         }
@@ -88,7 +82,7 @@ impl Tray {
         if self.registered {
             let data = self.data();
             // SAFETY: as above.
-            self.registered = unsafe { Shell_NotifyIconW(NIM_MODIFY, &data) }.as_bool();
+            self.registered = unsafe { Shell_NotifyIconW(NIM_MODIFY as u32, &data) }.as_bool();
         }
     }
 }
@@ -103,7 +97,7 @@ impl Drop for Tray {
         };
         // SAFETY: deleting this icon by (window, id); a missing icon is harmless.
         unsafe {
-            let _ = Shell_NotifyIconW(NIM_DELETE, &data);
+            let _ = Shell_NotifyIconW(NIM_DELETE as u32, &data);
         }
     }
 }

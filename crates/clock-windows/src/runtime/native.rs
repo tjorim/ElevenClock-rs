@@ -13,6 +13,7 @@ use super::{
     overlay_window::{Overlay, OverlayClass, REPAINT_EPOCH},
     shell::{covers_monitor, is_click_through},
 };
+use crate::bindings::*;
 use crate::{
     clock_time,
     events::{self, Notifications, WM_WAKE},
@@ -38,17 +39,9 @@ use std::{
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
-use windows::{
-    Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
-        Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONULL, MONITORINFO, MonitorFromWindow},
-        System::LibraryLoader::GetModuleHandleW,
-        UI::{HiDpi::GetDpiForWindow, WindowsAndMessaging::*},
-    },
-    core::{HSTRING, PCWSTR, w},
-};
+use windows_core::{HSTRING, PCWSTR, PWSTR, w};
 
-const WM_DISCOVERY: u32 = WM_APP + 3;
+const WM_DISCOVERY: u32 = WM_APP as u32 + 3;
 const TIMER_CLOCK: usize = 1;
 const TIMER_POLL: usize = 2;
 
@@ -68,25 +61,28 @@ pub(crate) fn request_exit() {
     EXIT.set(true);
 }
 
-fn render_error(error: RenderError) -> windows::core::Error {
+fn render_error(error: RenderError) -> windows_core::Error {
     let code = match error {
         RenderError::Native { code, .. } => code,
         _ => 0x80004005u32 as i32,
     };
-    windows::core::Error::new(windows::core::HRESULT(code), error.to_string())
+    windows_core::Error::new(windows_core::HRESULT(code), error.to_string())
 }
 
 fn is_taskbar_class(hwnd: HWND) -> bool {
     let mut class = [0u16; 32];
     // SAFETY: writable buffer of the advertised length; stale handles yield zero.
-    let length = unsafe { GetClassNameW(hwnd, &mut class) }.max(0) as usize;
+    let length = unsafe { GetClassNameW(hwnd, PWSTR(class.as_mut_ptr()), class.len() as i32) }
+        .max(0) as usize;
     let text = String::from_utf16_lossy(&class[..length]);
     text == "Shell_TrayWnd" || text == "Shell_SecondaryTrayWnd"
 }
 fn window_rect(hwnd: HWND) -> Option<PhysicalRect> {
     let mut rect = RECT::default();
     // SAFETY: live output buffer; a stale handle fails closed.
-    unsafe { GetWindowRect(hwnd, &mut rect) }.ok()?;
+    if !unsafe { GetWindowRect(hwnd, &mut rect) }.as_bool() {
+        return None;
+    }
     physical_rect(rect)
 }
 
@@ -94,7 +90,7 @@ fn window_rect(hwnd: HWND) -> Option<PhysicalRect> {
 /// auto-hide slide is not a change. One window lookup: no UI Automation.
 fn tray_rect(taskbar: HWND, taskbar_rect: PhysicalRect) -> Option<PhysicalRect> {
     // SAFETY: read-only lookup of a direct child of a possibly stale window.
-    let tray = unsafe { FindWindowExW(Some(taskbar), None, w!("TrayNotifyWnd"), None) }.ok()?;
+    let tray = unsafe { FindWindowExW(Some(taskbar), None, w!("TrayNotifyWnd"), None) }.valid()?;
     let rect = window_rect(tray)?;
     PhysicalRect::new(
         rect.left() - taskbar_rect.left(),
@@ -114,7 +110,8 @@ fn foreground() -> (Option<PhysicalRect>, bool) {
         return (None, false);
     }
     let mut class = [0u16; 64];
-    let length = unsafe { GetClassNameW(hwnd, &mut class) }.max(0) as usize;
+    let length = unsafe { GetClassNameW(hwnd, PWSTR(class.as_mut_ptr()), class.len() as i32) }
+        .max(0) as usize;
     let class = String::from_utf16_lossy(&class[..length]);
     let shell = matches!(
         class.as_str(),
@@ -310,7 +307,7 @@ impl Platform for NativePlatform {
         };
         // SAFETY: read-only queries; the monitor handle is used immediately.
         let (monitor_rect, dpi, visible) = unsafe {
-            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL as u32);
             let rect = (!monitor.is_invalid() && GetMonitorInfoW(monitor, &mut info).as_bool())
                 .then(|| physical_rect(info.rcMonitor))
                 .flatten();
@@ -478,7 +475,7 @@ fn set_timer(host: HWND, id: usize, delay: Duration) {
 
 fn guard(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match message {
-        WM_TIMER => {
+        m if m == WM_TIMER as u32 => {
             // One-shot semantics on top of the periodic USER timer.
             // SAFETY: kills this window's own timer.
             unsafe {
@@ -508,9 +505,9 @@ fn guard(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
             }
             LRESULT(0)
         }
-        WM_QUERYENDSESSION => LRESULT(1),
+        m if m == WM_QUERYENDSESSION as u32 => LRESULT(1),
         // A polite external close (taskkill without /f) is an Exit request.
-        WM_CLOSE => {
+        m if m == WM_CLOSE as u32 => {
             request_exit();
             LRESULT(0)
         }
@@ -546,30 +543,30 @@ pub enum ExitReason {
 
 struct HostWindow {
     hwnd: HWND,
-    instance: windows::Win32::Foundation::HINSTANCE,
+    instance: crate::bindings::HINSTANCE,
 }
 impl HostWindow {
-    fn create(title: &str) -> windows::core::Result<Self> {
+    fn create(title: &str) -> windows_core::Result<Self> {
         // SAFETY: registers a class and creates a hidden top-level (not
         // message-only) window, so broadcast messages reach it. Never shown.
         unsafe {
-            let instance: windows::Win32::Foundation::HINSTANCE = GetModuleHandleW(None)?.into();
+            let instance: crate::bindings::HINSTANCE = GetModuleHandleW(None).ok()?;
             // The class name must outlive RegisterClassW, so bind it first.
             let class_name = HSTRING::from(HOST_CLASS);
             let class = WNDCLASSW {
                 lpfnWndProc: Some(host_proc),
                 hInstance: instance,
-                lpszClassName: windows::core::PCWSTR(class_name.as_ptr()),
+                lpszClassName: windows_core::PCWSTR(class_name.as_ptr()),
                 ..Default::default()
             };
-            if RegisterClassW(&class) == 0 {
-                return Err(windows::core::Error::from_thread());
+            if RegisterClassW(&class).0 == 0 {
+                return Err(windows_core::Error::from_thread());
             }
             let hwnd = CreateWindowExW(
-                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) as u32,
                 &HSTRING::from(HOST_CLASS),
                 &HSTRING::from(title),
-                WS_OVERLAPPED,
+                WS_OVERLAPPED as u32,
                 0,
                 0,
                 0,
@@ -579,7 +576,7 @@ impl HostWindow {
                 Some(instance),
                 None,
             );
-            match hwnd {
+            match hwnd.ok() {
                 Ok(hwnd) => Ok(Self { hwnd, instance }),
                 Err(error) => {
                     let _ = UnregisterClassW(&HSTRING::from(HOST_CLASS), Some(instance));
@@ -605,25 +602,25 @@ fn tray_icon() -> HICON {
     // id Settings uses); LR_SHARED icons are owned by the system. Failure falls
     // back to the stock application icon, which is also shared.
     unsafe {
-        let loaded = GetModuleHandleW(None).ok().and_then(|module| {
+        let loaded = GetModuleHandleW(None).valid().and_then(|module| {
             LoadImageW(
-                Some(module.into()),
+                Some(module),
                 PCWSTR(102_usize as *const u16),
-                IMAGE_ICON,
+                IMAGE_ICON as u32,
                 GetSystemMetrics(SM_CXSMICON),
                 GetSystemMetrics(SM_CYSMICON),
-                LR_SHARED,
+                LR_SHARED as u32,
             )
-            .ok()
+            .valid()
         });
         match loaded {
             Some(handle) => HICON(handle.0),
-            None => LoadIconW(None, IDI_APPLICATION).unwrap_or_default(),
+            None => LoadIconW(None, IDI_APPLICATION),
         }
     }
 }
 
-fn start_error(error: windows::core::Error) -> PlatformError {
+fn start_error(error: windows_core::Error) -> PlatformError {
     PlatformError::new("ElevenClock-rs could not start its clock", error)
 }
 
@@ -725,8 +722,8 @@ fn pump<S: PreferencesStore>(
     if PANICKED.take() {
         // Fail closed: the clock overlay is removed, the native clock remains.
         request_exit();
-        return Err(start_error(windows::core::Error::new(
-            windows::core::HRESULT(0x80004005u32 as i32),
+        return Err(start_error(windows_core::Error::new(
+            windows_core::HRESULT(0x80004005u32 as i32),
             "An internal error occurred; ElevenClock-rs stopped and the Windows clock is shown.",
         )));
     }
@@ -794,7 +791,7 @@ mod tests {
             WM_TRAYICON,
         ];
         for (i, a) in all.iter().enumerate() {
-            assert!(*a >= WM_APP, "{a:#x}");
+            assert!(*a >= WM_APP as u32, "{a:#x}");
             for b in &all[i + 1..] {
                 assert_ne!(a, b);
             }

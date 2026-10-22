@@ -1,4 +1,5 @@
 use clock_core::{ClockText, PhysicalRect, Theme};
+use clock_windows::bindings::*;
 use clock_windows::overlay::{BandAction, band_action, may_show};
 use clock_windows::{
     render::{ClockSurface, PaintOutcome, PaintRequest, RenderError, Renderer, WorstCase},
@@ -11,19 +12,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use windows::{
-    Win32::{
-        Foundation::*,
-        Graphics::Gdi::*,
-        System::{LibraryLoader::GetModuleHandleW, Threading::*},
-        UI::{
-            HiDpi::GetDpiForWindow,
-            Input::KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
-            WindowsAndMessaging::*,
-        },
-    },
-    core::{Result, w},
-};
+use windows_core::{PWSTR, Result, w};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExperimentSlot {
@@ -43,7 +32,7 @@ pub enum Update {
 }
 struct WindowClass {
     instance: HINSTANCE,
-    name: windows::core::PCWSTR,
+    name: windows_core::PCWSTR,
 }
 impl Drop for WindowClass {
     fn drop(&mut self) {
@@ -86,23 +75,25 @@ fn harness_theme() -> Option<Theme> {
         _ => None,
     }
 }
-fn render_error(error: RenderError) -> windows::core::Error {
+fn render_error(error: RenderError) -> windows_core::Error {
     let code = match error {
         RenderError::Native { code, .. } => code,
         _ => 0x80004005u32 as i32,
     };
-    windows::core::Error::new(windows::core::HRESULT(code), error.to_string())
+    windows_core::Error::new(windows_core::HRESULT(code), error.to_string())
 }
 
 fn bounds(hwnd: HWND) -> Option<PhysicalRect> {
     let mut r = RECT::default();
     unsafe {
-        GetWindowRect(hwnd, &mut r).ok()?;
+        if !GetWindowRect(hwnd, &mut r).as_bool() {
+            return None;
+        }
     }
     clock_windows::taskbar::probe::physical_rect(r)
 }
 fn topmost(hwnd: HWND) -> bool {
-    unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0 }
+    unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST as isize != 0 }
 }
 fn shell_current(hwnd: HWND, slot: &ExperimentSlot) -> bool {
     unsafe {
@@ -111,7 +102,9 @@ fn shell_current(hwnd: HWND, slot: &ExperimentSlot) -> bool {
         if pid != slot.shell_pid {
             return false;
         }
-        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+        let Some(process) =
+            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION as u32, false, pid).valid()
+        else {
             return false;
         };
         let (mut creation, mut exit, mut kernel, mut user) = (
@@ -122,7 +115,7 @@ fn shell_current(hwnd: HWND, slot: &ExperimentSlot) -> bool {
         );
         let result = GetProcessTimes(process, &mut creation, &mut exit, &mut kernel, &mut user);
         let _ = CloseHandle(process);
-        result.is_ok()
+        result.as_bool()
             && (u64::from(creation.dwHighDateTime) << 32 | u64::from(creation.dwLowDateTime))
                 == slot.shell_started
     }
@@ -131,7 +124,7 @@ fn taskbar(slot: &ExperimentSlot) -> Result<HWND> {
     for name in [w!("Shell_TrayWnd"), w!("Shell_SecondaryTrayWnd")] {
         let mut after = None;
         for _ in 0..128 {
-            let Ok(hwnd) = (unsafe { FindWindowExW(None, after, name, None) }) else {
+            let Some(hwnd) = (unsafe { FindWindowExW(None, after, name, None) }).valid() else {
                 break;
             };
             if bounds(hwnd) == Some(slot.taskbar) && shell_current(hwnd, slot) {
@@ -140,7 +133,7 @@ fn taskbar(slot: &ExperimentSlot) -> Result<HWND> {
             after = Some(hwnd);
         }
     }
-    Err(windows::core::Error::from_thread())
+    Err(windows_core::Error::from_thread())
 }
 
 /// Windows can enumerate windows from other z-order bands between taskbar
@@ -149,22 +142,20 @@ fn taskbar(slot: &ExperimentSlot) -> Result<HWND> {
 fn relative_predecessor(root: HWND, topmost: bool) -> Result<Option<HWND>> {
     let mut cursor = root;
     for _ in 0..128 {
-        let Ok(previous) = (unsafe { GetWindow(cursor, GW_HWNDPREV) }) else {
-            return Ok(None);
-        };
+        let previous = unsafe { GetWindow(cursor, GW_HWNDPREV as u32) };
         if previous.is_invalid() {
             return Ok(None);
         }
         let same_band =
-            (unsafe { GetWindowLongPtrW(previous, GWL_EXSTYLE) } & WS_EX_TOPMOST.0 as isize != 0)
+            (unsafe { GetWindowLongPtrW(previous, GWL_EXSTYLE) } & WS_EX_TOPMOST as isize != 0)
                 == topmost;
         if same_band {
             return Ok(Some(previous));
         }
         cursor = previous;
     }
-    Err(windows::core::Error::new(
-        windows::core::HRESULT(0x80004005u32 as i32),
+    Err(windows_core::Error::new(
+        windows_core::HRESULT(0x80004005u32 as i32),
         "Taskbar predecessor inventory exceeded its bound",
     ))
 }
@@ -180,11 +171,15 @@ pub(crate) fn check_slot(slot: &ExperimentSlot) -> Result<()> {
     unsafe {
         if GetDpiForWindow(hwnd) != slot.dpi
             || !IsWindowVisible(hwnd).as_bool()
-            || !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL), &mut info).as_bool()
+            || !GetMonitorInfoW(
+                MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL as u32),
+                &mut info,
+            )
+            .as_bool()
             || clock_windows::taskbar::probe::physical_rect(info.rcMonitor) != Some(slot.monitor)
         {
-            return Err(windows::core::Error::new(
-                windows::core::HRESULT(0x80004005u32 as i32),
+            return Err(windows_core::Error::new(
+                windows_core::HRESULT(0x80004005u32 as i32),
                 "Native interaction epoch changed",
             ));
         }
@@ -201,19 +196,19 @@ pub fn run(
     duration: Duration,
 ) -> Result<()> {
     unsafe {
-        let module = GetModuleHandleW(None)?;
+        let module = GetModuleHandleW(None).ok()?;
         let class = WNDCLASSW {
             lpfnWndProc: Some(window_proc),
-            hInstance: module.into(),
+            hInstance: module,
             lpszClassName: w!("ElevenClock-rs.R03.Overlay"),
-            hCursor: LoadCursorW(None, IDC_ARROW)?,
+            hCursor: LoadCursorW(None, IDC_ARROW).ok()?,
             ..Default::default()
         };
-        if RegisterClassW(&class) == 0 {
-            return Err(windows::core::Error::from_thread());
+        if RegisterClassW(&class).0 == 0 {
+            return Err(windows_core::Error::from_thread());
         }
         let _class_owner = WindowClass {
-            instance: module.into(),
+            instance: module,
             name: class.lpszClassName,
         };
         let mut renderer = Renderer::new().map_err(render_error)?;
@@ -232,11 +227,11 @@ pub fn run(
         let mut wait_for_update = false;
         let mut last_observation = String::new();
         while started.elapsed() < duration {
-            while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).as_bool() {
-                if message.message == WM_QUIT {
+            while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE as u32).as_bool() {
+                if message.message == WM_QUIT as u32 {
                     return Ok(());
                 }
-                if message.message == WM_APP + 3 && !wait_for_update {
+                if message.message == WM_APP as u32 + 3 && !wait_for_update {
                     let slot = windows
                         .iter()
                         .find(|w| w.hwnd == message.hwnd)
@@ -273,13 +268,9 @@ pub fn run(
                         let r = slot.clock;
                         // Born in the taskbar's band: promotion is ignored
                         // while the desktop is foreground (see band_action).
-                        let band = if topmost(bar) {
-                            WS_EX_TOPMOST
-                        } else {
-                            WINDOW_EX_STYLE(0)
-                        };
+                        let band = if topmost(bar) { WS_EX_TOPMOST } else { 0 };
                         let hwnd = CreateWindowExW(
-                            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | band,
+                            (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | band) as u32,
                             class.lpszClassName,
                             w!("2642.2"),
                             WS_POPUP,
@@ -289,9 +280,10 @@ pub fn run(
                             r.height(),
                             None,
                             None,
-                            Some(module.into()),
+                            Some(module),
                             None,
-                        )?;
+                        )
+                        .ok()?;
                         windows.push(Window {
                             surface: renderer.create_surface(hwnd),
                             hwnd,
@@ -326,7 +318,7 @@ pub fn run(
             let fg = GetForegroundWindow();
             let fg_bounds = bounds(fg);
             let mut fg_class = [0u16; 128];
-            let n = GetClassNameW(fg, &mut fg_class);
+            let n = GetClassNameW(fg, PWSTR(fg_class.as_mut_ptr()), fg_class.len() as i32);
             let fg_class = String::from_utf16_lossy(&fg_class[..n.max(0) as usize]);
             let shell = matches!(
                 fg_class.as_str(),
@@ -351,8 +343,8 @@ pub fn run(
                 });
                 let state = format!(
                     "root_topmost={}; own_topmost={}; show={show}; current={current}; shell_current={}; taskbar_visible={}; taskbar_dpi={}; expected_dpi={}; foreground={fg_bounds:?}; taskbar={:?}",
-                    GetWindowLongPtrW(window.taskbar, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0,
-                    GetWindowLongPtrW(window.hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0,
+                    GetWindowLongPtrW(window.taskbar, GWL_EXSTYLE) & WS_EX_TOPMOST as isize != 0,
+                    GetWindowLongPtrW(window.hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST as isize != 0,
                     shell_current(window.taskbar, &window.slot),
                     IsWindowVisible(window.taskbar).as_bool(),
                     GetDpiForWindow(window.taskbar),
@@ -382,8 +374,10 @@ pub fn run(
                         0,
                         0,
                         0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-                    ) {
+                        (SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) as u32,
+                    )
+                    .ok()
+                    {
                         let _ = observations.try_send(format!(
                             "Taskbar-band placement failed: 0x{:08X}",
                             error.code().0 as u32
@@ -439,11 +433,7 @@ pub fn run(
                 } else {
                     preceding
                 };
-                let preserve_order = if adjacent {
-                    SWP_NOZORDER
-                } else {
-                    SET_WINDOW_POS_FLAGS(0)
-                };
+                let preserve_order = if adjacent { SWP_NOZORDER } else { 0 };
                 let r = window.slot.clock;
                 let positioned = SetWindowPos(
                     window.hwnd,
@@ -452,8 +442,9 @@ pub fn run(
                     r.top(),
                     r.width(),
                     r.height(),
-                    SWP_NOACTIVATE | SWP_SHOWWINDOW | preserve_order,
-                );
+                    (SWP_NOACTIVATE | SWP_SHOWWINDOW | preserve_order) as u32,
+                )
+                .ok();
                 if let Err(error) = positioned {
                     let _ =
                         observations.try_send(format!("SetWindowPos failed: {}", error.code().0));
@@ -479,7 +470,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
         APPEARANCE_EPOCH.fetch_add(1, Ordering::Relaxed);
     }
     unsafe {
-        match message {
+        match message as i32 {
             WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
             WM_LBUTTONDOWN => {
                 // GWLP_USERDATA is an owned scalar press flag, never a pointer
@@ -497,20 +488,20 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                 let mut rect = RECT::default();
                 if pressed
                     && IsWindowVisible(hwnd).as_bool()
-                    && GetCursorPos(&mut point).is_ok()
-                    && GetWindowRect(hwnd, &mut rect).is_ok()
+                    && GetCursorPos(&mut point).as_bool()
+                    && GetWindowRect(hwnd, &mut rect).as_bool()
                     && point.x >= rect.left
                     && point.x < rect.right
                     && point.y >= rect.top
                     && point.y < rect.bottom
                 {
-                    let _ = PostMessageW(Some(hwnd), WM_APP + 3, WPARAM(0), LPARAM(0));
+                    let _ = PostMessageW(Some(hwnd), WM_APP as u32 + 3, WPARAM(0), LPARAM(0));
                 }
                 LRESULT(0)
             }
             WM_CANCELMODE | WM_CAPTURECHANGED => {
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-                if message == WM_CANCELMODE && GetCapture() == hwnd {
+                if message == WM_CANCELMODE as u32 && GetCapture() == hwnd {
                     let _ = ReleaseCapture();
                 }
                 LRESULT(0)

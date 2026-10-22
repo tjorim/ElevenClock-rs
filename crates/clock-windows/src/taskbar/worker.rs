@@ -89,27 +89,29 @@ impl Stats {
 
 /// Windows job: kill-on-close and a one-process limit.
 #[cfg(windows)]
-pub struct HelperJob(windows::Win32::Foundation::HANDLE);
+pub struct HelperJob(crate::bindings::HANDLE);
 #[cfg(windows)]
 impl HelperJob {
-    pub fn attach(child: &Child) -> windows::core::Result<Self> {
+    pub fn attach(child: &Child) -> windows_core::Result<Self> {
+        use crate::bindings::HANDLE;
+        use crate::bindings::*;
         use std::os::windows::io::AsRawHandle;
-        use windows::Win32::{Foundation::HANDLE, System::JobObjects::*};
         // SAFETY: unnamed, non-inherited owned job and a correctly sized limits
         // structure. The borrowed child handle stays live for the synchronous call.
         unsafe {
-            let job = Self(CreateJobObjectW(None, None)?);
+            let job = Self(CreateJobObjectW(None, None).ok()?);
             let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
             limits.BasicLimitInformation.LimitFlags =
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+                (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_ACTIVE_PROCESS) as u32;
             limits.BasicLimitInformation.ActiveProcessLimit = 1;
             SetInformationJobObject(
                 job.0,
                 JobObjectExtendedLimitInformation,
                 (&limits as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
                 std::mem::size_of_val(&limits) as u32,
-            )?;
-            AssignProcessToJobObject(job.0, HANDLE(child.as_raw_handle()))?;
+            )
+            .ok()?;
+            AssignProcessToJobObject(job.0, HANDLE(child.as_raw_handle())).ok()?;
             Ok(job)
         }
     }
@@ -118,7 +120,7 @@ impl HelperJob {
 impl Drop for HelperJob {
     fn drop(&mut self) {
         // SAFETY: one close of our owned job; kill-on-close removes any survivor.
-        let _ = unsafe { windows::Win32::Foundation::CloseHandle(self.0) };
+        let _ = unsafe { crate::bindings::CloseHandle(self.0) };
     }
 }
 

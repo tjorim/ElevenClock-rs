@@ -92,15 +92,15 @@ mod tests {
 
 #[cfg(all(test, windows))]
 mod native_values {
-    use windows::Win32::UI::{Shell::NIN_SELECT, WindowsAndMessaging::WM_CONTEXTMENU};
+    use crate::bindings::{NIN_SELECT, WM_CONTEXTMENU};
 
     /// The portable decoder duplicates Win32 numbers so it can be tested anywhere;
     /// this keeps those copies honest.
     #[test]
     fn duplicated_values_match_the_windows_definitions() {
-        assert_eq!(super::WM_CONTEXTMENU, WM_CONTEXTMENU);
-        assert_eq!(super::NIN_SELECT, NIN_SELECT);
+        assert_eq!(super::WM_CONTEXTMENU, WM_CONTEXTMENU as u32);
+        assert_eq!(super::NIN_SELECT, NIN_SELECT as u32);
         // NIN_KEYSELECT is documented as NINF_KEY (1) | NIN_SELECT; the bindings omit it.
-        assert_eq!(super::NIN_KEYSELECT, NIN_SELECT | 1);
+        assert_eq!(super::NIN_KEYSELECT, NIN_SELECT as u32 | 1);
     }
 }

@@ -14,28 +14,30 @@ pub enum Completion {
 /// Windows kill-on-close ownership also handles a supervisor crash. No process
 /// handle or job is returned through a discovery result channel.
 #[cfg(windows)]
-pub struct HelperJob(windows::Win32::Foundation::HANDLE);
+pub struct HelperJob(clock_windows::bindings::HANDLE);
 
 #[cfg(windows)]
 impl HelperJob {
-    pub fn attach(child: &Child) -> windows::core::Result<Self> {
+    pub fn attach(child: &Child) -> windows_core::Result<Self> {
+        use clock_windows::bindings::HANDLE;
+        use clock_windows::bindings::*;
         use std::os::windows::io::AsRawHandle;
-        use windows::Win32::{Foundation::HANDLE, System::JobObjects::*};
         // SAFETY: unnamed, non-inherited owned job; correctly sized structure.
         // The borrowed child handle remains live for the synchronous assignment.
         unsafe {
-            let job = Self(CreateJobObjectW(None, None)?);
+            let job = Self(CreateJobObjectW(None, None).ok()?);
             let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
             limits.BasicLimitInformation.LimitFlags =
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+                (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_ACTIVE_PROCESS) as u32;
             limits.BasicLimitInformation.ActiveProcessLimit = 1;
             SetInformationJobObject(
                 job.0,
                 JobObjectExtendedLimitInformation,
                 (&limits as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
                 std::mem::size_of_val(&limits) as u32,
-            )?;
-            AssignProcessToJobObject(job.0, HANDLE(child.as_raw_handle()))?;
+            )
+            .ok()?;
+            AssignProcessToJobObject(job.0, HANDLE(child.as_raw_handle())).ok()?;
             Ok(job)
         }
     }
@@ -46,7 +48,7 @@ impl Drop for HelperJob {
     fn drop(&mut self) {
         // SAFETY: exactly one close of our owned job. Kill-on-close ensures no
         // stalled helper survives loss of the supervisor's last job handle.
-        let _ = unsafe { windows::Win32::Foundation::CloseHandle(self.0) };
+        let _ = unsafe { clock_windows::bindings::CloseHandle(self.0) };
     }
 }
 

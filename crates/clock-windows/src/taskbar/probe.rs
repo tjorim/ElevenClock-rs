@@ -1,19 +1,9 @@
 //! Blocking development probe; run only inside an isolated helper, never in a
 //! window callback. This inventory makes no clock-only claim.
+use crate::bindings::*;
 use clock_core::*;
 use std::{mem::size_of, time::Instant};
-use windows::{
-    Win32::{
-        Foundation::{CloseHandle, FILETIME, HWND, LPARAM, RECT},
-        Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONULL, MONITORINFO, MonitorFromWindow},
-        System::{
-            Registry::*,
-            Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
-        },
-        UI::{HiDpi::GetDpiForWindow, WindowsAndMessaging::*},
-    },
-    core::{BOOL, w},
-};
+use windows_core::{BOOL, PWSTR, w};
 
 #[derive(Debug)]
 pub struct NativeChild {
@@ -53,7 +43,7 @@ pub fn physical_rect(rect: RECT) -> Option<PhysicalRect> {
 fn class(hwnd: HWND) -> String {
     let mut buffer = [0u16; 256];
     // SAFETY: buffer is writable for its advertised capacity.
-    let count = unsafe { GetClassNameW(hwnd, &mut buffer) };
+    let count = unsafe { GetClassNameW(hwnd, PWSTR(buffer.as_mut_ptr()), buffer.len() as i32) };
     String::from_utf16_lossy(&buffer[..count.max(0) as usize])
 }
 
@@ -65,7 +55,9 @@ fn bounds(hwnd: HWND) -> Option<PhysicalRect> {
 fn measure(hwnd: HWND) -> Option<Option<PhysicalRect>> {
     let mut rect = RECT::default();
     // SAFETY: rect lives throughout the call; stale handles fail closed.
-    unsafe { GetWindowRect(hwnd, &mut rect) }.ok()?;
+    if !unsafe { GetWindowRect(hwnd, &mut rect) }.as_bool() {
+        return None;
+    }
     if rect.right == rect.left || rect.bottom == rect.top {
         return Some(None);
     }
@@ -84,7 +76,7 @@ unsafe extern "system" fn taskbars(hwnd: HWND, param: LPARAM) -> BOOL {
 }
 
 /// Cheap top-level window inventory; no child enumeration or UI Automation.
-pub(crate) fn taskbar_handles() -> windows::core::Result<Vec<HWND>> {
+pub(crate) fn taskbar_handles() -> windows_core::Result<Vec<HWND>> {
     let mut handles = Vec::<HWND>::new();
     // SAFETY: synchronous callback/vector ownership; class strings are static.
     // Direct lookup supplements EnumWindows, which can omit modern shell roots
@@ -93,16 +85,17 @@ pub(crate) fn taskbar_handles() -> windows::core::Result<Vec<HWND>> {
         EnumWindows(
             Some(taskbars),
             LPARAM((&mut handles as *mut Vec<HWND>) as isize),
-        )?;
+        )
+        .ok()?;
         for name in [w!("Shell_TrayWnd"), w!("Shell_SecondaryTrayWnd")] {
             let mut after = None;
             for count in 0..=128 {
-                let Ok(hwnd) = FindWindowExW(None, after, name, None) else {
+                let Some(hwnd) = FindWindowExW(None, after, name, None).valid() else {
                     break;
                 };
                 if count == 128 {
-                    return Err(windows::core::Error::new(
-                        windows::core::HRESULT(0x80004005u32 as i32),
+                    return Err(windows_core::Error::new(
+                        windows_core::HRESULT(0x80004005u32 as i32),
                         "Native taskbar enumeration limit reached",
                     ));
                 }
@@ -137,12 +130,12 @@ unsafe extern "system" fn children(hwnd: HWND, param: LPARAM) -> BOOL {
     BOOL(1)
 }
 
-pub(crate) fn shell_identity(hwnd: HWND) -> windows::core::Result<(u32, u64)> {
+pub(crate) fn shell_identity(hwnd: HWND) -> windows_core::Result<(u32, u64)> {
     let mut pid = 0;
     // SAFETY: output pointers are live; owned process handle is always closed.
     unsafe {
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)?;
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION as u32, false, pid).ok()?;
         let (mut created, mut exited, mut kernel, mut user) = (
             FILETIME::default(),
             FILETIME::default(),
@@ -151,8 +144,8 @@ pub(crate) fn shell_identity(hwnd: HWND) -> windows::core::Result<(u32, u64)> {
         );
         let result = GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user);
         let closed = CloseHandle(process);
-        result?;
-        closed?;
+        result.ok()?;
+        closed.ok()?;
         Ok((
             pid,
             (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
@@ -169,19 +162,19 @@ type NativeEpoch = (
     bool,
 );
 
-fn native_epoch(hwnd: HWND) -> windows::core::Result<NativeEpoch> {
+fn native_epoch(hwnd: HWND) -> windows_core::Result<NativeEpoch> {
     let mut info = MONITORINFO {
         cbSize: size_of::<MONITORINFO>() as u32,
         ..Default::default()
     };
     // SAFETY: read-only queries on this helper thread with a live output buffer.
     unsafe {
-        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL as u32);
         if !GetMonitorInfoW(monitor, &mut info).as_bool() {
-            return Err(windows::core::Error::from_thread());
+            return Err(windows_core::Error::from_thread());
         }
         let monitor_rect =
-            physical_rect(info.rcMonitor).ok_or_else(windows::core::Error::from_thread)?;
+            physical_rect(info.rcMonitor).ok_or_else(windows_core::Error::from_thread)?;
         Ok((
             hwnd,
             shell_identity(hwnd)?,
@@ -194,7 +187,7 @@ fn native_epoch(hwnd: HWND) -> windows::core::Result<NativeEpoch> {
 }
 
 /// Exact build and update revision, without relying on version virtualization.
-pub fn os_build() -> windows::core::Result<(String, u32)> {
+pub fn os_build() -> windows_core::Result<(String, u32)> {
     let mut buffer = [0u16; 64];
     let mut bytes = size_of::<[u16; 64]>() as u32;
     let mut revision = 0u32;
@@ -205,7 +198,7 @@ pub fn os_build() -> windows::core::Result<(String, u32)> {
             HKEY_LOCAL_MACHINE,
             w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"),
             w!("CurrentBuildNumber"),
-            RRF_RT_REG_SZ,
+            RRF_RT_REG_SZ as u32,
             None,
             Some(buffer.as_mut_ptr().cast()),
             Some(&mut bytes),
@@ -215,7 +208,7 @@ pub fn os_build() -> windows::core::Result<(String, u32)> {
             HKEY_LOCAL_MACHINE,
             w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"),
             w!("UBR"),
-            RRF_RT_REG_DWORD,
+            RRF_RT_REG_DWORD as u32,
             None,
             Some((&mut revision as *mut u32).cast()),
             Some(&mut revision_bytes),
@@ -229,13 +222,13 @@ pub fn os_build() -> windows::core::Result<(String, u32)> {
 /// Identity of the process that owns the primary taskbar, if one exists.
 pub fn current_shell() -> Option<(u32, u64)> {
     // SAFETY: class-name lookup of a top-level window; failure means no shell.
-    let hwnd = unsafe { FindWindowW(w!("Shell_TrayWnd"), None) }.ok()?;
+    let hwnd = unsafe { FindWindowW(w!("Shell_TrayWnd"), None) }.valid()?;
     shell_identity(hwnd).ok()
 }
 
 /// Returns value records only. Any shell replacement during a taskbar probe
 /// invalidates the complete result. IDs are local ordinals, never HWND values.
-pub fn collect(generation: ShellGeneration) -> windows::core::Result<Vec<TaskbarObservation>> {
+pub fn collect(generation: ShellGeneration) -> windows_core::Result<Vec<TaskbarObservation>> {
     collect_with(generation, true)
 }
 
@@ -244,29 +237,29 @@ pub fn collect(generation: ShellGeneration) -> windows::core::Result<Vec<Taskbar
 pub fn collect_with(
     generation: ShellGeneration,
     with_uia: bool,
-) -> windows::core::Result<Vec<TaskbarObservation>> {
+) -> windows_core::Result<Vec<TaskbarObservation>> {
     let handles = taskbar_handles()?;
     let initial: Vec<_> = handles
         .iter()
         .map(|hwnd| native_epoch(*hwnd))
-        .collect::<windows::core::Result<_>>()?;
+        .collect::<windows_core::Result<_>>()?;
     let mut observations = Vec::new();
     let mut monitors = Vec::new();
     for (index, hwnd) in handles.into_iter().enumerate() {
         let started = Instant::now();
         let identity = shell_identity(hwnd)?;
-        let taskbar_rect = bounds(hwnd).ok_or_else(windows::core::Error::from_thread)?;
+        let taskbar_rect = bounds(hwnd).ok_or_else(windows_core::Error::from_thread)?;
         // SAFETY: monitor handle used only on this thread; info has the correct size.
-        let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL) };
+        let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL as u32) };
         let mut info = MONITORINFO {
             cbSize: size_of::<MONITORINFO>() as u32,
             ..Default::default()
         };
         if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
-            return Err(windows::core::Error::from_thread());
+            return Err(windows_core::Error::from_thread());
         }
         let monitor_rect =
-            physical_rect(info.rcMonitor).ok_or_else(windows::core::Error::from_thread)?;
+            physical_rect(info.rcMonitor).ok_or_else(windows_core::Error::from_thread)?;
         let monitor_index = if let Some(i) = monitors.iter().position(|m| *m == monitor) {
             i
         } else {
@@ -288,8 +281,8 @@ pub fn collect_with(
             crate::taskbar::uia::Inventory::default()
         };
         if shell_identity(hwnd)? != identity || bounds(hwnd) != Some(taskbar_rect) {
-            return Err(windows::core::Error::new(
-                windows::core::HRESULT(0x80004005u32 as i32),
+            return Err(windows_core::Error::new(
+                windows_core::HRESULT(0x80004005u32 as i32),
                 "Shell identity or taskbar geometry changed during discovery",
             ));
         }
@@ -330,10 +323,10 @@ pub fn collect_with(
     let final_state: Vec<_> = final_handles
         .iter()
         .map(|hwnd| native_epoch(*hwnd))
-        .collect::<windows::core::Result<_>>()?;
+        .collect::<windows_core::Result<_>>()?;
     if initial != final_state {
-        return Err(windows::core::Error::new(
-            windows::core::HRESULT(0x80004005u32 as i32),
+        return Err(windows_core::Error::new(
+            windows_core::HRESULT(0x80004005u32 as i32),
             "Taskbar set or shell identity changed during discovery",
         ));
     }

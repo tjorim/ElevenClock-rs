@@ -28,6 +28,12 @@ fn main() {
 
 #[cfg(windows)]
 mod imp {
+    use clock_windows::bindings::{
+        COINIT_MULTITHREADED, CUIAutomation, CheckHandle, CoInitializeEx, CreateWindowExW,
+        DispatchMessageW, FindWindowW, HWND, IUIAutomation, IUIAutomationElement, MSG, PM_REMOVE,
+        PeekMessageW, TranslateMessage, TreeScope_Children, UIA_HWND, WS_EX_TOOLWINDOW, WS_POPUP,
+        WS_VISIBLE,
+    };
     use clock_windows::taskbar::{
         probe, uia,
         worker::{HelperSpec, RunError, Stats, run_helper},
@@ -40,22 +46,7 @@ mod imp {
         process::{Child, Command, Stdio},
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
-    use windows::{
-        Win32::{
-            Foundation::HWND,
-            System::Com::{COINIT_MULTITHREADED, CoInitializeEx},
-            UI::{
-                Accessibility::{
-                    CUIAutomation, IUIAutomation, IUIAutomationElement, TreeScope_Children,
-                },
-                WindowsAndMessaging::{
-                    CreateWindowExW, DispatchMessageW, FindWindowW, MSG, PM_REMOVE, PeekMessageW,
-                    TranslateMessage, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
-                },
-            },
-        },
-        core::w,
-    };
+    use windows_core::w;
 
     fn micros() -> u64 {
         SystemTime::now()
@@ -79,10 +70,10 @@ mod imp {
         // SAFETY: creates one top-level STATIC window on this thread.
         let hwnd = unsafe {
             CreateWindowExW(
-                WS_EX_TOOLWINDOW,
+                WS_EX_TOOLWINDOW as u32,
                 w!("STATIC"),
                 w!("elevenclock-rs-uia-fixture"),
-                WS_POPUP | WS_VISIBLE,
+                WS_POPUP | WS_VISIBLE as u32,
                 40,
                 40,
                 240,
@@ -93,6 +84,7 @@ mod imp {
                 None,
             )
         }
+        .ok()
         .expect("fixture window");
         fs::write(file, (hwnd.0 as usize).to_string()).unwrap();
         if mode == "hang" {
@@ -104,7 +96,7 @@ mod imp {
         while started.elapsed() < Duration::from_secs(180) {
             // SAFETY: standard message pump for the window created above.
             unsafe {
-                while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).as_bool() {
+                while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE as u32).as_bool() {
                     let _ = TranslateMessage(&message);
                     DispatchMessageW(&message);
                 }
@@ -144,7 +136,7 @@ mod imp {
             &mut self,
             name: &str,
             shell: u32,
-            call: impl FnOnce() -> windows::core::Result<T>,
+            call: impl FnOnce() -> windows_core::Result<T>,
         ) -> Option<T> {
             self.seq += 1;
             let seq = self.seq;
@@ -159,7 +151,7 @@ mod imp {
     fn target(spec: &str) -> Option<HWND> {
         if spec == "taskbar" {
             // SAFETY: class-name lookup of a top-level window.
-            unsafe { FindWindowW(w!("Shell_TrayWnd"), None) }.ok()
+            unsafe { FindWindowW(w!("Shell_TrayWnd"), None) }.valid()
         } else {
             spec.parse::<usize>().ok().map(|v| HWND(v as *mut _))
         }
@@ -184,7 +176,7 @@ mod imp {
         let stale_files = args.get(3).zip(args.get(4));
         // SAFETY: this client owns its MTA apartment for the whole process.
         unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED).ok();
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED as u32).ok();
         }
         let deadline = Instant::now() + Duration::from_secs(seconds);
         let mut automation: Option<IUIAutomation> = None;
@@ -205,10 +197,10 @@ mod imp {
             if automation.is_none() {
                 // SAFETY: creates the in-process UI Automation client.
                 automation = tracer.op("CoCreateInstance", shell, || unsafe {
-                    windows::Win32::System::Com::CoCreateInstance(
+                    clock_windows::bindings::CoCreateInstance(
                         &CUIAutomation,
                         None,
-                        windows::Win32::System::Com::CLSCTX_INPROC_SERVER,
+                        clock_windows::bindings::CLSCTX_INPROC_SERVER,
                     )
                 });
             }
@@ -220,7 +212,7 @@ mod imp {
             // is individually logged with its HRESULT; nothing is invoked.
             let pass = (|| -> Option<Vec<IUIAutomationElement>> {
                 let root = tracer.op("ElementFromHandle", shell, || unsafe {
-                    a.ElementFromHandle(hwnd)
+                    a.ElementFromHandle(UIA_HWND(hwnd.0))
                 })?;
                 let condition = tracer.op("CreateTrueCondition", shell, || unsafe {
                     a.CreateTrueCondition()
@@ -609,27 +601,31 @@ mod imp {
 
     #[link(name = "ntdll")]
     unsafe extern "system" {
-        fn NtSuspendProcess(process: windows::Win32::Foundation::HANDLE) -> i32;
-        fn NtResumeProcess(process: windows::Win32::Foundation::HANDLE) -> i32;
+        fn NtSuspendProcess(process: clock_windows::bindings::HANDLE) -> i32;
+        fn NtResumeProcess(process: clock_windows::bindings::HANDLE) -> i32;
     }
 
     /// Suspends a process so a client's call into it stays genuinely in flight, and
     /// guarantees it is resumed (or terminated) on every path so a failed test can
     /// never leave the desktop frozen.
     struct Freeze {
-        process: windows::Win32::Foundation::HANDLE,
+        process: clock_windows::bindings::HANDLE,
         pid: u32,
         suspended: bool,
     }
     impl Freeze {
         fn new(pid: u32) -> Self {
-            use windows::Win32::System::Threading::{
-                OpenProcess, PROCESS_SUSPEND_RESUME, PROCESS_TERMINATE,
-            };
+            use clock_windows::bindings::{OpenProcess, PROCESS_SUSPEND_RESUME, PROCESS_TERMINATE};
             // SAFETY: opens the shell process with exactly the rights used below.
-            let process =
-                unsafe { OpenProcess(PROCESS_SUSPEND_RESUME | PROCESS_TERMINATE, false, pid) }
-                    .expect("open the shell process");
+            let process = unsafe {
+                OpenProcess(
+                    (PROCESS_SUSPEND_RESUME | PROCESS_TERMINATE) as u32,
+                    false,
+                    pid,
+                )
+            }
+            .ok()
+            .expect("open the shell process");
             // SAFETY: valid handle with PROCESS_SUSPEND_RESUME.
             let status = unsafe { NtSuspendProcess(process) };
             assert!(status >= 0, "NtSuspendProcess failed: {status:#x}");
@@ -660,7 +656,7 @@ mod imp {
                 if self.suspended {
                     let _ = NtResumeProcess(self.process);
                 }
-                let _ = windows::Win32::Foundation::CloseHandle(self.process);
+                let _ = clock_windows::bindings::CloseHandle(self.process);
             }
         }
     }

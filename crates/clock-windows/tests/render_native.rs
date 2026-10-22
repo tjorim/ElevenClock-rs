@@ -4,23 +4,15 @@
 
 use chrono::{FixedOffset, TimeZone};
 use clock_core::{ClockText, Preferences};
+use clock_windows::bindings::{
+    CheckHandle, CreateWindowExW, DestroyWindow, GR_GDIOBJECTS, GR_USEROBJECTS, GetCurrentProcess,
+    GetGuiResources, GetProcessHandleCount, HWND, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
+};
 use clock_windows::{
     render::{ClockSurface, Fit, PaintOutcome, PaintRequest, PixelSize, Renderer, WorstCase},
     theme::Palette,
 };
-use windows::{
-    Win32::{
-        Foundation::HWND,
-        System::Threading::{
-            GR_GDIOBJECTS, GR_USEROBJECTS, GetCurrentProcess, GetGuiResources,
-            GetProcessHandleCount,
-        },
-        UI::WindowsAndMessaging::{
-            CreateWindowExW, DestroyWindow, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
-        },
-    },
-    core::w,
-};
+use windows_core::w;
 
 /// A hidden, never-shown window of exact physical size standing in for an overlay.
 struct Host(HWND);
@@ -29,7 +21,7 @@ impl Host {
         // SAFETY: STATIC is a system class; the window is destroyed on drop.
         let hwnd = unsafe {
             CreateWindowExW(
-                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) as u32,
                 w!("STATIC"),
                 w!(""),
                 WS_POPUP,
@@ -43,6 +35,7 @@ impl Host {
                 None,
             )
         }
+        .ok()
         .expect("create host window");
         Self(hwnd)
     }
@@ -153,7 +146,7 @@ fn long_format_reports_width_overflow_instead_of_truncating() {
 }
 #[test]
 fn iso_week_apply_and_transient_region_overflow_recover_on_the_same_surface() {
-    use windows::Win32::UI::WindowsAndMessaging::{SWP_NOMOVE, SWP_NOZORDER, SetWindowPos};
+    use clock_windows::bindings::{SWP_NOMOVE, SWP_NOZORDER, SetWindowPos};
     let renderer = Renderer::new().unwrap();
     let default = case(&Preferences::default().format);
     let iso = case("%g%V.%u");
@@ -174,14 +167,35 @@ fn iso_week_apply_and_transient_region_overflow_recover_on_the_same_surface() {
         // Cache a real worst-case overflow, then restore the region without
         // replacing the surface or changing preferences.
         // SAFETY: resizes the hidden window owned by this test thread.
-        unsafe { SetWindowPos(host.0, None, 0, 0, 1, height, SWP_NOMOVE | SWP_NOZORDER) }.unwrap();
+        unsafe {
+            SetWindowPos(
+                host.0,
+                None,
+                0,
+                0,
+                1,
+                height,
+                (SWP_NOMOVE | SWP_NOZORDER) as u32,
+            )
+        }
+        .unwrap();
         assert!(matches!(
             surface.paint(&renderer, &request(&iso, dpi, 9)).unwrap(),
             PaintOutcome::Overflow(_)
         ));
         // SAFETY: restores that same owned window's original size.
-        unsafe { SetWindowPos(host.0, None, 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER) }
-            .unwrap();
+        unsafe {
+            SetWindowPos(
+                host.0,
+                None,
+                0,
+                0,
+                width,
+                height,
+                (SWP_NOMOVE | SWP_NOZORDER) as u32,
+            )
+        }
+        .unwrap();
         assert_eq!(
             surface.paint(&renderer, &request(&iso, dpi, 9)).unwrap(),
             PaintOutcome::Painted
@@ -319,7 +333,7 @@ fn invalid_scale_is_an_error() {
 }
 #[test]
 fn resizing_the_host_repaints_for_the_new_region() {
-    use windows::Win32::UI::WindowsAndMessaging::{SWP_NOMOVE, SWP_NOZORDER, SetWindowPos};
+    use clock_windows::bindings::{SWP_NOMOVE, SWP_NOZORDER, SetWindowPos};
     let renderer = Renderer::new().unwrap();
     let case = case("%H:%M");
     let host = Host::new(74, 48);
@@ -329,7 +343,18 @@ fn resizing_the_host_repaints_for_the_new_region() {
         PaintOutcome::Painted
     );
     // SAFETY: resizes our own window.
-    unsafe { SetWindowPos(host.0, None, 0, 0, 92, 48, SWP_NOMOVE | SWP_NOZORDER) }.unwrap();
+    unsafe {
+        SetWindowPos(
+            host.0,
+            None,
+            0,
+            0,
+            92,
+            48,
+            (SWP_NOMOVE | SWP_NOZORDER) as u32,
+        )
+    }
+    .unwrap();
     assert_eq!(
         surface.paint(&renderer, &request(&case, 96, 9)).unwrap(),
         PaintOutcome::Painted
@@ -344,8 +369,8 @@ fn counts() -> (u32, u32, u32) {
         GetProcessHandleCount(process, &mut handles).unwrap();
         (
             handles,
-            GetGuiResources(process, GR_GDIOBJECTS),
-            GetGuiResources(process, GR_USEROBJECTS),
+            GetGuiResources(process, GR_GDIOBJECTS as u32),
+            GetGuiResources(process, GR_USEROBJECTS as u32),
         )
     }
 }

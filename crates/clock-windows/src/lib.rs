@@ -1,6 +1,11 @@
 //! Safe platform facade. Native resources stay on their owning thread/process.
 
 #[cfg(windows)]
+#[doc(hidden)]
+#[allow(non_upper_case_globals, non_snake_case)]
+pub mod bindings;
+
+#[cfg(windows)]
 mod settings;
 pub mod taskbar;
 #[cfg(windows)]

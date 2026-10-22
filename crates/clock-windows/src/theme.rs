@@ -162,19 +162,13 @@ impl AppearanceTracker {
 #[cfg(windows)]
 mod native {
     use super::{Rgb, SystemAppearance, taskbar_appearance};
-    use windows::Win32::{
-        Foundation::LPARAM,
-        Graphics::Gdi::{COLOR_WINDOW, COLOR_WINDOWTEXT, GetSysColor},
-        System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW},
-        UI::{
-            Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
-            WindowsAndMessaging::{
-                SPI_GETHIGHCONTRAST, SystemParametersInfoW, WM_DWMCOLORIZATIONCOLORCHANGED,
-                WM_SETTINGCHANGE, WM_SYSCOLORCHANGE, WM_THEMECHANGED,
-            },
-        },
+    use crate::bindings::{
+        COLOR_WINDOW, COLOR_WINDOWTEXT, GetSysColor, HCF_HIGHCONTRASTON, HIGHCONTRASTW,
+        HKEY_CURRENT_USER, LPARAM, RRF_RT_REG_DWORD, RegGetValueW, SPI_GETHIGHCONTRAST,
+        SystemParametersInfoW, WM_DWMCOLORIZATIONCOLORCHANGED, WM_SETTINGCHANGE, WM_SYSCOLORCHANGE,
+        WM_THEMECHANGED,
     };
-    use windows::core::{PCWSTR, w};
+    use windows_core::{PCWSTR, w};
 
     fn colorref(value: u32) -> Rgb {
         Rgb::new(value as u8, (value >> 8) as u8, (value >> 16) as u8)
@@ -187,14 +181,14 @@ mod native {
         // SAFETY: `info` is a correctly sized, writable HIGHCONTRASTW.
         unsafe {
             SystemParametersInfoW(
-                SPI_GETHIGHCONTRAST,
+                SPI_GETHIGHCONTRAST as u32,
                 info.cbSize,
-                Some((&mut info as *mut HIGHCONTRASTW).cast()),
-                Default::default(),
+                (&mut info as *mut HIGHCONTRASTW).cast(),
+                0,
             )
         }
-        .is_ok()
-            && info.dwFlags.contains(HCF_HIGHCONTRASTON)
+        .as_bool()
+            && info.dwFlags & HCF_HIGHCONTRASTON as u32 != 0
     }
     fn read_dword(key: PCWSTR, value: PCWSTR) -> Option<u32> {
         let mut data = 0u32;
@@ -205,13 +199,13 @@ mod native {
                 HKEY_CURRENT_USER,
                 key,
                 value,
-                RRF_RT_REG_DWORD,
+                RRF_RT_REG_DWORD as u32,
                 None,
                 Some((&mut data as *mut u32).cast()),
                 Some(&mut size),
             )
         };
-        (status.is_ok() && size == 4).then_some(data)
+        (status.0 == 0 && size == 4).then_some(data)
     }
 
     /// Cheap enough for notification handlers; never call from a paint loop.
@@ -250,7 +244,7 @@ mod native {
     /// True for messages after which the appearance must be re-read. The caller
     /// feeds the result to `AppearanceTracker::observe`.
     pub fn is_appearance_message(message: u32, lparam: LPARAM) -> bool {
-        match message {
+        match message as i32 {
             WM_SYSCOLORCHANGE | WM_THEMECHANGED | WM_DWMCOLORIZATIONCOLORCHANGED => true,
             WM_SETTINGCHANGE => {
                 if lparam.0 == 0 {

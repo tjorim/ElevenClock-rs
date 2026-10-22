@@ -6,35 +6,22 @@ use super::{
     Extent, Fit, Overflow, PixelSize, RenderError, TextMeasurer, WorstCase, auto_fit, font_size_px,
     padding_px, plan_fit,
 };
+use crate::bindings::{
+    D2D_COLOR_F, D2D_SIZE_U, D2D1_ALPHA_MODE_IGNORE, D2D1_DRAW_TEXT_OPTIONS_NONE,
+    D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_HWND_RENDER_TARGET_PROPERTIES, D2D1_PIXEL_FORMAT,
+    D2D1_PRESENT_OPTIONS_NONE, D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT,
+    D2D1_RENDER_TARGET_USAGE_NONE, D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE, D2D1CreateFactory,
+    DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+    DWRITE_FONT_WEIGHT_NORMAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER,
+    DWRITE_TEXT_METRICS, DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory,
+    DXGI_FORMAT_B8G8R8A8_UNORM, GetClientRect, HWND, ID2D1Factory, ID2D1HwndRenderTarget,
+    ID2D1SolidColorBrush, IDWriteFactory, IDWriteTextFormat, NONCLIENTMETRICSW, RECT,
+    SPI_GETNONCLIENTMETRICS, SystemParametersInfoW,
+};
 use crate::theme::{Palette, Rgb};
 use clock_core::ClockText;
 use std::marker::PhantomData;
-use windows::{
-    Win32::{
-        Foundation::{HWND, RECT},
-        Graphics::{
-            Direct2D::{
-                Common::{D2D_SIZE_U, D2D1_ALPHA_MODE_IGNORE, D2D1_COLOR_F, D2D1_PIXEL_FORMAT},
-                D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_FACTORY_TYPE_SINGLE_THREADED,
-                D2D1_HWND_RENDER_TARGET_PROPERTIES, D2D1_PRESENT_OPTIONS_NONE,
-                D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT,
-                D2D1_RENDER_TARGET_USAGE_NONE, D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE,
-                D2D1CreateFactory, ID2D1Factory, ID2D1HwndRenderTarget, ID2D1SolidColorBrush,
-            },
-            DirectWrite::{
-                DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-                DWRITE_FONT_WEIGHT_NORMAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
-                DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_METRICS, DWRITE_WORD_WRAPPING_NO_WRAP,
-                DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat,
-            },
-            Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
-        },
-        UI::WindowsAndMessaging::{
-            GetClientRect, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS, SystemParametersInfoW,
-        },
-    },
-    core::{HRESULT, PCWSTR},
-};
+use windows_core::{HRESULT, PCWSTR};
 use windows_numerics::Vector2;
 
 /// `D2DERR_RECREATE_TARGET`: the render target's device was lost or the
@@ -44,14 +31,14 @@ const FALLBACK_FONT: &str = "Segoe UI";
 /// Layout box used only to measure a line; large enough that nothing wraps.
 const MEASURE_BOX: f32 = 16_384.0;
 
-fn native(operation: &'static str) -> impl FnOnce(windows::core::Error) -> RenderError {
+fn native(operation: &'static str) -> impl FnOnce(windows_core::Error) -> RenderError {
     move |error| RenderError::Native {
         operation,
         code: error.code().0,
     }
 }
-fn color(rgb: Rgb) -> D2D1_COLOR_F {
-    D2D1_COLOR_F {
+fn color(rgb: Rgb) -> D2D_COLOR_F {
+    D2D_COLOR_F {
         r: f32::from(rgb.r) / 255.0,
         g: f32::from(rgb.g) / 255.0,
         b: f32::from(rgb.b) / 255.0,
@@ -74,13 +61,13 @@ fn system_font_family() -> String {
     // SAFETY: `metrics` is correctly sized and writable.
     let ok = unsafe {
         SystemParametersInfoW(
-            SPI_GETNONCLIENTMETRICS,
+            SPI_GETNONCLIENTMETRICS as u32,
             metrics.cbSize,
-            Some((&mut metrics as *mut NONCLIENTMETRICSW).cast()),
-            Default::default(),
+            (&mut metrics as *mut NONCLIENTMETRICSW).cast(),
+            0,
         )
     }
-    .is_ok();
+    .as_bool();
     let face = &metrics.lfMessageFont.lfFaceName;
     let length = face
         .iter()
@@ -188,7 +175,7 @@ impl Renderer {
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
                 font_px,
-                PCWSTR(windows::core::w!("").as_ptr()),
+                PCWSTR(windows_core::w!("").as_ptr()),
             )
         }
         .map_err(native("CreateTextFormat"))?;
@@ -197,12 +184,15 @@ impl Renderer {
             // Overflow is reported, never hidden by wrapping or trimming.
             format
                 .SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)
+                .ok()
                 .map_err(native("SetWordWrapping"))?;
             format
                 .SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)
+                .ok()
                 .map_err(native("SetTextAlignment"))?;
             format
                 .SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)
+                .ok()
                 .map_err(native("SetParagraphAlignment"))?;
         }
         Ok(format)
@@ -213,20 +203,16 @@ impl Renderer {
         text: &str,
         width: f32,
         height: f32,
-    ) -> Result<
-        (
-            windows::Win32::Graphics::DirectWrite::IDWriteTextLayout,
-            DWRITE_TEXT_METRICS,
-        ),
-        RenderError,
-    > {
+    ) -> Result<(crate::bindings::IDWriteTextLayout, DWRITE_TEXT_METRICS), RenderError> {
         let units = wide(text);
         // SAFETY: valid factory/format; `units` outlives the call.
         let layout = unsafe { self.dwrite.CreateTextLayout(&units, format, width, height) }
             .map_err(native("CreateTextLayout"))?;
         let mut metrics = DWRITE_TEXT_METRICS::default();
         // SAFETY: `metrics` is writable.
-        unsafe { layout.GetMetrics(&mut metrics) }.map_err(native("GetMetrics"))?;
+        unsafe { layout.GetMetrics(&mut metrics) }
+            .ok()
+            .map_err(native("GetMetrics"))?;
         Ok((layout, metrics))
     }
 }
@@ -316,7 +302,9 @@ impl ClockSurface {
     fn client_size(&self) -> Result<PixelSize, RenderError> {
         let mut rect = RECT::default();
         // SAFETY: `rect` is writable and the HWND is owned by this UI thread.
-        unsafe { GetClientRect(self.hwnd, &mut rect) }.map_err(native("GetClientRect"))?;
+        unsafe { GetClientRect(self.hwnd, &mut rect) }
+            .ok()
+            .map_err(native("GetClientRect"))?;
         Ok(PixelSize {
             width: rect.right.saturating_sub(rect.left).max(0),
             height: rect.bottom.saturating_sub(rect.top).max(0),
@@ -563,8 +551,8 @@ impl ClockSurface {
             target.Clear(Some(&background));
             target.DrawTextLayout(
                 Vector2 {
-                    X: padding as f32,
-                    Y: 0.0,
+                    x: padding as f32,
+                    y: 0.0,
                 },
                 &layout,
                 &brush,
@@ -572,6 +560,7 @@ impl ClockSurface {
             );
             target.EndDraw(None, None)
         }
+        .ok()
         .map_err(native("EndDraw"))?;
         Ok(None)
     }
