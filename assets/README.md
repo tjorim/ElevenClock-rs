@@ -16,4 +16,4 @@ and the tray already load. No Rust resource IDs or paths need to change.
 The inherited icon, upstream banners, screenshots and artwork were removed from
 the tree at cutover. They remain in Git history under
 [`legacy/`](https://github.com/tjorim/ElevenClock-rs/tree/0ac31152e265bb5d6e02fcac18404362453670d2/legacy) with their GPLv3 license and
-historical notices. See the [provenance review](../docs/windows-evidence/licensing-provenance.md).
+historical notices. See [licensing](../docs/licensing.md).

@@ -1,14 +1,13 @@
-//! The R02 clock candidate, as a pure function over a UIA inventory. Its
-//! acceptance is recorded in `docs/windows-evidence/acceptance.md`.
+//! The clock candidate, as a pure function over a UIA inventory.
 //!
-//! This reproduces what the hosted captures recorded and R03's spike used: a
+//! On most builds the clock is a
 //! visible XAML `SystemTray.OmniButtonLeft` button owned by the shell whose
 //! children expose `TimeInnerTextBlock` and `DateInnerTextBlock`, with the bell
 //! (`OmniButtonRight`) and Show Desktop buttons as neighbours. It uses only
 //! locale-independent properties: never a localized Name, an ordinal or an offset.
 //! Passing it proves nothing about hit targets on untested configurations.
 //!
-//! A stock x64 desktop (build 26200.9457, #21) instead exposes one merged
+//! A stock x64 desktop (build 26200.9457) instead exposes one merged
 //! `SystemTray.OmniButton` with the same time/date children and Show Desktop as
 //! its neighbour; on a secondary taskbar the same button stands alone. See
 //! [`Layout`].
@@ -364,7 +363,7 @@ mod tests {
     #[test]
     fn split_secondary_clock_without_show_desktop_keeps_the_bell_excluded() {
         // Windows 11 26H2 x64 26300.9711, second 1280x720 display at 96 DPI.
-        // Normalized from docs/windows-evidence/issue34-26300/auto-hide-off.jsonl.
+        // Normalized from a captured UIA inventory of that taskbar.
         let mut elements = vec![
             element(None, "", "Shell_SecondaryTrayWnd", r(1280, 672, 1280, 48)),
             element(

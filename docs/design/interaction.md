@@ -1,12 +1,4 @@
-# R09 clock actions, tray controls and accessible native interaction
-
-Status: **action dispatch, fixed menu, tray registration, pause, failure handling and the
-UI Automation provider are implemented and unit-tested; every interactive gate below is
-unchecked.** The authoring environment was Linux with no Windows desktop: Windows code
-was type-checked and linted for `x86_64-pc-windows-msvc` only, and the Windows-only unit
-tests run in the Windows CI job. Nothing here claims overlay placement, calendar
-behavior or Narrator speech on a real build; those results and the Windows acceptance
-decision (GO) are in the [acceptance record](../windows-evidence/acceptance.md).
+# Clock actions, tray and accessibility
 
 ## Action behavior table
 
@@ -28,15 +20,14 @@ Out of scope and absent: arbitrary commands, double/middle-click customization, 
 shortcuts beyond standard menu navigation, a duplicated notification counter, shell
 injection, synthetic mouse relay. The menu has exactly three commands (`MenuCommand`).
 
-## Calendar strategy decision
+## Calendar strategy
 
-R03's hosted captures showed UIA `Invoke` on the native clock returning success without
-opening the flyout, while one deliberate Win+N opened it ([#23](https://github.com/tjorim/ElevenClock/issues/23)).
+On tested builds, UIA `Invoke` on the native clock returned success without opening the
+flyout, while one deliberate Win+N opened it.
 The production action is therefore the deliberate keyboard batch only. It runs on the UI
 thread, needs no COM and cannot block the message loop; UIA is not used to *discover* or
 *invoke* the native clock from the click path. If a later build proves a supported UIA
-invoke, only `Platform::open_calendar` changes. #23's remaining items (a real build
-matrix for this action) stay open and are not closed by R09.
+invoke, only `Platform::open_calendar` changes.
 
 ## UI Automation provider
 
@@ -71,67 +62,16 @@ is no timer or retry of its own. If Explorer is not ready, `Shell_NotifyIconW(NI
 fails quietly and the `TaskbarCreated` broadcast that follows tries again; a repeated
 restore uses `NIM_MODIFY` and never stacks a second icon.
 
-## Changed interfaces
+## Hooks for Settings, Support and UI tests
 
-| Item | Change |
-| --- | --- |
-| `clock_core::Event::SetPaused(bool)`, `State::is_paused` | **New shared-contract input.** Paused hides every overlay through the existing `HiddenReason::Paused`; never persisted; survives Explorer loss. [state-and-scheduling.md](state-and-scheduling.md) updated |
-| `runtime::Platform` | + `open_calendar`, `show_menu`, `open_settings` (required), `restore_tray`, `paused_changed` (default no-op) |
-| `runtime::Input::Action(UserAction)` | `UserAction::{Activate(TaskbarKey), ShowMenu(Option<ScreenPoint>)}` |
-| `runtime::Reason::ActionFailed(String)`, `Diagnostics::paused` | For Settings → Support (R11) |
-| `interaction` (new, portable) | `MenuCommand`, `menu_items`, `PressTracker`, `ActivationGate`, `InteractionQueue`, `WIN_N`, `cleanup_after`, `HeldKeys`, `CalendarOutcome`, `accessible_name` |
-| `tray` (new) | `interaction_for_message` (portable decoder), `Tray` (Windows) |
-| `accessibility` (new, Windows) | `ClockAccessible` |
-| Dependencies | `windows-core` 0.61.2 added as a direct dependency (required by `#[implement]`; already locked via `windows`) and `windows` features `Win32_System_Ole`, `Win32_System_Variant`; no new package, no MSRV change |
-
-## Callbacks and snapshot values for R10 / R11 / R13
-
-* **R10 Settings:** the menu's Settings item calls `Platform::open_settings`, which sets
+* **Settings:** the menu's Settings item calls `Platform::open_settings`, which sets
   the loop's existing `SHOW_SETTINGS` flag; `pump` then calls
-  `SettingsWindow::show_or_focus` after the current input. R10 replaces nothing in this
-  path. `WM_SHOW_SETTINGS` (second launch) uses the same flag.
-* **R11 Support:** `Runtime::diagnostics()` now carries `paused` and, per taskbar,
+  `SettingsWindow::show_or_focus` after the current input. `WM_SHOW_SETTINGS` (second launch) uses the same flag.
+* **Support:** `Runtime::diagnostics()` carries `paused` and, per taskbar,
   `Reason::ActionFailed(reason)` with the exact `SendInput` failure text.
-* **R13 / hosted UI checks:** `AutomationId == "ElevenClock.Clock"`; overlay class
+* **UI tests:** `AutomationId == "ElevenClock.Clock"`; overlay class
   `ElevenClock.Overlay`; tray icon id 1 on the host window class `ElevenClock.Runtime.Host`;
   menu item ids 1..3.
-
-## Verification
-
-Commands, run on Linux x86_64 with Rust stable (the only toolchain CI uses); every command
-exited 0 (the second clippy line is the cross-target Windows type/lint check). Before
-the single-toolchain change the same commands also passed on 1.90.0:
-
-```sh
-cargo fmt --manifest-path rust/Cargo.toml --all --check
-cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
-cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
-cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
-cargo test --manifest-path rust/Cargo.toml --workspace --doc --locked
-```
-
-Results: clock-core state tests **13 passed** (2 new pause tests; pause is also part of
-the generated event sequences), clock-windows library **113 passed** (27 added: 11
-interaction, 4 tray decoder, 12 runtime action/pause/tray-recovery tests), 2 doctests.
-The Windows-only unit tests (`accessibility::tests`, `tray::native_values`,
-`runtime::native::tests`) are compiled and linted for `x86_64-pc-windows-msvc` but have
-**not been executed** by the author; the Windows CI job runs them.
-
-## Unchecked gates (real Windows desktop; backlog [#21](https://github.com/tjorim/ElevenClock/issues/21))
-
-- [ ] Mouse and keyboard users can reach Settings and Exit (right click, tray click, Win+B
-      then Enter, context-menu key); menu closes on outside click and Escape.
-- [ ] Paused mode shows the native clock on every monitor; Resume restores overlays.
-- [ ] One click opens the calendar once on supported builds; no stuck Win/N key (verify
-      with a key-state probe), no recursive overlay invocation, double click is one action.
-- [ ] Forced `SendInput` failure (UIPI/other desktop) removes the overlay and keeps
-      native access; Pause/Resume re-enables.
-- [ ] Bell, Show Desktop and ordinary app focus unaffected by overlay clicks and the menu.
-- [ ] Explorer kill/restart: tray icon returns exactly once; no duplicate icons.
-- [ ] Narrator: the clock is announced by Name/Button, Invoke (Caps+Enter or scan mode)
-      opens the calendar, and no unprompted per-second speech occurs with a seconds format.
-- [ ] High contrast / dark mode appearance of the Win32 popup menu (system colors only;
-      no custom drawing).
 
 ## Known limitations
 
@@ -141,5 +81,5 @@ The Windows-only unit tests (`accessibility::tests`, `tray::native_values`,
   overlay is shown; not de-duplicated without modifying Explorer.
 * A UIA client that invokes the element cannot learn that the later calendar action
   failed (the call returns once queued); the failure is visible in diagnostics.
-* Menu strings are fixed English; localization belongs to R14.
+* Menu strings are fixed English.
 * Pause is deliberately not persisted.

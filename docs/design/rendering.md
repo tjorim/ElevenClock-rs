@@ -1,10 +1,4 @@
-# R07 DirectWrite clock rendering
-
-Status: **code, portable tests and Windows type-checking complete; the interactive
-DPI/theme/long-format screenshot gates below are unchecked.** No Windows desktop
-was available in the authoring environment, so nothing here is a measured Windows
-result. Real-desktop results are in the
-[acceptance record](../windows-evidence/acceptance.md).
+# Clock rendering (DirectWrite)
 
 ## Renderer API (`clock-windows`)
 
@@ -18,14 +12,14 @@ result. Real-desktop results are in the
 | `ClockSurface::paint(&Renderer, &PaintRequest) -> Result<PaintOutcome, RenderError>` | `render/native.rs` | `Painted`, `Unchanged` (identical text/palette/font/region on a live device) or `Overflow`. Overflow draws nothing: the runtime must hide that monitor's overlay. |
 | `ClockSurface::{mark_dirty, invalidate_device}` | `render/native.rs` | Force a repaint; discard device-dependent objects (what `D2DERR_RECREATE_TARGET` does internally, with one automatic retry). |
 | `theme::{resolve, Palette, SystemAppearance, AppearanceTracker}` | `theme.rs` | High contrast (system `COLOR_WINDOW`/`COLOR_WINDOWTEXT`) always wins; otherwise explicit Light/Dark; `System` follows `SystemUsesLightTheme`. Opaque colors only; no pixel sampling. |
-| `theme::{system_appearance, is_appearance_message}` | `theme.rs` | Windows-only queries. The tracker yields R06's `ThemeChanged { revision }` only when the resolved appearance really changed. |
+| `theme::{system_appearance, is_appearance_message}` | `theme.rs` | Windows-only queries. The tracker yields the reducer's `ThemeChanged { revision }` only when the resolved appearance really changed. |
 
-### How R08 should drive it
+### How the runtime drives it
 
 On `CreateOverlay`/`SetBounds` size the HWND to the verified clock rectangle and
 call `paint` on `Effect::Paint`. Build `PaintRequest` from the reducer's committed
 preferences (`font_size_pt`, `theme` → `resolve(theme, tracker.current())`), the
-overlay's R02 `dpi`, the effect's `ClockText` and a `WorstCase` computed from
+overlay's discovered `dpi`, the effect's `ClockText` and a `WorstCase` computed from
 `preferences.format()`. Hide the overlay on `PaintOutcome::Overflow` (and on `Err`)
 and surface the `Overflow` values in Settings/diagnostics. Route
 `WM_SETTINGCHANGE`/`WM_THEMECHANGED`/`WM_SYSCOLORCHANGE`
@@ -44,10 +38,9 @@ the window procedure only bumps an epoch counter and validates the rectangle).
 - Cached per surface: text format (by pixel size/font generation), solid brush (by
   palette), worst-case verdict (by font, region, padding, format fingerprint) and
   the last painted state. Resize reuses the target; failures drop it.
-- Overlay prototype: GDI `WM_PAINT` drawing was replaced by `ClockSurface`. R03's
-  evidence script checks pure-black corners, so the harness still paints fixed
-  black/white unless `ELEVENCLOCK_R07_THEME=system|light|dark` is set, which uses
-  the live theme/high-contrast resolution. Shell/z-order logic is unchanged.
+- The `overlay_evidence` development example paints fixed black/white (its
+  harness checks pure-black corners) unless `ELEVENCLOCK_R07_THEME=system|light|dark`
+  is set, which uses the live theme/high-contrast resolution.
 
 ## Resource ownership
 
@@ -58,17 +51,7 @@ are COM references released by `Drop`; there are no raw handles. Drop a surface
 before destroying its window (the overlay prototype declares the surface field
 first). Nothing native crosses a worker channel.
 
-## Verification performed
-
-Authoring environment: Linux; Windows code type-checked with
-`--target x86_64-pc-windows-msvc` only (not executed).
-
-```sh
-cargo +1.90.0 fmt --manifest-path rust/Cargo.toml --all --check                       # ok
-cargo +1.90.0 clippy --manifest-path rust/Cargo.toml -p clock-core -p clock-windows --all-targets --locked -- -D warnings   # ok (Linux)
-cargo +1.90.0 clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings   # ok (type-check)
-cargo +1.90.0 test --manifest-path rust/Cargo.toml -p clock-core -p clock-windows --locked  # ok: 32 clock-windows unit tests
-```
+## Tests
 
 Portable tests cover DPI conversion at 100/125/150/200%, DIP rounding/saturation,
 negative-coordinate regions, worst-case coverage (months, ISO week 53, year
@@ -77,18 +60,4 @@ overflows though today fits", invalid measurements and palette/high-contrast
 resolution. `tests/render_native.rs` adds real DirectWrite/Direct2D checks (all
 four scales, no-repaint/theme repaint, long-format overflow, future month overflow,
 height overflow, resize, and a device-loss + surface-churn handle/GDI/USER count
-check). **These native tests have not been run yet; Windows CI is their first
-execution.**
-
-## Unchecked interactive gates
-
-- [ ] Crisp text screenshots at 100/125/150/200% on one display and mixed DPI.
-- [ ] Theme (light/dark), accent and high-contrast switch repaint without restart,
-      including via `ELEVENCLOCK_R07_THEME=system` in the overlay harness.
-- [ ] Long month/day/year-boundary format visually cannot overlap bell/tray
-      (overflow hides the overlay; native clock remains).
-- [ ] Observed handle count during a real GPU/driver reset.
-
-Per the [shared backlog](../contributing.md#shared-desktop-acceptance-backlog),
-attempt these on hosted Windows images first; record anything that is genuinely
-unavailable in [#21](https://github.com/tjorim/ElevenClock/issues/21).
+check), run by the Windows CI job.

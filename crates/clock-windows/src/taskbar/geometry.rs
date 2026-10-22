@@ -7,7 +7,6 @@ pub enum Rejection {
     OutsideMonitor,
     OutsideTaskbar,
     AdjacentControlOverlap,
-    UnverifiedSelector,
     IncompleteExclusions,
 }
 
@@ -48,19 +47,6 @@ pub fn validate_candidate(
     Ok(())
 }
 
-/// Fail closed until the manual build/selector/exclusion evidence gate is met.
-/// No public boolean allows a caller to declare an experimental selector proven.
-pub fn verified_clock_rect(
-    snapshot: &TaskbarSnapshot,
-    current: ShellGeneration,
-    candidate: PhysicalRect,
-    adjacent: &[PhysicalRect],
-    exclusions_complete: bool,
-) -> Result<PhysicalRect, Rejection> {
-    validate_candidate(snapshot, current, candidate, adjacent, exclusions_complete)?;
-    Err(Rejection::UnverifiedSelector)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,10 +77,6 @@ mod tests {
         assert_eq!(
             validate_candidate(&s, ShellGeneration(7), clock, &[bell], true),
             Ok(())
-        );
-        assert_eq!(
-            verified_clock_rect(&s, ShellGeneration(7), clock, &[bell], true),
-            Err(Rejection::UnverifiedSelector)
         );
     }
 
