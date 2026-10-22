@@ -1,7 +1,7 @@
 name: Rust x64 packaging candidate
 on:
   pull_request:
-    paths: ['rust/**', 'assets/**', 'packaging/**', 'scripts/package-rust-release.ps1', 'scripts/rust-release.py', 'scripts/test-rust-release.py', 'scripts/rust-license-check.py', 'scripts/test-rust-license-check.py', 'scripts/test-rust-installer.ps1', '.github/workflows/rust-release.yml', '.gitattributes', 'LICENSE', 'docs/dependency-notices/**']
+    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', 'packaging/**', 'scripts/package-rust-release.ps1', 'scripts/rust-release.py', 'scripts/test-rust-release.py', 'scripts/rust-license-check.py', 'scripts/test-rust-license-check.py', 'scripts/test-rust-installer.ps1', '.github/workflows/rust-release.yml', '.gitattributes', 'LICENSE', 'docs/dependency-notices/**']
   workflow_dispatch:
 concurrency:
   group: rust-packaging-${{ github.ref }}
@@ -18,14 +18,12 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       # Shared lint, unit tests and script regressions run in rust-ci.yml.
       - name: Prepare locked dependency cache (including source-only targets)
-        run: cargo fetch --manifest-path rust/Cargo.toml --locked
+        run: cargo fetch --locked
       - name: Install pinned development compiler
         shell: pwsh
         run: |

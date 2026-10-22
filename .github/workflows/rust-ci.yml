@@ -2,9 +2,9 @@ name: Rust foundation
 on:
   push:
     branches: [main, rust-rewrite]
-    paths: ['rust/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
+    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
   pull_request:
-    paths: ['rust/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
+    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
   workflow_dispatch:
 concurrency:
   group: rust-foundation-${{ github.ref }}
@@ -23,12 +23,10 @@ jobs:
           components: rustfmt, clippy
           targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
-      - run: cargo fmt --manifest-path rust/Cargo.toml --all --check
-      - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
-      - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
-      - run: cargo test --manifest-path rust/Cargo.toml -p clock-core --locked
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
+      - run: cargo test -p clock-core --locked
       - name: Packaging script regression checks
         run: python3 scripts/test-rust-release.py
       - name: Overlay harness wait regression checks
@@ -45,17 +43,15 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
-      - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
+      - run: cargo test --workspace --all-targets --locked
       # The real Windows clipboard, including contention (R11). Ignored by default
       # because it overwrites the clipboard text while it runs.
-      - run: cargo test --manifest-path rust/Cargo.toml -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1
-      - run: cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_64-pc-windows-msvc --locked
+      - run: cargo test -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1
+      - run: cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked
       - name: Check GUI subsystem and linked native resources
         shell: pwsh
         run: |
-          $exe = 'rust/target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe'
+          $exe = 'target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe'
           $bytes = [IO.File]::ReadAllBytes($exe)
           $pe = [BitConverter]::ToInt32($bytes, 0x3c)
           if ([BitConverter]::ToUInt16($bytes, $pe + 0x5c) -ne 2) { throw 'Expected Windows GUI subsystem' }
@@ -79,7 +75,7 @@ jobs:
         with:
           name: elevenclock-rs-dev-x64
           retention-days: 30
-          path: rust/target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe
+          path: target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         if: always()
@@ -96,7 +92,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: rust
           shared-key: cargo-audit-0.22.2
       - name: Install pinned advisory checker if not cached
         run: |
@@ -104,12 +99,11 @@ jobs:
             cargo install cargo-audit --locked --version 0.22.2
           fi
       - name: Advisory audit (failures are never ignored)
-        working-directory: rust
         run: cargo audit --deny warnings
       # Gates every PR. The inventory is regenerated on demand (see
       # docs/dependencies.md); it is not uploaded as an artifact.
       - name: License inventory and original-notice check
         run: |
           python3 scripts/test-rust-license-check.py
-          cargo metadata --manifest-path rust/Cargo.toml --locked --format-version 1 > dependency-metadata.json
+          cargo metadata --locked --format-version 1 > dependency-metadata.json
           python3 scripts/rust-license-check.py dependency-metadata.json > /dev/null

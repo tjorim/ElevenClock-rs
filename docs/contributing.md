@@ -1,10 +1,9 @@
-# Rust development (R01)
+# Contributing to ElevenClock-rs
 
-The integration branch is `rust-rewrite`, created from main with the planning
-contracts included. One issue per feature PR targeting that branch; do not merge
-into main until the release gates pass. The Python application stays intact.
-The baseline is f967218e95b6f3c15e26f840e6090a6720528e39; the reviewed plans landed
-in main through #17. The old `rust-rewrite-plan` link in R01 no longer resolves.
+`main` is the default branch and builds only the Rust app; open feature PRs against
+it. The Python/Qt app, its build scripts and the rewrite plan were removed at the
+cutover (R15). They stay retrievable from Git; the commits are listed in the
+[migration guide](migration.md#legacy-reference).
 
 ## Toolchains and commands
 
@@ -13,7 +12,9 @@ not pin one (no `rust-toolchain.toml`). Workspace `rust-version` (1.99, the stab
 current when it was last set) matches what CI builds with; it is not a separately
 tested floor, so raise it when you move to a newer stable. Install
 rustfmt and Clippy. Use `fmt --all` from the repository root so cargo-fmt finds
-this virtual workspace's targets. Release builds require a native Windows host so
+this virtual workspace's targets. The workspace's default member is `clock-app`, so a bare
+`cargo run` starts the app; use `--workspace` or `-p` (as below and in CI) to build,
+lint or test the other crates. Release builds require a native Windows host so
 resources cannot be silently omitted during cross-compilation. Linux cross-target
 checks are type checks only.
 CI layout (`rust-ci.yml`): the Linux `core` job runs fmt, Clippy for the host and for
@@ -42,27 +43,27 @@ Windows development requires the MSVC toolchain and
 Windows SDK resource compiler; users do not need these developer tools.
 
 ```sh
-cargo fmt --manifest-path rust/Cargo.toml --all --check
-cargo test --manifest-path rust/Cargo.toml -p clock-core --locked
-cargo clippy --manifest-path rust/Cargo.toml -p clock-core --all-targets --locked -- -D warnings
+cargo fmt --all --check
+cargo test -p clock-core --locked
+cargo clippy -p clock-core --all-targets --locked -- -D warnings
 ```
 
 On Windows, additionally run:
 
 ```sh
-cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
-cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
-cargo test --manifest-path rust/Cargo.toml --workspace --locked
-cargo test --manifest-path rust/Cargo.toml --workspace --doc --locked
-cargo build --manifest-path rust/Cargo.toml -p clock-app --release --target x86_64-pc-windows-msvc --locked
+cargo check --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo test --workspace --doc --locked
+cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked
 ```
 
 Double-click the resulting `elevenclock-rs.exe` for the native
 runtime and Settings shell. It has no command suite. Closing Settings keeps the
 clock running in the background; **Exit ElevenClock-rs** quits (R08, see
-[its record](design/lifecycle.md)). This is a work in progress with no
-release: the experimental R02 candidate places the clock overlay, and P1 is still
-NO-GO (#21), so expect rough edges.
+[its record](design/lifecycle.md)). Exit any legacy ElevenClock first: two overlay
+apps cannot share a taskbar. The current release state is in
+[`windows-evidence/acceptance.md`](windows-evidence/acceptance.md).
 `rust-ci.yml` checks the GUI subsystem, embedded manifest, native launch/close
 and forward/reverse dialog focus. Its development harness captures the actual
 dialog and records runner OS/build/DPI as prototype evidence. The environment
@@ -83,7 +84,7 @@ owns FFI. On Linux the app is a no-op build stub, not a supported product.
 
 `clock-core::model` defines physical-pixel rectangles with checked signed edges,
 transient generation-scoped taskbar keys, discovery snapshots, rendered text,
-cadence and event/effect values. See [contracts](rewrite/dissection.md#4-target-boundaries-and-interfaces).
+cadence and event/effect values. See the [contracts](https://github.com/tjorim/ElevenClock-rs/blob/0ac31152e265bb5d6e02fcac18404362453670d2/docs/rewrite/dissection.md#4-target-boundaries-and-interfaces) (removed at cutover; linked at the last commit that has them).
 R02 owns snapshot validation: a Some clock rect means proven clock-only bounds;
 DPI must be nonzero, clock/taskbar must fit the monitor, and adjacent controls
 must be excluded. Unknown visibility/geometry must not produce overlays.
@@ -122,8 +123,8 @@ never enter an installer or support flow. R14 owns packaging and final notices.
 Portable discovery validation and the process-supervisor tests also run on Linux:
 
 ```sh
-cargo test --manifest-path rust/Cargo.toml -p clock-windows --all-targets --locked
-cargo clippy --manifest-path rust/Cargo.toml -p clock-windows --all-targets --locked -- -D warnings
+cargo test -p clock-windows --all-targets --locked
+cargo clippy -p clock-windows --all-targets --locked -- -D warnings
 ```
 
 The Windows-only FFI remains gated; only portable geometry/queue code is exposed
@@ -162,7 +163,7 @@ to hosted CI when feasible; do not defer the entire issue or block unrelated wor
 `overlay_evidence` is a development-only example in `clock-app`, never an installed
 app artifact. Its experimental overlay/interaction FFI is private to the example;
 a normal `-p clock-app` release build does not compile it. Build it with
-`cargo build --manifest-path rust/Cargo.toml -p clock-app --example overlay_evidence`.
+`cargo build -p clock-app --example overlay_evidence`.
 See the [coverage migration](windows-evidence/overlay-retirement.md). Core models
 and the R02 production-selector gate remain unchanged. Historical hosted results
 and the P1 no-go are in [overlay evidence](windows-evidence/overlay-spike.md). The hosted workflow uses
@@ -192,7 +193,7 @@ discovery helper is the same executable started with a private marker
 ([ADR 0002](adr/0002-same-executable-discovery-helper.md)); it is not a user command.
 
 ```sh
-cargo test --manifest-path rust/Cargo.toml -p clock-windows --locked
+cargo test -p clock-windows --locked
 ```
 
 There is no feature flag or support gate for overlays: the experimental candidate is
@@ -214,7 +215,7 @@ The real-clipboard tests overwrite the clipboard text while they run (and restor
 they are ignored by default; CI runs them on its Windows runner:
 
 ```sh
-cargo test --manifest-path rust/Cargo.toml -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1
+cargo test -p clock-windows --test clipboard_native --locked -- --ignored --test-threads=1
 ```
 
 See the [R11 record](design/diagnostics.md) for behaviour, limits and the unchecked
