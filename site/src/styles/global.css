@@ -331,3 +331,9 @@ footer a { color: var(--mint); }
 @media (prefers-reduced-motion: reduce) {
   .button { transition: none; }
 }
+
+/* 404 */
+.not-found { max-width: 640px; margin: 0 auto; padding: 4.5rem 1.5rem 6rem; text-align: center; }
+.not-found h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 0 0 0.6em; }
+.not-found .actions { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; margin-top: 2rem; }
+.not-found .button:not(.primary) { color: var(--ink); border-color: var(--line); }

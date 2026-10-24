@@ -1,6 +1,7 @@
 ---
 import SiteLayout from '../../layouts/SiteLayout.astro';
 import { documentRoute, repository, siteUrl } from '../../../lib/paths.mjs';
+import { describe } from '../../../lib/describe.mjs';
 import { navigation } from '../../../lib/nav.mjs';
 
 export async function getStaticPaths() {
@@ -20,13 +21,13 @@ export async function getStaticPaths() {
   });
 }
 const { doc, source } = Astro.props;
-const { Content, getHeadings } = doc;
+const { Content, getHeadings, rawContent } = doc;
 const headings = getHeadings();
 const labels = Object.fromEntries(navigation.flatMap(([, pages]) => pages));
 const title = source === 'docs/README.md' ? 'Documentation'
   : labels[source] ?? headings.find(heading => heading.depth === 1)?.text ?? 'Documentation';
 ---
-<SiteLayout title={`${title} · ElevenClock-rs`} documentation>
+<SiteLayout title={`${title} · ElevenClock-rs`} description={describe(rawContent(), undefined)} documentation>
   <main id="main" tabindex="-1" class="docs-layout">
     <aside class="docs-sidebar">
       <a href={siteUrl()}>← Back to home</a>

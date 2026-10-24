@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { documentRoute, listSources, rewriteUrl } from '../site/lib/paths.mjs';
+import { describe } from '../site/lib/describe.mjs';
 import { navigation } from '../site/lib/nav.mjs';
 import remarkLinks from '../site/lib/remark-links.mjs';
 
@@ -27,6 +28,14 @@ test('every published page is in the documentation navigation', () => {
   const navigable = navigation.flatMap(([, pages]) => pages.map(([source]) => source));
   const published = listSources().filter(source => source !== 'docs/README.md');
   assert.deepEqual([...navigable].sort(), published);
+});
+
+test('page descriptions are the first prose paragraph as plain text', () => {
+  const markdown = '# Title\n\n![badge](x.svg)\n\n> note\n\nA [guide](a.md) with `code` and **bold**\ntext.\n\nSecond paragraph.';
+  assert.equal(describe(markdown, 'fallback'), 'A guide with code and bold text.');
+  assert.equal(describe('# Only a title\n\n- item', 'fallback'), 'fallback');
+  const long = describe(`${'word '.repeat(60)}end`, 'fallback');
+  assert.ok(long.length <= 160 && long.endsWith('…'));
 });
 
 test('source-relative links retain fragments and query strings under the base', () => {

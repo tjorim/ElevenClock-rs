@@ -38,6 +38,9 @@ assets and redirect targets must resolve under `/ElevenClock-rs/`.
 ## Project structure
 
 - `site/src/pages/index.astro`: the landing page.
+- `site/src/pages/404.astro`: the not-found page GitHub Pages serves for unknown URLs.
+- `site/lib/describe.mjs`: derives each documentation page's meta description from its
+  first paragraph.
 - `site/src/scripts/clock.js`: the format preview and hero clock. It is a small
   JavaScript copy of the format language in
   [`FORMAT.md`](../crates/clock-core/FORMAT.md); keep the tokens in sync when the

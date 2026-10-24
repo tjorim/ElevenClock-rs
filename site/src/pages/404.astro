@@ -1,0 +1,14 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { siteUrl } from '../../lib/paths.mjs';
+---
+<SiteLayout title="Page not found · ElevenClock-rs" noindex>
+  <main id="main" tabindex="-1" class="not-found">
+    <h1>This page does not exist.</h1>
+    <p>The link may be out of date. Start from the home page or browse the documentation.</p>
+    <p class="actions">
+      <a class="button primary" href={siteUrl()}>Back to home</a>
+      <a class="button" href={siteUrl('docs/')}>Documentation</a>
+    </p>
+  </main>
+</SiteLayout>

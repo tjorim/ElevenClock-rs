@@ -21,3 +21,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # astro and its @astrojs packages are pinned together and must move together.
+      astro:
+        patterns: ["astro", "@astrojs/*"]
