@@ -16,3 +16,8 @@ updates:
       # regenerated in the same PR (CI fails if they are stale).
       windows:
         patterns: ["windows-*"]
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -1,57 +1,35 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ElevenClock-rs: your own clock format on the Windows 11 taskbar</title>
-  <meta name="description" content="A lightweight, customizable clock for the Windows 11 taskbar. ISO week dates, seconds, two lines: any format you like. Free, open source and native.">
-  <meta property="og:title" content="ElevenClock-rs">
-  <meta property="og:description" content="Your own date and time format on the Windows 11 taskbar. Native, tiny and free.">
-  <meta property="og:image" content="icon.png">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <header class="hero">
-    <nav class="top">
-      <a class="brand" href="#"><img src="icon.svg" alt="" width="32" height="32"> ElevenClock-rs</a>
-      <div class="links">
-        <a href="#features">Features</a>
-        <a href="#try">Try a format</a>
-        <a href="#install">Install</a>
-        <a href="#faq">FAQ</a>
-        <a href="https://github.com/tjorim/ElevenClock-rs">GitHub</a>
-      </div>
-    </nav>
-
-    <div class="hero-body">
-      <h1>Your clock.<br><span>Your format.</span></h1>
-      <p class="lead">ElevenClock-rs puts your own date and time format on the Windows 11
-        taskbar: ISO week dates, seconds, a second line, whatever you need.
-        Native, tiny and free.</p>
-      <div class="cta">
-        <a class="button primary" href="https://github.com/tjorim/ElevenClock-rs/releases/latest">Download for Windows 11</a>
-        <a class="button" href="https://github.com/tjorim/ElevenClock-rs">View the source</a>
-      </div>
-      <p class="fineprint">Free and open source · Windows 11 x64 · No administrator rights</p>
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { repository, siteUrl } from '../../lib/paths.mjs';
+---
+<SiteLayout title="ElevenClock-rs: your own clock format on the Windows 11 taskbar" landing>
+  <div class="hero-body" slot="hero">
+    <h1>Your clock.<br><span>Your format.</span></h1>
+    <p class="lead">ElevenClock-rs puts your own date and time format on the Windows 11
+      taskbar: ISO week dates, seconds, a second line, whatever you need.
+      Native, tiny and free.</p>
+    <div class="cta">
+      <a class="button primary" href={`${repository}/releases/latest`}>Download for Windows 11</a>
+      <a class="button" href={repository}>View the source</a>
     </div>
+    <p class="fineprint">Free and open source · Windows 11 x64 · No administrator rights</p>
+  </div>
 
-    <figure class="desktop" aria-label="A Windows 11 taskbar showing the ElevenClock-rs clock">
-      <div class="taskbar">
-        <div class="apps" aria-hidden="true">
-          <span class="app start"></span><span class="app"></span><span class="app"></span>
-          <span class="app"></span><span class="app"></span>
-        </div>
-        <div class="tray">
-          <span class="tray-icons" aria-hidden="true">⌃ &nbsp;◔ &nbsp;🔈</span>
-          <span class="clock" id="hero-clock">2642.2</span>
-        </div>
+  <figure class="desktop" slot="hero" aria-label="A Windows 11 taskbar showing the ElevenClock-rs clock">
+    <div class="taskbar">
+      <div class="apps" aria-hidden="true">
+        <span class="app start"></span><span class="app"></span><span class="app"></span>
+        <span class="app"></span><span class="app"></span>
       </div>
-      <figcaption id="hero-caption">ISO week date: 2026, week 42, Tuesday</figcaption>
-    </figure>
-  </header>
+      <div class="tray">
+        <span class="tray-icons" aria-hidden="true">⌃ &nbsp;◔ &nbsp;🔈</span>
+        <span class="clock" id="hero-clock">2642.2</span>
+      </div>
+    </div>
+    <figcaption id="hero-caption">ISO week date: 2026, week 42, Tuesday</figcaption>
+  </figure>
 
-  <main>
+  <main id="main" tabindex="-1">
     <section id="features" class="features">
       <h2>Everything a taskbar clock should be</h2>
       <div class="grid">
@@ -133,7 +111,7 @@
         <p>Start at sign-in is off until you turn it on, and diagnostics are only ever
           copied to your clipboard, never sent anywhere.</p>
       </div>
-      <img src="settings.png" width="611" height="624" loading="lazy"
+      <img src={siteUrl('docs/design/images/settings/first-run.png')} width="611" height="624" loading="lazy"
            alt="The ElevenClock-rs Settings window with the Time + ISO week date preset, a live preview and the token list">
     </section>
 
@@ -141,7 +119,7 @@
       <h2>Install in a minute</h2>
       <ol>
         <li>Download <code>ElevenClock-rs-…-x64-setup.exe</code> from the
-          <a href="https://github.com/tjorim/ElevenClock-rs/releases/latest">latest release</a>.</li>
+          <a href={`${repository}/releases/latest`}>latest release</a>.</li>
         <li>Run it. It installs for your account only, without administrator rights.</li>
         <li>Open <strong>ElevenClock-rs</strong> from the Start menu and pick your format.</li>
       </ol>
@@ -152,7 +130,7 @@
         <strong>Run anyway</strong>. Each release lists SHA-256 checksums.</p>
       <p>Coming from the original ElevenClock? Quit it and switch it off in
         <strong>Settings &gt; Apps &gt; Startup</strong> first; the
-        <a href="https://github.com/tjorim/ElevenClock-rs/blob/main/docs/migration.md">migration guide</a>
+        <a href={siteUrl('docs/migration/')}>migration guide</a>
         explains what changed.</p>
     </section>
 
@@ -194,32 +172,13 @@
       <details>
         <summary>Something is wrong. Where do I get help?</summary>
         <p>Open <strong>Settings &gt; Support</strong>, click <strong>Copy diagnostics</strong>
-          and paste it into a <a href="https://github.com/tjorim/ElevenClock-rs/issues/new">new issue</a>.
+          and paste it into a <a href={`${repository}/issues/new`}>new issue</a>.
           The report contains no user name, paths or window titles.</p>
       </details>
     </section>
   </main>
 
-  <footer>
-    <div class="footer-cta">
-      <img src="icon.svg" alt="" width="56" height="56">
-      <p>Make the taskbar clock yours.</p>
-      <a class="button primary" href="https://github.com/tjorim/ElevenClock-rs/releases/latest">Download ElevenClock-rs</a>
-    </div>
-    <div class="footer-notes">
-      <p>Free and open source under the
-        <a href="https://github.com/tjorim/ElevenClock-rs/blob/main/LICENSE">Apache License 2.0</a>.
-        Thanks to Martí Climent and the ElevenClock contributors for the original app,
-        which inspired this one.</p>
-      <p>Developed with help from AI coding agents, directed and reviewed by the
-        maintainer. <a href="https://github.com/tjorim/ElevenClock-rs#ai-assistance">More</a></p>
-      <p><a href="https://github.com/tjorim/ElevenClock-rs#code-signing-policy">Code signing policy</a> ·
-        Privacy: this program will not transfer any information to other networked
-        systems unless specifically requested by the user or the person installing or
-        operating it.</p>
-    </div>
-  </footer>
-
-  <script src="clock.js"></script>
-</body>
-</html>
+  <script>
+    import '../scripts/clock.js';
+  </script>
+</SiteLayout>

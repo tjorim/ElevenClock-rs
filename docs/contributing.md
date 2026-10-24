@@ -94,6 +94,18 @@ harness uses actual Windows high contrast and Display Scale selections at
 100/125/150/200%, restoring the original settings; it never injects DPI messages
 or uses a private DPI setter. It does not cover Explorer or the taskbar overlay.
 
+## Website and documentation
+
+The Markdown under `docs/`, the root `README.md`, `CODE_OF_CONDUCT.md` and
+[`FORMAT.md`](../crates/clock-core/FORMAT.md) are the single source of the documentation
+site; there are no HTML copies. An Astro build renders them next to the landing page and
+rewrites their relative links to the published pages, so write links the way GitHub
+resolves them. When you add a page, list it in `site/lib/nav.mjs` (`npm test` fails
+otherwise). Preview and check the site with `npm ci`, `npm run dev` and
+`npm run build && npm run check:site`; the Node and npm versions, routes and
+deployment are in [`site/README.md`](../site/README.md). The `pages.yml` workflow builds
+and checks the site for pull requests that touch it and deploys from `main`.
+
 ## Boundaries and ownership
 
 For the unsigned x64 installer/ZIP workflow, source/notices/checksum companions and
