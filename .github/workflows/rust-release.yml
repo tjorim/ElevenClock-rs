@@ -1,15 +1,35 @@
 name: Rust x64 packaging and release
+
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
   pull_request:
-    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', 'packaging/**', 'scripts/package-rust-release.ps1', 'scripts/rust-release.py', 'scripts/test-rust-release.py', 'scripts/rust-license-check.py', 'scripts/test-rust-license-check.py', 'scripts/test-rust-installer.ps1', '.github/workflows/rust-release.yml', '.gitattributes', 'LICENSE', 'docs/dependency-notices/**']
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'assets/**'
+      - 'packaging/**'
+      - 'scripts/package-rust-release.ps1'
+      - 'scripts/rust-release.py'
+      - 'scripts/test-rust-release.py'
+      - 'scripts/rust-license-check.py'
+      - 'scripts/test-rust-license-check.py'
+      - 'scripts/test-rust-installer.ps1'
+      - '.github/workflows/rust-release.yml'
+      - '.gitattributes'
+      - 'LICENSE'
+      - 'docs/dependency-notices/**'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 concurrency:
   group: rust-packaging-${{ github.ref }}
   cancel-in-progress: true
-permissions:
-  contents: read
+
 jobs:
   package:
     runs-on: windows-2025

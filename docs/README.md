@@ -2,6 +2,9 @@
 
 Docs for ElevenClock-rs. Using the app is covered in the [README](../README.md); moving
 from the original Python ElevenClock is covered in the [migration guide](migration.md).
+These Markdown files are the single source: the [website](https://tjorim.github.io/ElevenClock-rs/docs/)
+renders them, with relative links rewritten to the published pages, and
+[`site/README.md`](../site/README.md) explains the routes and how to preview them.
 
 | Folder / file | What it is | Changes when |
 | --- | --- | --- |
@@ -11,7 +14,7 @@ from the original Python ElevenClock is covered in the [migration guide](migrati
 | [`dependencies.md`](dependencies.md), [`dependency-notices/`](dependency-notices) | Dependency policy and bundled third-party notices | A dependency is added, removed or updated |
 | [`releasing.md`](releasing.md) | Native x64 packaging, installer ownership and publishing a release | Packaging changes |
 | [`licensing.md`](licensing.md), [`product-name.md`](product-name.md) | The Apache 2.0 decision and artwork provenance; the product name, listing copy and distribution channels | The license or name decision changes |
-| [`../site/`](../site) | The public website ([tjorim.github.io/ElevenClock-rs](https://tjorim.github.io/ElevenClock-rs/)), deployed from `main` by `pages.yml`; it reuses the app icon and a Settings screenshot | Features, install steps or the format language change |
+| [`../site/`](../site/README.md) | The public website and these docs ([tjorim.github.io/ElevenClock-rs](https://tjorim.github.io/ElevenClock-rs/)): an Astro build that renders the Markdown in this repository, deployed from `main` by `pages.yml` | Features, install steps or the format language change; a page is added |
 | [`design/`](design) | How each part behaves and why: the interfaces, states and limits a reader needs | The behaviour changes |
 | [`adr/`](adr) | Architecture decisions that were weighed and settled | A decision is made or superseded |
 

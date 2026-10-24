@@ -480,13 +480,26 @@ try {
         $holder.Dispose()
         Remove-Item $flag, $holderScript -Force -ErrorAction SilentlyContinue
     }
-    $report = [SettingsNative]::Text((Control $window $PAGE.Support 1503))
-    $alertsBefore = [SettingsNative]::AlertsFrom($feedback)
-    Click (Control $window $PAGE.Support 1504)
-    Pump 300
+    # Runtime discovery may update the report and clear the old Copy feedback.
+    # Observe the action promptly instead of Click's fixed 500 ms settle + Pump 300.
+    # Retry only if the report actually changed; a stable failed copy still fails.
+    $copyDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $report = [SettingsNative]::Text((Control $window $PAGE.Support 1503))
+        $alertsBefore = [SettingsNative]::AlertsFrom($feedback)
+        [SettingsNative]::SendMessageW((Control $window $PAGE.Support 1504), 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null # BM_CLICK
+        $actionDeadline = [DateTime]::UtcNow.AddSeconds(1)
+        do {
+            Pump 20
+            $copyFeedback = [SettingsNative]::Text($feedback)
+            $reportChanged = [SettingsNative]::Text((Control $window $PAGE.Support 1503)) -ne $report
+        } while (-not $reportChanged -and ($copyFeedback -ne 'Diagnostics copied to the clipboard.' -or [SettingsNative]::AlertsFrom($feedback) -le $alertsBefore) -and [DateTime]::UtcNow -lt $actionDeadline)
+        $copied = (Get-Clipboard -Raw).Replace("`r`n", "`n")
+        $reportChanged = $reportChanged -or ([SettingsNative]::Text((Control $window $PAGE.Support 1503)) -ne $report)
+    } while ($reportChanged -and [DateTime]::UtcNow -lt $copyDeadline)
+    Assert (-not $reportChanged) 'The diagnostics report did not stabilize during the bounded Copy check'
     Assert (([SettingsNative]::AlertsFrom($feedback) - $alertsBefore) -ge 1) 'The copy result must be announced'
-    Assert ([SettingsNative]::Text($feedback) -eq 'Diagnostics copied to the clipboard.') "Copy did not report success: '$([SettingsNative]::Text($feedback))'"
-    $copied = (Get-Clipboard -Raw).Replace("`r`n", "`n")
+    Assert ($copyFeedback -eq 'Diagnostics copied to the clipboard.') "Copy did not report success: '$copyFeedback'"
     Assert ($copied.TrimEnd() -eq $report.TrimEnd()) 'The clipboard must hold exactly the previewed report'
     if ($null -ne $clipboardBefore) { Set-Clipboard -Value $clipboardBefore } else { Set-Clipboard -Value $null }
     # The bounded local log exists, names the start and holds no personal data.

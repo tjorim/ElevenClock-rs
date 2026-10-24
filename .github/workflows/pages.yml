@@ -1,31 +1,72 @@
 name: Website
+
 on:
   push:
-    branches: [main]
-    paths: ['site/**', 'assets/icon.svg', 'assets/icon.png', 'docs/design/images/settings/first-run.png', '.github/workflows/pages.yml']
+    branches:
+      - 'main'
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'assets/**'
+      - 'README.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'crates/clock-core/FORMAT.md'
+      - 'scripts/prepare-site.mjs'
+      - 'scripts/site-links.test.mjs'
+      - 'scripts/check-site.py'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.nvmrc'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'assets/**'
+      - 'README.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'crates/clock-core/FORMAT.md'
+      - 'scripts/prepare-site.mjs'
+      - 'scripts/site-links.test.mjs'
+      - 'scripts/check-site.py'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.nvmrc'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
-concurrency:
-  group: pages
-  cancel-in-progress: false
+
 permissions:
   contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # The page reuses the app icon and a Settings screenshot instead of copies.
-      - name: Assemble the site
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install pinned npm
+        run: npm install --global npm@10.9.8
+      - run: npm ci
+      - name: Build Astro site
+        run: npm run build
+      - name: Check routes, links, anchors and assets
         run: |
-          mkdir _site
-          cp site/* _site/
-          cp assets/icon.svg assets/icon.png _site/
-          cp docs/design/images/settings/first-run.png _site/settings.png
-      - uses: actions/configure-pages@v6
+          npm test
+          npm run check:site
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
   deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -35,5 +76,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/configure-pages@v6
       - id: deployment
         uses: actions/deploy-pages@v5

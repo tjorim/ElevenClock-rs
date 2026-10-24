@@ -2,13 +2,13 @@
 
 ![ElevenClock-rs icon](assets/icon.png)
 
-A customizable clock for the Windows 11 taskbar ([website](https://tjorim.github.io/ElevenClock-rs/)). It shows your own date and time
+A customizable clock for the Windows 11 taskbar ([website and documentation](https://tjorim.github.io/ElevenClock-rs/)). It shows your own date and time
 format, such as the ISO week date `2642.2` (2026, week 42, Tuesday), in place of the
 taskbar clock on one or every display. The Windows clock is never changed or
 disabled; it sits underneath, so exiting always brings it straight back.
 
 - **Light.** About 3 MiB of memory and around 0.01% CPU while running
-  ([measured](docs/tested-configurations.md#resource-use)). There is no busy
+  ([measured](https://tjorim.github.io/ElevenClock-rs/docs/tested-configurations/#resource-use)). There is no busy
   loop: the clock updates only when its text changes, plus a cheap taskbar check
   every 2 seconds.
 - **Self-contained.** One native executable: no Python, Qt or Visual C++ runtime to
@@ -27,7 +27,7 @@ You need stock Windows 11 on an x64 PC. No administrator rights are needed.
 3. Open **ElevenClock-rs** from the Start menu.
 
 If you used the original ElevenClock, quit it and switch it off in
-**Windows Settings > Apps > Startup** first. The [migration guide](docs/migration.md)
+**Windows Settings > Apps > Startup** first. The [migration guide](https://tjorim.github.io/ElevenClock-rs/docs/migration/)
 explains this and what changed.
 
 The release also has a portable ZIP: extract it to a folder you can write to and
@@ -72,7 +72,7 @@ unless you paste it yourself.
    so reinstalling restores them.
 
 To go back to an earlier version, uninstall and run the earlier installer; to go back
-to the original ElevenClock, see [Going back](docs/migration.md#going-back).
+to the original ElevenClock, see [Going back](https://tjorim.github.io/ElevenClock-rs/docs/migration/#going-back).
 
 ## Not supported
 
@@ -80,14 +80,14 @@ Windows 10, ARM64 devices, Windows Insider builds, taskbar replacements such as
 ExplorerPatcher or StartAllBack, and taskbars on the side or top of the screen.
 Internet time sync, notification counters, custom gestures, format expressions and
 time offsets, extra time zones, translations and settings import from the original
-ElevenClock are not available; the [migration guide](docs/migration.md#what-carries-over-and-what-does-not)
+ElevenClock are not available; the [migration guide](https://tjorim.github.io/ElevenClock-rs/docs/migration/#what-carries-over-and-what-does-not)
 lists everything that was removed.
 
 ## Contributing
 
 Build, test and packaging instructions are in the
-[contributor guide](docs/contributing.md) and the [release guide](docs/releasing.md).
-The [docs index](docs/README.md) maps the design records and Windows evidence.
+[contributor guide](https://tjorim.github.io/ElevenClock-rs/docs/contributing/) and the [release guide](https://tjorim.github.io/ElevenClock-rs/docs/releasing/).
+The [docs index](https://tjorim.github.io/ElevenClock-rs/docs/) maps the design records and Windows evidence.
 
 ## Name
 
@@ -125,9 +125,9 @@ operating it.
 The Rust implementation, its tooling and the [application artwork](assets/README.md)
 are licensed under [Apache License 2.0](LICENSE). Copyright 2026 ElevenClock-rs
 contributors. Third-party dependencies keep their own licenses; see
-[dependencies](docs/dependencies.md).
+[dependencies](https://tjorim.github.io/ElevenClock-rs/docs/dependencies/).
 
 The original Python ElevenClock is GPLv3. It is no longer in this tree and is not
-part of ElevenClock-rs releases; the [migration guide](docs/migration.md#legacy-reference)
-links the commits that contain it. [Licensing](docs/licensing.md) documents the Apache 2.0 decision, and
-[product name](docs/product-name.md) records the name and distribution channels.
+part of ElevenClock-rs releases; the [migration guide](https://tjorim.github.io/ElevenClock-rs/docs/migration/#legacy-reference)
+links the commits that contain it. [Licensing](https://tjorim.github.io/ElevenClock-rs/docs/licensing/) documents the Apache 2.0 decision, and
+[product name](https://tjorim.github.io/ElevenClock-rs/docs/product-name/) records the name and distribution channels.

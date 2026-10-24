@@ -11,3 +11,11 @@ __pycache__/
 .vs/
 .vscode/
 *.code-workspace
+
+# Website (Astro): dependencies, cache and generated output
+node_modules/
+site/.astro/
+site/public/
+
+# Generated website output
+_site/

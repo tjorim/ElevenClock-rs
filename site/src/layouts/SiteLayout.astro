@@ -1,0 +1,82 @@
+---
+import '../styles/global.css';
+import { origin, repository, siteUrl } from '../../lib/paths.mjs';
+
+const {
+  title,
+  description = 'A lightweight, customizable clock for the Windows 11 taskbar. ISO week dates, seconds, two lines: any format you like. Free, open source and native.',
+  landing = false,
+  documentation = false,
+  noindex = false,
+} = Astro.props;
+const canonical = origin + Astro.url.pathname;
+// The pre-Astro site served its social image from the root; keep that URL.
+const image = origin + siteUrl('icon.png');
+const icon = (name) => siteUrl(`assets/${name}`);
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172b42">
+  <title>{title}</title>
+  <meta name="description" content={description}>
+  {noindex ? <meta name="robots" content="noindex"> : <>
+    <link rel="canonical" href={canonical}>
+    <meta property="og:url" content={canonical}>
+  </>}
+  <meta property="og:title" content={title}>
+  <meta property="og:description" content={description}>
+  <meta property="og:type" content="website">
+  <meta property="og:image" content={image}>
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" type="image/svg+xml" href={icon('icon.svg')}>
+  <link rel="alternate icon" href={icon('icon.ico')}>
+  <link rel="apple-touch-icon" href={icon('icon.png')}>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class={landing ? 'hero' : 'bar'}>
+    <nav class="top" aria-label="Main navigation">
+      <a class="brand" href={siteUrl()}><img src={siteUrl('assets/icon.svg')} alt="" width="32" height="32"> ElevenClock-rs</a>
+      <div class="links">
+        <a href={siteUrl('#features')}>Features</a>
+        <a href={siteUrl('#try')}>Try a format</a>
+        <a href={siteUrl('#install')}>Install</a>
+        <a href={siteUrl('#faq')}>FAQ</a>
+        <a href={siteUrl('docs/')} aria-current={documentation ? 'true' : undefined}>Documentation</a>
+        <a href={repository}>GitHub</a>
+      </div>
+    </nav>
+    <slot name="hero" />
+  </header>
+
+  <slot />
+
+  <footer>
+    {landing && <div class="footer-cta">
+      <img src={siteUrl('assets/icon.svg')} alt="" width="56" height="56">
+      <p>Make the taskbar clock yours.</p>
+      <a class="button primary" href={`${repository}/releases/latest`}>Download ElevenClock-rs</a>
+    </div>}
+    <div class="footer-notes">
+      <p><a href={siteUrl()}>Home</a> · <a href={siteUrl('docs/')}>Documentation</a> ·
+        <a href={siteUrl('docs/guide/')}>User guide</a> ·
+        <a href={`${repository}/releases/latest`}>Releases</a> ·
+        <a href={repository}>Source</a></p>
+      <p>Free and open source under the
+        <a href={`${repository}/blob/main/LICENSE`}>Apache License 2.0</a>.
+        Thanks to Martí Climent and the ElevenClock contributors for the original app,
+        which inspired this one.</p>
+      <p>Developed with help from AI coding agents, directed and reviewed by the
+        maintainer. <a href={siteUrl('docs/guide/#ai-assistance')}>More</a></p>
+      <p><a href={siteUrl('docs/guide/#code-signing-policy')}>Code signing policy</a> ·
+        <a href={siteUrl('docs/code-of-conduct/')}>Code of conduct</a> ·
+        Privacy: this program will not transfer any information to other networked
+        systems unless specifically requested by the user or the person installing or
+        operating it.</p>
+    </div>
+  </footer>
+</body>
+</html>

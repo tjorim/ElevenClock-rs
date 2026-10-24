@@ -1,16 +1,44 @@
 name: Rust foundation
+
 on:
   push:
-    branches: [main, rust-rewrite]
-    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
+    branches:
+      - 'main'
+      - 'rust-rewrite'
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'assets/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/pages.yml'
+      - 'docs/dependency-notices/**'
+      - 'packaging/**'
+      - 'LICENSE'
+      - '.gitattributes'
+      - 'scripts/*rust*'
   pull_request:
-    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', '.github/workflows/**', 'docs/dependency-notices/**', 'packaging/**', 'LICENSE', '.gitattributes', 'scripts/*rust*']
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'assets/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/pages.yml'
+      - 'docs/dependency-notices/**'
+      - 'packaging/**'
+      - 'LICENSE'
+      - '.gitattributes'
+      - 'scripts/*rust*'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 concurrency:
   group: rust-foundation-${{ github.ref }}
   cancel-in-progress: true
-permissions:
-  contents: read
+
 jobs:
   # Everything that does not need a Windows machine runs here, once.
   core:

@@ -94,6 +94,11 @@ Cross-cutting rules (details in `docs/contributing.md` and the ADRs):
 
 ## Docs and dependencies
 
+The website is an Astro build (`site/`, Node 24.14.0, npm 10.9.8) that renders the Markdown in
+`docs/`, `README.md`, `CODE_OF_CONDUCT.md` and `FORMAT.md` as the single source. Check
+website changes with `npm ci && npm test && npm run build && npm run check:site`; new
+pages go into `site/lib/nav.mjs` (details in `site/README.md`).
+
 Docs describe the app as it is now; development history lives in Git. New or updated
 dependencies follow `docs/dependencies.md` (license inventory via
 `scripts/rust-license-check.py`; release DLL allowlist in `scripts/rust-release.py`).
