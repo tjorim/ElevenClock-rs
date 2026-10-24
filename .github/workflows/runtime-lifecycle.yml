@@ -1,13 +1,25 @@
 name: R08 hosted runtime lifecycle (includes R02 and R03 desktop evidence)
+
 on:
   pull_request:
-    paths: ['Cargo.toml', 'Cargo.lock', 'crates/**', 'assets/**', 'scripts/test-rust-lifecycle.ps1', 'scripts/test-rust-taskbar.ps1', 'scripts/test-rust-overlay*.ps1', '.github/workflows/runtime-lifecycle.yml']
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'assets/**'
+      - 'scripts/test-rust-lifecycle.ps1'
+      - 'scripts/test-rust-taskbar.ps1'
+      - 'scripts/test-rust-overlay*.ps1'
+      - '.github/workflows/runtime-lifecycle.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 concurrency:
   group: r08-lifecycle-${{ github.ref }}
   cancel-in-progress: true
-permissions:
-  contents: read
+
 jobs:
   lifecycle:
     strategy:
