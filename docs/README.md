@@ -32,6 +32,14 @@ renders them, with relative links rewritten to the published pages, and
 | Support status, Copy diagnostics, local logs | [`diagnostics.md`](design/diagnostics.md) |
 | Opt-in login startup and the uninstall contract | [`startup.md`](design/startup.md) |
 
+## `adr/`
+
+| Decision | File |
+| --- | --- |
+| Fail-closed taskbar discovery in an isolated process | [`0001-taskbar-discovery.md`](adr/0001-taskbar-discovery.md) |
+| The discovery helper is the app's own executable | [`0002-same-executable-discovery-helper.md`](adr/0002-same-executable-discovery-helper.md) |
+| Managed launcher that deploys a local copy from a central source | [`0004-managed-launcher.md`](adr/0004-managed-launcher.md) |
+
 Screenshots used by a design file live next to it, in [`design/images/`](design/images).
 Docs describe the app as it is now. Verification logs, screenshots and dated run records
 from development are in Git history ([migration guide](migration.md#legacy-reference)).
