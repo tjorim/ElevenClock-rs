@@ -71,7 +71,7 @@ function AppIsClosed(): Boolean;
 begin
   Result := FindWindowByClassName('ElevenClock-rs.Runtime.Host') = 0;
   if not Result then
-    MsgBox('Exit ElevenClock-rs from Settings or the tray menu, then try again.', mbInformation, MB_OK);
+    SuppressibleMsgBox('Exit ElevenClock-rs from Settings or the tray menu, then try again.', mbInformation, MB_OK, IDOK);
 end;
 
 // The managed launcher (ADR 0004) deploys its copy into this same folder. A copy
@@ -85,7 +85,7 @@ function InitializeSetup(): Boolean;
 begin
   Result := not ManagedCopyIn(ExpandConstant('{localappdata}\Programs\ElevenClock-rs'));
   if not Result then
-    MsgBox(ManagedCopyMessage(), mbError, MB_OK)
+    SuppressibleMsgBox(ManagedCopyMessage(), mbError, MB_OK, IDOK)
   else
     Result := AppIsClosed();
 end;
