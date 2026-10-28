@@ -4,6 +4,7 @@ export const navigation = [
   ['Use', [
     ['README.md', 'User guide'],
     ['docs/migration.md', 'Migration from ElevenClock'],
+    ['docs/managed-deployment.md', 'Managed deployment'],
     ['docs/tested-configurations.md', 'Tested configurations'],
     ['crates/clock-core/FORMAT.md', 'Format strings'],
   ]],
