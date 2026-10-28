@@ -19,13 +19,21 @@ PORTABLE_FOLDER = "ElevenClock-rs"
 README_SOURCES = {
     "installer": "packaging/INSTALLER-README.txt",
     "portable": "packaging/PORTABLE-README.txt",
+    "managed": "packaging/MANAGED-README.txt",
 }
+APP_EXE = "elevenclock-rs.exe"
+# The managed launcher (ADR 0004) ships only in the managed ZIP.
+LAUNCHER_EXE = "elevenclock-rs-launcher.exe"
+RAW_LAUNCHER = f"launcher/{LAUNCHER_EXE}"
 PORTABLE_FILES = {
     f"{PORTABLE_FOLDER}/{file}" for file in (
-        "elevenclock-rs.exe", "README.txt", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt",
-        "RUST-COPYRIGHT.html",
+        APP_EXE, "README.txt", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "RUST-COPYRIGHT.html",
     )
 }
+# The managed ZIP is the portable ZIP plus the launcher: the same app executable.
+MANAGED_FILES = PORTABLE_FILES | {f"{PORTABLE_FOLDER}/{LAUNCHER_EXE}"}
+# The launcher only copies files: it must never be able to reach a network.
+NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsock32.dll"}
 # In-box DLLs the release executable imports, besides api-ms-win-* API sets. Keep
 # this to what is actually imported: a new entry is a reviewed native dependency.
 SYSTEM_DLLS = {
@@ -33,6 +41,9 @@ SYSTEM_DLLS = {
     "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll",
     "uiautomationcore.dll", "user32.dll", "wtsapi32.dll",
 }
+
+
+ARCHIVE_SUFFIXES = ("-portable.zip", "-managed.zip", "-setup.exe")
 
 
 def run(*args):
@@ -47,8 +58,9 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def inspect_pe(data):
-    """Read the PE32+ import table without executing the candidate."""
+def inspect_pe(data, forbidden=()):
+    """Read the PE32+ import table without executing the candidate. Names in `forbidden`
+    are refused even if they would otherwise be an in-box system DLL."""
     if data[:2] != b"MZ":
         raise ValueError("Not a PE executable")
     pe = struct.unpack_from("<I", data, 0x3C)[0]
@@ -90,6 +102,8 @@ def inspect_pe(data):
         imports.add(data[name:data.index(b"\0", name)].decode("ascii").lower())
         pos += 20
     for name in sorted(imports):
+        if name in forbidden:
+            raise ValueError(f"Forbidden native dependency: {name}")
         api_set = name.startswith(("api-ms-win-", "ext-ms-win-")) and name.endswith(".dll")
         if "crt" in name or name.startswith(("msvcp", "vcruntime")):
             raise ValueError(f"Dynamic CRT dependency is forbidden: {name}")
@@ -127,6 +141,8 @@ def prepare(out, mode):
     payload.mkdir()
     portable = out / "portable" / PORTABLE_FOLDER
     portable.mkdir(parents=True)
+    managed = out / "managed" / PORTABLE_FOLDER
+    managed.mkdir(parents=True)
     symbols = out / "symbols"
     symbols.mkdir()
     version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
@@ -137,10 +153,13 @@ def prepare(out, mode):
     binary_dir = ROOT / "target/packaging" / TARGET / "release"
     binary = binary_dir / "elevenclock-rs.exe"
     inspect_pe(binary.read_bytes())  # Build-time gate: fails on an unreviewed or CRT import.
-    pdb = binary_dir / "elevenclock_rs.pdb"
-    if not pdb.is_file():
-        raise ValueError("Missing release PDB")
-    shutil.copy2(pdb, symbols / pdb.name)
+    launcher = binary_dir / LAUNCHER_EXE
+    # Same gate, plus: the launcher has no network imports.
+    inspect_pe(launcher.read_bytes(), forbidden=NETWORK_DLLS)
+    for pdb in ("elevenclock_rs.pdb", "elevenclock_rs_launcher.pdb"):
+        if not (binary_dir / pdb).is_file():
+            raise ValueError(f"Missing release PDB: {pdb}")
+        shutil.copy2(binary_dir / pdb, symbols / pdb)
     spec = importlib.util.spec_from_file_location("license_check", ROOT / "scripts/rust-license-check.py")
     checker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(checker)
@@ -151,21 +170,26 @@ def prepare(out, mode):
     rust_docs = Path(run("rustc", "--print", "sysroot")) / "share/doc/rust"
     for directory, readme in (
         (payload, README_SOURCES["installer"]), (portable, README_SOURCES["portable"]),
+        (managed, README_SOURCES["managed"]),
     ):
         shutil.copy2(binary, directory / binary.name)
         shutil.copy2(ROOT / "LICENSE", directory / "LICENSE.txt")
         shutil.copy2(ROOT / readme, directory / "README.txt")
         (directory / "THIRD-PARTY-NOTICES.txt").write_text(notices.getvalue(), encoding="utf-8")
         shutil.copy2(rust_docs / "COPYRIGHT.html", directory / "RUST-COPYRIGHT.html")
+    shutil.copy2(launcher, managed / LAUNCHER_EXE)
+    (out / "launcher").mkdir()
+    shutil.copy2(launcher, out / RAW_LAUNCHER)
     zip_tree(out / "portable", out / (name + "-portable.zip"))
+    zip_tree(out / "managed", out / (name + "-managed.zip"))
     write_json(out / "package.json", {"name": name, "version": version})
 
 
 def finish(out):
     package = json.loads((out / "package.json").read_text())
     name = package["name"]
-    required = [out / (name + suffix) for suffix in ("-portable.zip", "-setup.exe")]
-    required += [out / "payload/elevenclock-rs.exe"]
+    required = [out / (name + suffix) for suffix in ARCHIVE_SUFFIXES]
+    required += [out / "payload" / APP_EXE, out / RAW_LAUNCHER]
     for file in required:
         if not file.is_file():
             raise ValueError(f"Missing artifact: {file}")
@@ -183,8 +207,8 @@ def finish(out):
 def verify(out):
     package = json.loads((out / "package.json").read_text())
     name = package["name"]
-    expected = {name + suffix for suffix in ("-portable.zip", "-setup.exe")}
-    expected.add("payload/elevenclock-rs.exe")
+    expected = {name + suffix for suffix in ARCHIVE_SUFFIXES}
+    expected |= {f"payload/{APP_EXE}", RAW_LAUNCHER}
     hashes = {}
     for line in (out / "SHA256SUMS.txt").read_text().splitlines():
         sha, relative = line.split("  ", 1)
@@ -198,11 +222,22 @@ def verify(out):
     with zipfile.ZipFile(out / (name + "-portable.zip")) as archive:
         if set(archive.namelist()) != PORTABLE_FILES or len(archive.namelist()) != len(PORTABLE_FILES):
             raise ValueError("Portable ZIP file allowlist differs")
-        executable = archive.read(f"{PORTABLE_FOLDER}/elevenclock-rs.exe")
-        if hashlib.sha256(executable).hexdigest() != hashes["payload/elevenclock-rs.exe"]:
+        executable = archive.read(f"{PORTABLE_FOLDER}/{APP_EXE}")
+        if hashlib.sha256(executable).hexdigest() != hashes[f"payload/{APP_EXE}"]:
             raise ValueError("Portable executable differs from checksummed executable")
         # The shipped bytes must still pass the import and CRT gate.
         inspect_pe(executable)
+    with zipfile.ZipFile(out / (name + "-managed.zip")) as archive:
+        if set(archive.namelist()) != MANAGED_FILES or len(archive.namelist()) != len(MANAGED_FILES):
+            raise ValueError("Managed ZIP file allowlist differs")
+        # One app executable everywhere: setup payload, portable ZIP and managed ZIP.
+        executable = archive.read(f"{PORTABLE_FOLDER}/{APP_EXE}")
+        if hashlib.sha256(executable).hexdigest() != hashes[f"payload/{APP_EXE}"]:
+            raise ValueError("Managed ZIP app executable differs from the portable and setup executable")
+        launcher = archive.read(f"{PORTABLE_FOLDER}/{LAUNCHER_EXE}")
+        if hashlib.sha256(launcher).hexdigest() != hashes[RAW_LAUNCHER]:
+            raise ValueError("Managed ZIP launcher differs from checksummed launcher")
+        inspect_pe(launcher, forbidden=NETWORK_DLLS)
 
 
 def main():

@@ -51,6 +51,10 @@ The script cannot see timer-wake or discovery rates.
   the clock, the native clock is left alone.
 - **Narrator speech.** The UIA data and events it relies on are verified; nobody has
   listened to it.
+- **Managed ZIP.** The launcher flow (deploy, managed mode, launcher startup entry,
+  update on the next launch, installer refusal, uninstall) runs on the hosted Windows
+  runner only. Not tried: a real file share, a VPN or offline start, or Group Policy
+  deployment.
 - **Actual sign-out/sign-in startup** and a clean first-run machine without developer
   runtimes.
 - **Secondary taskbars** have no `TrayNotifyWnd`, so a tray re-layout there waits for the

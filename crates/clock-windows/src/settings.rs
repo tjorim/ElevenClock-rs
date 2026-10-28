@@ -13,7 +13,7 @@
 //! and lets the same loop that serves the clock serve this window.
 use crate::bindings::*;
 use crate::{
-    logging,
+    logging, managed,
     preferences_store::{PreferenceSession, PreferencesStore},
     runtime::{Diagnostics, Input, Platform, Reason, Runtime},
     settings_model::{ApplyOutcome, FONT_MAX, FONT_MIN, Field, SettingsController, TOKEN_HELP},
@@ -508,8 +508,15 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         }
         self.sync_all(dialog);
         self.refresh(dialog, runtime);
-        self.update_support(dialog, runtime);
+        // Managed mode is checked again every time Settings opens.
+        let managed = managed::detect();
+        if managed != self.support.environment.managed {
+            self.support.environment.managed = managed;
+            self.support.shown = None;
+        }
+        // Before the Support page is filled: the report names the startup program.
         self.show_startup(dialog);
+        self.update_support(dialog, runtime);
         // SAFETY: shows our own window and brings it forward.
         unsafe {
             let _ = ShowWindow(dialog, SW_SHOW);
@@ -758,6 +765,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
     /// whether Repair applies. Reads the registry; changes nothing.
     fn show_startup(&mut self, dialog: HWND) {
         let page = |id| control(dialog, PAGE_STARTUP, id);
+        let mut kind = None;
         let (text, on, can_toggle, can_repair) = match self.startup.controller.as_mut() {
             None => (
                 "ElevenClock-rs could not determine where it is running from, so it cannot \
@@ -767,19 +775,27 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 false,
                 false,
             ),
-            Some(controller) => match controller.state() {
-                Ok(state) => (
-                    startup::describe(&state),
-                    // An entry that exists but is stale is still registered: clearing the
-                    // box removes it. One Windows switched off does not start, so it
-                    // shows as off and selecting the box turns it back on.
-                    matches!(state, StartupState::On | StartupState::Stale(_)),
-                    true,
-                    matches!(state, StartupState::Stale(_)),
-                ),
+            Some(controller) => match controller.status() {
+                Ok((state, program)) => {
+                    kind = Some(program);
+                    (
+                        startup::describe(&state),
+                        // An entry that exists but is stale is still registered: clearing
+                        // the box removes it. One Windows switched off does not start, so
+                        // it shows as off and selecting the box turns it back on.
+                        matches!(state, StartupState::On | StartupState::Stale(_)),
+                        true,
+                        matches!(state, StartupState::Stale(_)),
+                    )
+                }
                 Err(error) => (error.message(), false, false, false),
             },
         };
+        // The diagnostics report names the program that starts at sign-in.
+        if let Some(kind) = kind.filter(|kind| *kind != self.support.environment.startup) {
+            self.support.environment.startup = kind;
+            self.support.shown = None;
+        }
         quietly(|| {
             set_text(page(ID_STARTUP_INFO), &text);
             checked(page(ID_STARTUP_CHECK), on);

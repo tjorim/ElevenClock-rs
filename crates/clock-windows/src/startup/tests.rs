@@ -314,3 +314,164 @@ fn every_state_has_words_and_stale_ones_name_the_repair() {
         );
     }
 }
+
+// ---- managed mode: the launcher beside the app -------------------------------------
+
+const LAUNCHER_COMMAND: &str = r#""C:\Tools\ElevenClock-rs\elevenclock-rs-launcher.exe" --startup"#;
+fn launcher() -> PathBuf {
+    PathBuf::from(r"C:\Tools\ElevenClock-rs\elevenclock-rs-launcher.exe")
+}
+
+#[test]
+fn the_target_is_the_sibling_launcher_only_when_it_exists() {
+    assert_eq!(startup_target(&exe(), |_| true), launcher());
+    assert_eq!(startup_target(&exe(), |_| false), exe());
+    // A launcher somewhere else does not count.
+    assert_eq!(
+        startup_target(&exe(), |path| path != launcher().as_path()),
+        exe()
+    );
+}
+
+#[test]
+fn a_registration_for_the_sibling_launcher_is_on() {
+    assert_eq!(
+        reconcile(&entry(Some(LAUNCHER_COMMAND), true), &exe(), |_| true),
+        StartupState::On
+    );
+    assert_eq!(
+        reconcile(&entry(Some(LAUNCHER_COMMAND), false), &exe(), |_| true),
+        StartupState::DisabledInWindows
+    );
+    // The path compares without regard to case, like the app's own.
+    let upper = r#""C:\TOOLS\ELEVENCLOCK-RS\ELEVENCLOCK-RS-LAUNCHER.EXE" --startup"#;
+    assert_eq!(
+        reconcile(&entry(Some(upper), true), &exe(), |_| true),
+        StartupState::On
+    );
+}
+
+#[test]
+fn a_launcher_that_was_removed_reads_as_missing() {
+    assert_eq!(
+        reconcile(&entry(Some(LAUNCHER_COMMAND), true), &exe(), |_| false),
+        StartupState::Stale(Stale::Missing {
+            registered: launcher().to_string_lossy().into_owned()
+        })
+    );
+}
+
+#[test]
+fn a_launcher_in_another_folder_is_never_on() {
+    let elsewhere = r#""D:\Share\elevenclock-rs-launcher.exe" --startup"#;
+    assert_eq!(
+        reconcile(&entry(Some(elsewhere), true), &exe(), |_| true),
+        StartupState::Stale(Stale::OtherCopy {
+            registered: r"D:\Share\elevenclock-rs-launcher.exe".into()
+        })
+    );
+    assert_eq!(
+        reconcile(&entry(Some(elsewhere), true), &exe(), |_| false),
+        StartupState::Stale(Stale::Missing {
+            registered: r"D:\Share\elevenclock-rs-launcher.exe".into()
+        })
+    );
+}
+
+#[test]
+fn the_launcher_registration_keeps_the_private_marker_rule() {
+    for command in [
+        r#""C:\Tools\ElevenClock-rs\elevenclock-rs-launcher.exe""#,
+        r#""C:\Tools\ElevenClock-rs\elevenclock-rs-launcher.exe" --source D:\Share"#,
+        r"C:\Tools\ElevenClock-rs\elevenclock-rs-launcher.exe --startup",
+    ] {
+        assert_eq!(
+            reconcile(&entry(Some(command), true), &exe(), |_| true),
+            StartupState::Stale(Stale::Unrecognised),
+            "{command:?}"
+        );
+    }
+}
+
+#[test]
+fn the_report_names_which_program_starts() {
+    let kind_of = |command: Option<&str>, approved, exists: bool| {
+        let entry = entry(command, approved);
+        let state = reconcile(&entry, &exe(), |_| exists);
+        kind(&state, &entry, &exe())
+    };
+    assert_eq!(kind_of(None, true, true), StartupKind::Off);
+    assert_eq!(
+        kind_of(
+            Some(r#""C:\Tools\ElevenClock-rs\elevenclock-rs.exe" --startup"#),
+            true,
+            true
+        ),
+        StartupKind::App
+    );
+    assert_eq!(
+        kind_of(Some(LAUNCHER_COMMAND), true, true),
+        StartupKind::Launcher
+    );
+    assert_eq!(
+        kind_of(Some(LAUNCHER_COMMAND), false, true),
+        StartupKind::Off
+    );
+    assert_eq!(
+        kind_of(Some(LAUNCHER_COMMAND), true, false),
+        StartupKind::Stale
+    );
+    assert_eq!(kind_of(Some("nonsense"), true, true), StartupKind::Stale);
+    let labels: Vec<_> = [
+        StartupKind::App,
+        StartupKind::Launcher,
+        StartupKind::Off,
+        StartupKind::Stale,
+    ]
+    .map(StartupKind::label)
+    .into();
+    assert_eq!(labels, ["app", "launcher", "off", "stale"]);
+}
+
+#[cfg(windows)]
+#[test]
+fn managed_startup_registers_the_launcher_and_repair_follows_its_removal() {
+    let present = Rc::new(std::cell::Cell::new(true));
+    let fake = Fake::default();
+    let mut controller = StartupController::with_exists(fake.clone(), exe(), {
+        let present = present.clone();
+        move |path| path == launcher().as_path() && present.get()
+    });
+    controller.enable().unwrap();
+    assert_eq!(fake.0.borrow().command.as_deref(), Some(LAUNCHER_COMMAND));
+    assert_eq!(
+        controller.status().unwrap(),
+        (StartupState::On, StartupKind::Launcher)
+    );
+
+    // The managed files are removed afterwards: the entry is stale, never silently
+    // rewritten, and Repair registers the app itself.
+    present.set(false);
+    assert!(matches!(
+        controller.state().unwrap(),
+        StartupState::Stale(Stale::Missing { .. })
+    ));
+    assert_eq!(fake.0.borrow().writes, 1);
+    controller.repair().unwrap();
+    assert_eq!(
+        controller.status().unwrap(),
+        (StartupState::On, StartupKind::App)
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn without_a_launcher_enable_registers_the_app_as_before() {
+    let fake = Fake::default();
+    let mut controller = StartupController::with_exists(fake.clone(), exe(), |_| false);
+    controller.enable().unwrap();
+    assert_eq!(
+        fake.0.borrow().command.as_deref(),
+        Some(command_line(&exe()).unwrap().as_str())
+    );
+}

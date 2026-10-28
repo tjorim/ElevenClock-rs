@@ -19,6 +19,9 @@ and logs in %LOCALAPPDATA%\ElevenClock-rs are preserved. The legacy ElevenClock
 installation and configuration are never removed. A portable copy's startup
 registration is preserved when it points outside this installation.
 
+If your organization manages ElevenClock-rs on this PC, Setup stops and does not
+change that copy; the managed copy and this installer cannot share an account.
+
 No Python or Qt runtime is included. The MSVC CRT is statically linked. No
 elevated prerequisite installer is run.
 

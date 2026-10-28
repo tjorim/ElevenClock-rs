@@ -17,7 +17,7 @@ use std::{
 pub const APP_EXE: &str = "elevenclock-rs.exe";
 /// The app under a name that cannot be run from the share by mistake.
 pub const APP_DATA: &str = "elevenclock-rs.data";
-pub const LAUNCHER_EXE: &str = "elevenclock-rs-launcher.exe";
+pub const LAUNCHER_EXE: &str = clock_windows::managed::LAUNCHER_FILE;
 /// A just-replaced launcher that was running at the time; it can only go on a later run.
 pub const LAUNCHER_OLD: &str = "elevenclock-rs-launcher.exe.old";
 /// Optional `sha256sum` style list next to the central copy.
