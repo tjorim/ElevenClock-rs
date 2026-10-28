@@ -6,8 +6,12 @@
 //! 1. `--source <folder>`, for a launcher IT pushed to the machine;
 //! 2. the launcher's own folder, when it was started from the share;
 //! 3. the folder recorded in the state file, when it runs as the local copy.
-use crate::sha256::{self, Digest};
+use crate::{
+    fsops,
+    sha256::{self, Digest},
+};
 use std::{
+    io,
     path::{Path, PathBuf},
     sync::mpsc,
     time::Duration,
@@ -92,17 +96,50 @@ pub fn with_timeout<T: Send + 'static>(
     receiver.recv_timeout(timeout).ok()
 }
 
-/// Looks for the app in `folder`, preferring the `.exe`. `None` when the folder is
-/// unreachable or holds neither file.
-pub fn probe(folder: &Path, timeout: Duration) -> Option<Found> {
-    let folder = folder.to_path_buf();
+/// What probing the source folder found.
+#[derive(Debug, Eq, PartialEq)]
+pub enum Probe {
+    /// Unreachable, or it holds neither file.
+    Unreachable,
+    /// The folder is the local one, reached through a junction, a short name or
+    /// similar. Copying it onto itself would only overwrite the record of the real
+    /// source.
+    IsDestination,
+    Found(Found),
+}
+
+/// Looks for the app in `folder`, preferring the `.exe`, and tells whether `folder` is
+/// really `destination`. All of it runs under one `timeout`, because both can touch the
+/// network.
+pub fn probe(folder: &Path, destination: &Path, timeout: Duration) -> Probe {
+    let (folder, destination) = (folder.to_path_buf(), destination.to_path_buf());
     with_timeout(timeout, move || {
-        [APP_EXE, APP_DATA].into_iter().find_map(|name| {
-            let path = folder.join(name);
-            path.is_file().then_some(Found { path, name })
-        })
+        if let (Ok(folder), Ok(destination)) = (folder.canonicalize(), destination.canonicalize())
+            && folder == destination
+        {
+            return Probe::IsDestination;
+        }
+        [APP_EXE, APP_DATA]
+            .into_iter()
+            .find_map(|name| {
+                let path = folder.join(name);
+                path.is_file().then_some(Found { path, name })
+            })
+            .map_or(Probe::Unreachable, Probe::Found)
     })
-    .flatten()
+    .unwrap_or(Probe::Unreachable)
+}
+
+/// Reads a file from the source under `timeout`, like [`probe`]: a share that answers
+/// the probe and then stalls must not hold the launch up either.
+pub fn read_bounded(path: &Path, timeout: Duration) -> io::Result<Vec<u8>> {
+    let path = path.to_path_buf();
+    with_timeout(timeout, move || fsops::read_limited(&path)).unwrap_or_else(|| {
+        Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "the share did not answer",
+        ))
+    })
 }
 
 /// The result of comparing the central copy with `SHA256SUMS.txt`.
@@ -219,12 +256,45 @@ mod tests {
     fn a_probe_prefers_the_exe_and_accepts_data() {
         let dir = tempfile::tempdir().unwrap();
         let timeout = Duration::from_secs(5);
-        assert_eq!(probe(dir.path(), timeout), None);
+        let local = dir.path().join("local");
+        let name = |probe: Probe| match probe {
+            Probe::Found(found) => Some(found.name),
+            _ => None,
+        };
+        assert_eq!(probe(dir.path(), &local, timeout), Probe::Unreachable);
         std::fs::write(dir.path().join(APP_DATA), b"x").unwrap();
-        assert_eq!(probe(dir.path(), timeout).unwrap().name, APP_DATA);
+        assert_eq!(name(probe(dir.path(), &local, timeout)), Some(APP_DATA));
         std::fs::write(dir.path().join(APP_EXE), b"x").unwrap();
-        assert_eq!(probe(dir.path(), timeout).unwrap().name, APP_EXE);
-        assert_eq!(probe(&dir.path().join("missing"), timeout), None);
+        assert_eq!(name(probe(dir.path(), &local, timeout)), Some(APP_EXE));
+        assert_eq!(
+            probe(&dir.path().join("missing"), &local, timeout),
+            Probe::Unreachable
+        );
+    }
+
+    #[test]
+    fn a_probe_sees_through_a_different_spelling_of_the_local_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("local");
+        std::fs::create_dir(&local).unwrap();
+        std::fs::write(local.join(APP_EXE), b"x").unwrap();
+        // Same folder, spelled with a detour that the text comparison cannot see.
+        let detour = dir.path().join("local").join("..").join("local");
+        assert!(!same_folder(&detour, &local));
+        assert_eq!(
+            probe(&detour, &local, Duration::from_secs(5)),
+            Probe::IsDestination
+        );
+    }
+
+    #[test]
+    fn bounded_reads_return_the_file_or_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("f");
+        std::fs::write(&file, b"abc").unwrap();
+        let timeout = Duration::from_secs(5);
+        assert_eq!(read_bounded(&file, timeout).unwrap(), b"abc");
+        assert!(read_bounded(&dir.path().join("none"), timeout).is_err());
     }
 
     #[test]

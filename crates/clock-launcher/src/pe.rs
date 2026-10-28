@@ -20,6 +20,8 @@ const MAX_BLOCKS: usize = 256;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Rejection {
     NotX64Program,
+    /// A section's data runs past the end of the file.
+    Truncated,
     NoVersionInfo,
     WrongProduct,
 }
@@ -28,6 +30,7 @@ impl Rejection {
     pub fn describe(self) -> &'static str {
         match self {
             Self::NotX64Program => "not an x64 Windows program",
+            Self::Truncated => "the file is cut short",
             Self::NoVersionInfo => "no version information",
             Self::WrongProduct => "version information names another product",
         }
@@ -75,6 +78,14 @@ struct Section {
 /// The raw bytes of the file's version resource.
 fn version_resource(bytes: &[u8]) -> Result<&[u8], Rejection> {
     let (sections, directory_rva) = headers(bytes).ok_or(Rejection::NotX64Program)?;
+    // A copy cut short can keep its resources and still be a broken program.
+    let file_len = bytes.len() as u64;
+    if sections.iter().any(|section| {
+        section.raw_size != 0
+            && u64::from(section.raw_offset) + u64::from(section.raw_size) > file_len
+    }) {
+        return Err(Rejection::Truncated);
+    }
     let to_offset = |rva: u32| -> Option<usize> {
         sections.iter().find_map(|section| {
             let span = section.virtual_size.max(section.raw_size);
@@ -458,6 +469,18 @@ mod tests {
                 Err(Rejection::NotX64Program)
             );
         }
+    }
+
+    #[test]
+    fn a_copy_cut_short_after_its_resources_is_rejected() {
+        let mut whole = app("a long build id");
+        assert_eq!(validate(&whole, "elevenclock-rs.exe"), Ok(()));
+        // The version resource is intact; only the tail of the last section is gone.
+        whole.truncate(whole.len() - 1);
+        assert_eq!(
+            validate(&whole, "elevenclock-rs.exe"),
+            Err(Rejection::Truncated)
+        );
     }
 
     #[test]

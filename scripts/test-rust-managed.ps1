@@ -147,6 +147,7 @@ try {
     $setup = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$evidence/refused-install.log`"" -PassThru
     Assert ($setup.WaitForExit(120000)) 'Installer timed out'
     Assert ($setup.ExitCode -ne 0) 'Installer ran although a managed copy is present'
+    Assert (Select-String -LiteralPath "$evidence/refused-install.log" -SimpleMatch 'refused: managed copy present' -Quiet) 'The installer stopped, but not because of the managed copy'
     Assert ((Hash $localApp) -eq $before) 'Refused installer changed the managed app'
     Assert (Test-Path $localLauncher) 'Refused installer removed the launcher'
     Assert (!(Test-Path (Join-Path $install 'unins000.exe')) -and !(Test-Path $shortcut)) 'Refused installer left installer files'

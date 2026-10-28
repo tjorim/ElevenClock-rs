@@ -84,8 +84,10 @@ end;
 function InitializeSetup(): Boolean;
 begin
   Result := not ManagedCopyIn(ExpandConstant('{localappdata}\Programs\ElevenClock-rs'));
-  if not Result then
-    SuppressibleMsgBox(ManagedCopyMessage(), mbError, MB_OK, IDOK)
+  if not Result then begin
+    Log('refused: managed copy present');
+    SuppressibleMsgBox(ManagedCopyMessage(), mbError, MB_OK, IDOK);
+  end
   else
     Result := AppIsClosed();
 end;

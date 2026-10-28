@@ -96,13 +96,16 @@ Pick one way. Both end in the same state.
 
 Give users a Start menu or desktop shortcut that points at
 `\\fileserver\apps\ElevenClock-rs\elevenclock-rs-launcher.exe`. The source is then
-"the folder the launcher was started from". The first launch copies everything to the
-user's profile and starts the clock.
+"the folder the launcher was started from". The first launch copies the app and the
+launcher to the user's profile (the README, license and notice files stay on the share)
+and starts the clock.
 
 ### Push the launcher with a deployment tool
 
-With Intune, SCCM or a script, copy `elevenclock-rs-launcher.exe` to the machine and run
-it once with the source named:
+With Intune, SCCM or a script, copy `elevenclock-rs-launcher.exe` to a staging folder on
+the machine (for example the tool's own cache; policy must allow it to run from there,
+see [AppLocker](#applocker-and-software-restriction-policies)) and run it once with the
+source named:
 
 ```text
 elevenclock-rs-launcher.exe --source \\fileserver\apps\ElevenClock-rs
@@ -150,7 +153,8 @@ The details are in [Startup](design/startup.md#managed-mode-the-launcher-is-the-
 
 ## Offline behavior
 
-The launcher probes the central folder for about 3 seconds.
+The launcher probes the central folder for about 3 seconds, and each file it then reads
+from the share gets the same limit.
 
 | Situation | Result |
 | --- | --- |
@@ -206,10 +210,12 @@ uninstall, run it from the share to remove that file too.
 
 ## AppLocker and Software Restriction Policies
 
-If policy only allows programs from approved folders, two locations need a rule:
+If policy only allows programs from approved folders, these locations need a rule:
 
 - the **central folder**, for `elevenclock-rs-launcher.exe` when users start it from the
   share;
+- the **staging folder** the deployment tool runs the pushed launcher from, for its first
+  run only;
 - the **local folder**, `%LOCALAPPDATA%\Programs\ElevenClock-rs\*`, for the app and the
   launcher the Run value starts. An AppLocker path rule can use the wildcard path
   `%OSDRIVE%\Users\*\AppData\Local\Programs\ElevenClock-rs\*`.

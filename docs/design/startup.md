@@ -34,6 +34,10 @@ value. Only the registered program differs:
   The sibling launcher counts only while it exists: a removed launcher reads as
   `Stale::Missing`, and Repair resolves the target again (so it registers the app).
   A launcher in any other folder reads as `OtherCopy` or `Missing`, never `On`.
+- An entry that already points at the app stays `On` after the launcher is added, and
+  Repair is only offered for stale entries. Until the user turns Startup off and on again
+  (which registers the launcher), sign-in starts the app directly and skips the
+  launcher's update step.
 - Diagnostics show `Managed: yes/no` and `Startup: app / launcher / off / stale`, without
   paths.
 

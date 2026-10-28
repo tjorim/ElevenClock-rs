@@ -10,8 +10,8 @@ use crate::{
 };
 use clock_windows::{
     bindings::{
-        ACCESS_MASK, AllowSetForegroundWindow, HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE,
-        MB_ICONERROR, MB_OK, MessageBoxW, RegCloseKey, RegOpenKeyExW,
+        ACCESS_MASK, AllowSetForegroundWindow, ERROR_FILE_NOT_FOUND, HKEY, HKEY_CURRENT_USER,
+        KEY_QUERY_VALUE, MB_ICONERROR, MB_OK, MessageBoxW, RegCloseKey, RegOpenKeyExW,
     },
     instance::{self, Acquired},
     logging::{self, RotatingLog},
@@ -78,8 +78,14 @@ impl Host for NativeHost {
                 &mut key,
             )
         };
-        if status.0 != 0 {
+        // Only a missing key means "not installed". A key that is there but cannot
+        // be opened counts as installed, so the launcher refuses rather than deploy
+        // into the installer's folder.
+        if status.0 == ERROR_FILE_NOT_FOUND {
             return false;
+        }
+        if status.0 != 0 {
+            return true;
         }
         // SAFETY: `key` was opened above and is not used afterwards.
         unsafe {

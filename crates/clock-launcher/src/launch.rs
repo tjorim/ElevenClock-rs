@@ -13,7 +13,9 @@ use crate::{
     args::Launch,
     fsops::{self, install, install_running},
     pe, sha256,
-    source::{self, APP_EXE, LAUNCHER_EXE, LAUNCHER_OLD, Listed, STATE_FILE, SUMS, check_sums},
+    source::{
+        self, APP_EXE, LAUNCHER_EXE, LAUNCHER_OLD, Listed, Probe, STATE_FILE, SUMS, check_sums,
+    },
 };
 use clock_windows::startup::RunKey;
 use std::{
@@ -37,6 +39,9 @@ const BAD_SOURCE: &str = "ElevenClock-rs could not be started: the central copy 
 const NOT_COPIED: &str = "ElevenClock-rs could not be started: copying it to this PC failed. \
     Try again, or ask your administrator.";
 const NOT_STARTED: &str = "ElevenClock-rs could not be started.";
+const NOT_RECORDED: &str = "ElevenClock-rs was started, but this PC could not remember where \
+    the central copy is. It will not update at sign-in until you start ElevenClock-rs from the \
+    central folder again.";
 
 /// The process exit code: every outcome has one and a log line.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -155,7 +160,10 @@ pub fn launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> Exit {
     let layout = Layout::new(&ctx.destination);
     if host.installer_entry_present() {
         host.log("refused: installed copy");
-        host.show_error(INSTALLED_COPY);
+        // A sign-in start shows no message boxes, only the log.
+        if !request.quiet {
+            host.show_error(INSTALLED_COPY);
+        }
         return Exit::Refused;
     }
     // Checked before the central copy is touched: a running app means no update, so
@@ -224,16 +232,24 @@ fn refresh(
         return Err(Problem::Unreachable);
     };
     // The local folder is never a source: copying it onto itself would only ever
-    // overwrite the record of where the real one is.
+    // overwrite the record of where the real one is. The text comparison is the fast
+    // path; the probe also catches junctions and short names.
     if source::same_folder(&folder, &ctx.destination) {
         host.log("source unreachable: it is the local folder");
         return Err(Problem::Unreachable);
     }
-    let Some(found) = source::probe(&folder, ctx.probe_timeout) else {
-        host.log("source unreachable");
-        return Err(Problem::Unreachable);
+    let found = match source::probe(&folder, &ctx.destination, ctx.probe_timeout) {
+        Probe::Found(found) => found,
+        Probe::IsDestination => {
+            host.log("source unreachable: it is the local folder");
+            return Err(Problem::Unreachable);
+        }
+        Probe::Unreachable => {
+            host.log("source unreachable");
+            return Err(Problem::Unreachable);
+        }
     };
-    let bytes = match fsops::read_limited(&found.path) {
+    let bytes = match source::read_bounded(&found.path, ctx.probe_timeout) {
         Ok(bytes) => bytes,
         Err(error) => {
             host.log(&format!("source unreachable: {}", describe(&error)));
@@ -245,7 +261,7 @@ fn refresh(
         host.log(&format!("source invalid: {}", rejection.describe()));
         return Err(Problem::Invalid);
     }
-    let sums = fsops::read_limited(&folder.join(SUMS))
+    let sums = source::read_bounded(&folder.join(SUMS), ctx.probe_timeout)
         .ok()
         .and_then(|bytes| String::from_utf8(bytes).ok());
     if sums.is_some_and(|list| check_sums(&list, found.name, &digest) == Listed::Differs) {
@@ -266,30 +282,36 @@ fn refresh(
         }
     }
     refresh_launcher(host, ctx, layout, &folder);
-    remember_source(host, layout, &folder);
+    if !remember_source(host, layout, &folder) && !request.quiet {
+        host.show_error(NOT_RECORDED);
+    }
     Ok(())
 }
 
 /// Best effort: a launcher that cannot be refreshed never keeps the app from starting.
 fn refresh_launcher(host: &mut dyn Host, ctx: &Context, layout: &Layout, folder: &Path) {
+    let timeout = ctx.probe_timeout;
     let central = folder.join(LAUNCHER_EXE);
-    let from = if central.is_file() {
-        central
-    } else if !ctx
+    let started_from_share = !ctx
         .own_exe
         .parent()
-        .is_some_and(|own| source::same_folder(own, &ctx.destination))
-    {
+        .is_some_and(|own| source::same_folder(own, &ctx.destination));
+    let (from, read) = match source::read_bounded(&central, timeout) {
+        Ok(bytes) => (central, Ok(bytes)),
         // Started from the share, which holds the launcher under another name.
-        ctx.own_exe.clone()
-    } else {
-        return;
+        Err(_) if started_from_share => (
+            ctx.own_exe.clone(),
+            source::read_bounded(&ctx.own_exe, timeout),
+        ),
+        // The central folder has no launcher: nothing to refresh from.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return,
+        Err(error) => (central, Err(error)),
     };
     let target = layout.launcher();
     if source::same_folder(&from, &target) {
         return;
     }
-    let bytes = match fsops::read_limited(&from) {
+    let bytes = match read {
         Ok(bytes) => bytes,
         Err(error) => {
             host.log(&format!("launcher refresh skipped: {}", describe(&error)));
@@ -316,18 +338,25 @@ fn refresh_launcher(host: &mut dyn Host, ctx: &Context, layout: &Layout, folder:
 }
 
 /// The local launcher needs to know where to look at the next login.
-fn remember_source(host: &mut dyn Host, layout: &Layout, folder: &Path) {
+/// Whether the record is in place afterwards.
+fn remember_source(host: &mut dyn Host, layout: &Layout, folder: &Path) -> bool {
     let Some(text) = source::state_text(folder) else {
         host.log("source not recorded: not storable as text");
-        return;
+        return false;
     };
     let state = layout.state();
     if fsops::read_limited(&state).is_ok_and(|current| current == text.as_bytes()) {
-        return;
+        return true;
     }
     match install(&state, text.as_bytes(), || host.before_replace(&state)) {
-        Ok(()) => host.log("source recorded"),
-        Err(error) => host.log(&format!("source not recorded: {}", describe(&error))),
+        Ok(()) => {
+            host.log("source recorded");
+            true
+        }
+        Err(error) => {
+            host.log(&format!("source not recorded: {}", describe(&error)));
+            false
+        }
     }
 }
 

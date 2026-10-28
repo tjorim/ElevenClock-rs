@@ -28,7 +28,7 @@ pub struct Launch {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArgError {
-    /// `--source` was the last argument.
+    /// `--source` was the last argument or was followed by another option.
     SourceNeedsFolder,
     /// `--uninstall` deletes files, so it is only accepted on its own.
     UninstallIsExclusive,
@@ -55,9 +55,13 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Command, ArgEr
     let mut rest = args.into_iter();
     while let Some(arg) = rest.next() {
         if arg == SOURCE {
-            launch.source = Some(PathBuf::from(
-                rest.next().ok_or(ArgError::SourceNeedsFolder)?,
-            ));
+            // A following option is not a folder: `--source --startup` is a mistake,
+            // not a folder called `--startup`.
+            let folder = rest
+                .next()
+                .filter(|folder| !folder.to_string_lossy().starts_with("--"))
+                .ok_or(ArgError::SourceNeedsFolder)?;
+            launch.source = Some(PathBuf::from(folder));
         } else {
             launch.quiet |= arg == STARTUP;
             launch.app_args.push(arg);
@@ -126,6 +130,11 @@ mod tests {
         assert_eq!(parse_text(&["--source"]), Err(ArgError::SourceNeedsFolder));
         assert_eq!(
             parse_text(&["--startup", "--source"]),
+            Err(ArgError::SourceNeedsFolder)
+        );
+        // A following option is not the folder.
+        assert_eq!(
+            parse_text(&["--source", "--startup"]),
             Err(ArgError::SourceNeedsFolder)
         );
     }

@@ -367,11 +367,31 @@ fn an_installed_copy_stops_everything() {
         let mut host = FakeHost::new();
         host.installer = true;
         assert_eq!(launch(&mut host, &ctx, &request), Exit::Refused);
-        assert_eq!(host.errors, [INSTALLED_COPY]);
+        // A sign-in start shows no message boxes, only the log.
+        if request.quiet {
+            assert!(host.errors.is_empty());
+        } else {
+            assert_eq!(host.errors, [INSTALLED_COPY]);
+        }
         assert!(host.started.is_empty());
         assert!(host.logged("refused: installed copy"));
         // Nothing was deployed: the folder does not even exist.
         assert!(!world.destination.exists());
+    }
+}
+
+#[test]
+fn a_record_that_cannot_be_written_is_reported_only_when_messages_are_allowed() {
+    for (request, shown) in [(interactive(), true), (login(), false)] {
+        let world = World::with_app(NEW);
+        let ctx = world.launched_from_share();
+        let mut host = FakeHost::new();
+        host.interrupted = vec!["source.txt"];
+        assert_eq!(launch(&mut host, &ctx, &request), Exit::Done);
+        assert!(host.logged_starting("source not recorded"));
+        assert_eq!(host.errors.len(), usize::from(shown), "{:?}", host.errors);
+        // The app starts either way.
+        assert_eq!(host.started.len(), 1);
     }
 }
 
