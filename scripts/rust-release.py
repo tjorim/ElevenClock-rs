@@ -65,6 +65,11 @@ def managed_sums(app):
     return f"{digest(app)}  {app.name}\n"
 
 
+def write_managed_sums(folder):
+    # Bytes, not write_text: Windows would turn the newline into CRLF, and verify compares exactly.
+    (folder / MANAGED_SUMS).write_bytes(managed_sums(folder / MANAGED_APP).encode("utf-8"))
+
+
 def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
@@ -189,7 +194,7 @@ def prepare(out, mode):
         (directory / "THIRD-PARTY-NOTICES.txt").write_text(notices.getvalue(), encoding="utf-8")
         shutil.copy2(rust_docs / "COPYRIGHT.html", directory / "RUST-COPYRIGHT.html")
     (managed / APP_EXE).rename(managed / MANAGED_APP)
-    (managed / MANAGED_SUMS).write_text(managed_sums(managed / MANAGED_APP), encoding="utf-8")
+    write_managed_sums(managed)
     shutil.copy2(launcher, managed / LAUNCHER_EXE)
     (out / "launcher").mkdir()
     shutil.copy2(launcher, out / RAW_LAUNCHER)

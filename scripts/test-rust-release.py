@@ -186,6 +186,15 @@ class Gates(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "SHA256SUMS.txt does not list"):
                     release.verify(root)
 
+    def test_managed_checksum_list_uses_plain_newlines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / release.MANAGED_APP).write_bytes(b"app")
+            release.write_managed_sums(folder)
+            self.assertEqual(
+                (folder / release.MANAGED_SUMS).read_bytes(),
+                f"{hashlib.sha256(b'app').hexdigest()}  elevenclock-rs.data\n".encode())
+
     def test_launcher_must_not_import_the_network(self):
         release.inspect_pe(pe(b"KERNEL32.dll"), forbidden=release.NETWORK_DLLS)
         for dll in (b"WINHTTP.dll", b"WININET.dll", b"WS2_32.dll"):
