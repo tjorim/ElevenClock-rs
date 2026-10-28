@@ -47,7 +47,7 @@ The PR/manual `rust-release.yml` workflow uploads these development artifacts:
 | --- | --- |
 | `*-setup.exe` | Normal per-user installer, Start menu shortcut, uninstaller |
 | `*-portable.zip` | One `ElevenClock-rs/` folder with the executable, `README.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `RUST-COPYRIGHT.html` (an explicit allowlist) |
-| `*-managed.zip` | The portable ZIP's `ElevenClock-rs/` folder plus `elevenclock-rs-launcher.exe` and the admin `README.txt` ([ADR 0004](adr/0004-managed-launcher.md)); the same `elevenclock-rs.exe` |
+| `*-managed.zip` | The portable ZIP's `ElevenClock-rs/` folder plus `elevenclock-rs-launcher.exe` and the admin `README.txt` ([ADR 0004](adr/0004-managed-launcher.md)); the app is the same executable, stored as `elevenclock-rs.data` so nobody runs it from the share, with a `SHA256SUMS.txt` that lists it |
 | `SHA256SUMS.txt` | Installer, portable ZIP, managed ZIP and raw executable (app and launcher) hashes |
 | Separate symbols artifact | Matching PDB and its own checksums, for debugging a recent build |
 | Packaging evidence (failed runs only) | Actual installer/lifecycle/Settings logs and environment limitations |

@@ -99,8 +99,8 @@ try {
     Expand-Archive -LiteralPath $managedZip -DestinationPath "$work/source"
     $source = Join-Path $work 'source/ElevenClock-rs'
     $sourceLauncher = Join-Path $source 'elevenclock-rs-launcher.exe'
-    $sourceApp = Join-Path $source 'elevenclock-rs.exe'
-    Assert ((Test-Path $sourceLauncher) -and (Test-Path $sourceApp)) 'Managed ZIP lacks the launcher or the app'
+    $sourceApp = Join-Path $source 'elevenclock-rs.data'
+    Assert ((Test-Path $sourceLauncher) -and (Test-Path $sourceApp)) 'Managed ZIP lacks the launcher or the app (elevenclock-rs.data)'
 
     # 1. First launch: the launcher deploys the local copy and starts it.
     Invoke-Launcher $sourceLauncher
@@ -136,6 +136,12 @@ try {
     $stream = [IO.File]::Open($sourceApp, 'Append')
     try { $stream.WriteByte(0) } finally { $stream.Dispose() }  # still a valid PE; a different hash
     Assert ((Hash $sourceApp) -ne $oldHash) 'The test did not change the source'
+    # The shipped list now names the old app: the next launch must refuse the copy.
+    Invoke-Launcher $sourceLauncher
+    Assert ((Hash $localApp) -eq $oldHash) 'Launcher replaced the local copy although the checksum list did not match'
+    Exit-App (Wait-App)
+    # An admin replaces the list together with the app.
+    Set-Content -LiteralPath (Join-Path $source 'SHA256SUMS.txt') -Value "$((Hash $sourceApp).ToLowerInvariant())  elevenclock-rs.data" -Encoding ascii
     Invoke-Launcher $sourceLauncher
     Assert ((Hash $localApp) -eq (Hash $sourceApp)) 'Launcher did not update the local copy'
     $app = Wait-App

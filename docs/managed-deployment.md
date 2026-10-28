@@ -33,13 +33,14 @@ An `ElevenClock-rs/` folder with:
 
 | File | Purpose |
 | --- | --- |
-| `elevenclock-rs.exe` | The app, byte-identical to the one in the installer and the portable ZIP |
+| `elevenclock-rs.data` | The app, byte-identical to the `elevenclock-rs.exe` in the installer and the portable ZIP, stored under a `.data` name so nobody starts it from the share by accident |
 | `elevenclock-rs-launcher.exe` | The launcher |
+| `SHA256SUMS.txt` | One line with the hash of `elevenclock-rs.data`; the launcher refuses an app that does not match it |
 | `README.txt` | A short readme for administrators ([`MANAGED-README.txt`](../packaging/MANAGED-README.txt)) |
 | `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt`, `RUST-COPYRIGHT.html` | Licenses and notices |
 
-There is no configuration file to edit. The release's `SHA256SUMS.txt` lists the ZIP's
-hash. The executables are not code-signed.
+There is no configuration file to edit. The release's `SHA256SUMS.txt` (a separate
+download) lists the ZIP's hash. The executables are not code-signed.
 
 ## Set up the central location
 
@@ -50,18 +51,20 @@ Extract the ZIP's files to a folder on the share, for example:
 ```text
 \\fileserver\apps\ElevenClock-rs\
     elevenclock-rs-launcher.exe
-    elevenclock-rs.exe          (or elevenclock-rs.data)
-    SHA256SUMS.txt              (optional)
+    elevenclock-rs.data         (or elevenclock-rs.exe)
+    SHA256SUMS.txt
 ```
 
-- **`elevenclock-rs.data`:** the launcher accepts the app under this name too. Rename the
-  file if you do not want users to start the exe from the share by accident. The local
-  copy is always called `elevenclock-rs.exe`. If both names exist, the `.exe` is used.
-- **`SHA256SUMS.txt`:** optional. When present, the launcher checks the app against the
-  line that names `elevenclock-rs.exe` (also when the file is called `.data`) and
-  refuses a copy that does not match. Lines for other files are ignored, and a file
-  without a line for the app checks nothing. Replace the list together with the exe: a
-  stale list stops the update.
+- **`elevenclock-rs.data`:** the managed ZIP ships the app under this name, so users who
+  open the central folder find only the launcher to run. The launcher accepts
+  `elevenclock-rs.exe` too (for example if you extract the app from the portable ZIP). The
+  local copy is always called `elevenclock-rs.exe`. If both names exist, the `.exe` is used.
+- **`SHA256SUMS.txt`:** shipped in the ZIP and checked by the launcher. It checks the app
+  against the line that names the file (`elevenclock-rs.data` as shipped, or
+  `elevenclock-rs.exe`) and refuses a copy that does not match. Lines for other files are
+  ignored, and without the file (or a line for the app) nothing is checked. Replace the
+  list together with the app: a stale list stops the update, and users keep their current
+  copy. Extracting the whole ZIP always gives a matching pair.
 - **The launcher checks the app before copying it:** it must be an x64 program whose
   version information names ElevenClock-rs. Anything else is refused.
 

@@ -62,9 +62,10 @@ source, refreshes the local copy when that is safe, starts the app and exits.
 * The launcher **copies itself next to the app** and writes **one small state file of
   its own** there (for example `source.txt`) recording the source, so the local launcher
   knows where to look at login. Admins never create or edit it.
-* The source file name defaults to `elevenclock-rs.exe`. A `.data` copy
-  (`elevenclock-rs.data`) is also accepted, so admins can stop users running the exe
-  from the share directly. The local copy is always `elevenclock-rs.exe`.
+* The source file name is `elevenclock-rs.exe` or `elevenclock-rs.data`. The managed ZIP
+  ships the `.data` name, so users cannot run the app from the share by accident. The
+  local copy is always `elevenclock-rs.exe`. The managed ZIP also ships a
+  `SHA256SUMS.txt` with the app's hash, which the launcher checks.
 
 ### Mixing installs is unsupported, and enforced both ways
 
