@@ -3132,6 +3132,7 @@ pub struct KEYBDINPUT {
     pub dwExtraInfo: usize,
 }
 pub const KEYEVENTF_KEYUP: i32 = 2;
+pub const KEY_QUERY_VALUE: i32 = 1;
 pub const KEY_SET_VALUE: i32 = 2;
 pub const KF_FLAG_DEFAULT: KNOWN_FOLDER_FLAG = 0;
 pub type KNOWNFOLDERID = windows_core::GUID;

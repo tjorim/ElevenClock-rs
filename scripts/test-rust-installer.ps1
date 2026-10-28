@@ -134,7 +134,9 @@ try {
     Invoke-Setup $installer 'install-unicode' $spacedInstall
     $portable = Join-Path $packageRoot "portable smoke $testSuffix"
     Expand-Archive -LiteralPath "$packageRoot/$($package.name)-portable.zip" -DestinationPath $portable
-    $portableExe = Join-Path $portable 'elevenclock-rs.exe'
+    $portableExe = Join-Path $portable 'ElevenClock-rs/elevenclock-rs.exe'
+    Assert (Test-Path $portableExe) 'Portable ZIP does not extract into one ElevenClock-rs folder'
+    Assert (@(Get-ChildItem -LiteralPath $portable).Count -eq 1) 'Portable ZIP spilled files outside its folder'
     Set-ItemProperty $run $value ('"' + $portableExe + '" --startup')
     New-ItemProperty $approved $value -PropertyType Binary -Value ([byte[]](3,0,0,0,0,0,0,0,0,0,0,0)) -Force | Out-Null
     Uninstall $spacedInstall 'uninstall-portable-owner'

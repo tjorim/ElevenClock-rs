@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/clock-core", "crates/clock-windows", "crates/clock-app", "crates/clock-bindgen"]
+members = ["crates/clock-core", "crates/clock-windows", "crates/clock-app", "crates/clock-launcher", "crates/clock-bindgen"]
 # Bare `cargo run`/`build`/`test` target the app; pass --workspace for every crate.
 default-members = ["crates/clock-app"]
 resolver = "3"

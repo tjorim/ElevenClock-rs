@@ -165,7 +165,7 @@ impl RegistryRunKey {
         Self::with_keys(RUN_SUBKEY, APPROVED_SUBKEY, VALUE_NAME)
     }
     /// Different keys let the tests run against a temporary location.
-    pub(super) fn with_keys(run: &str, approved: &str, name: &str) -> Self {
+    pub fn with_keys(run: &str, approved: &str, name: &str) -> Self {
         Self {
             run: wide_nul(run),
             approved: wide_nul(approved),

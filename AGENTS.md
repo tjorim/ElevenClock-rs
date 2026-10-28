@@ -25,7 +25,7 @@ Windows-only code is gated on `cfg(windows)`. On Linux, type-check and lint it w
 `--target x86_64-pc-windows-msvc` (needs the target installed); it cannot be executed:
 
 ```sh
-cargo clippy -p clock-windows -p clock-app --all-targets --target x86_64-pc-windows-msvc -- -D warnings
+cargo clippy -p clock-windows -p clock-app -p clock-launcher --all-targets --target x86_64-pc-windows-msvc -- -D warnings
 ```
 
 `--workspace --all-targets` for the Windows target fails on Linux because Criterion's
@@ -74,6 +74,12 @@ Crates (dependency direction app → windows → core, app → core):
 - **`clock-app`**: thin `#![forbid(unsafe_code)]` entry point and the linked resources
   (dialog, icon, DPI-v2 manifest). `instance::Role` decides whether the process is the
   app or the taskbar discovery helper.
+- **`clock-launcher`**: the managed launcher of ADR 0004, shipped in the company
+  `-managed.zip` only. It copies the centrally deployed app to
+  `%LOCALAPPDATA%\Programs\ElevenClock-rs`, starts that copy and exits. Portable logic
+  (arguments, source rules, PE/version validation, SHA-256, the launch and uninstall
+  flows over a `Host` trait) is tested on any host; `native.rs` is the Windows `Host`.
+  It builds on `clock-windows` (instance names, log writer, Run key, atomic replace).
 - **`clock-bindgen`**: development-only generator for the Win32 bindings.
 
 Cross-cutting rules (details in `docs/contributing.md` and the ADRs):
@@ -85,8 +91,9 @@ Cross-cutting rules (details in `docs/contributing.md` and the ADRs):
 - Native handles and COM pointers never cross worker channels; window/dialog callbacks
   store no borrowed state and never unwind across FFI.
 - Monitor/taskbar IDs are process-local values, never raw handles or persisted IDs.
-- Only `clock-app`'s release executable ships. Examples (`taskbar_probe`,
-  `overlay_evidence`), tests and scripts are development artifacts.
+- Only `clock-app`'s release executable ships, plus `clock-launcher`'s in the managed
+  ZIP only (ADR 0004). Examples (`taskbar_probe`, `overlay_evidence`), tests and scripts
+  are development artifacts.
 - The diagnostics report must stay free of user names, paths and window titles
   (golden text and redaction cases in `support/tests.rs`).
 - Startup touches only this app's own `ElevenClockRust` Run value and `StartupApproved`

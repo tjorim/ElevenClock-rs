@@ -57,6 +57,16 @@ Taskbars: 2
    Discovery strategy: UI Automation; clock located: yes
 ```
 
+A managed copy ([ADR 0004](../adr/0004-managed-launcher.md)) adds two lines after
+`Architecture:` and the Status text shows "(managed by your organization)" after the
+version. The sample above predates them; a current report has `Managed: no` and
+`Startup: off` there:
+
+| Line | Values |
+| --- | --- |
+| `Managed:` | `yes` when `elevenclock-rs-launcher.exe` sits in the app's own folder, otherwise `no`. Checked again each time Settings opens |
+| `Startup:` | Which program the sign-in entry starts: `app`, `launcher` (the sibling launcher), `off` (no entry, or Windows has it turned off) or `stale` (registered for something else). Never a path |
+
 It is plain text for a person, with no schema: the layout may change between versions
 and nothing parses it. The commit is recorded by `clock-windows/build.rs` (`+modified`
 marks a build from uncommitted changes; `unknown` means no git checkout).
@@ -115,6 +125,13 @@ the limit. It logs **transitions**, not repaints: a taskbar's outcome changing, 
 discovery failure or recovery, pause/resume, discovery turned off, a refresh request,
 a copy, a failed save, start and stop, and a panic message. `Runtime::transition_lines`
 compares against what it last logged, so a minute of ticks writes nothing.
+
+The managed launcher ([ADR 0004](../adr/0004-managed-launcher.md)) writes the same
+bounded log under its own name, `launcher.log`, `launcher.1.log` and `launcher.2.log`
+beside the app's files (`RotatingLog::named`), through the same redaction. It records
+one line per decision (`updated`, `unchanged`, `skipped: running`, `source unreachable`,
+`source invalid: ...`, `refused: installed copy`, `started`) and never a path or user
+name. The Copy diagnostics report does not read these files.
 
 Every write error (no folder, disk full, locked file) is swallowed and the next write
 starts from a fresh look at the disk. Only the primary instance logs. Lines pass through

@@ -34,7 +34,7 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\elevenclock-rs.exe
 LicenseFile={#PayloadDir}\LICENSE.txt
-InfoBeforeFile={#PayloadDir}\PACKAGE-README.txt
+InfoBeforeFile={#PayloadDir}\README.txt
 CloseApplications=no
 RestartApplications=no
 SetupMutex=ElevenClock-rs.Setup
@@ -46,9 +46,7 @@ Source: "{#PayloadDir}\elevenclock-rs.exe"; DestDir: "{app}"; Flags: ignoreversi
 Source: "{#PayloadDir}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\RUST-COPYRIGHT.html"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\provenance.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\runtime-dependencies.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\PACKAGE-README.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{userprograms}\ElevenClock-rs"; Filename: "{app}\elevenclock-rs.exe"; WorkingDir: "{app}"; AppUserModelID: "tjorim.ElevenClockRs"
@@ -61,23 +59,46 @@ const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
   ApprovedKey = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
   StartupValue = 'ElevenClockRust';
+  ManagedLauncher = 'elevenclock-rs-launcher.exe';
+
+function ManagedCopyMessage(): String;
+begin
+  Result := 'A copy managed by your organization is installed for this account. ' +
+    'Setup will not change it.';
+end;
 
 function AppIsClosed(): Boolean;
 begin
   Result := FindWindowByClassName('ElevenClock-rs.Runtime.Host') = 0;
   if not Result then
-    MsgBox('Exit ElevenClock-rs from Settings or the tray menu, then try again.', mbInformation, MB_OK);
+    SuppressibleMsgBox('Exit ElevenClock-rs from Settings or the tray menu, then try again.', mbInformation, MB_OK, IDOK);
+end;
+
+// The managed launcher (ADR 0004) deploys its copy into this same folder. A copy
+// managed by the organization is never overwritten or uninstalled from here.
+function ManagedCopyIn(Folder: String): Boolean;
+begin
+  Result := FileExists(AddBackslash(Folder) + ManagedLauncher);
 end;
 
 function InitializeSetup(): Boolean;
 begin
-  Result := AppIsClosed();
+  Result := not ManagedCopyIn(ExpandConstant('{localappdata}\Programs\ElevenClock-rs'));
+  if not Result then begin
+    Log('refused: managed copy present');
+    SuppressibleMsgBox(ManagedCopyMessage(), mbError, MB_OK, IDOK);
+  end
+  else
+    Result := AppIsClosed();
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if not AppIsClosed() then
+  // Also covers an installation folder chosen with /DIR.
+  if ManagedCopyIn(ExpandConstant('{app}')) then
+    Result := ManagedCopyMessage()
+  else if not AppIsClosed() then
     Result := 'ElevenClock-rs is still running. Exit it before continuing.';
 end;
 

@@ -26,6 +26,8 @@ pub const MAX_FILES: usize = 3;
 /// A single line is cut here so that one message can never exceed a file.
 const MAX_LINE_BYTES: usize = 1024;
 
+/// File name stem of the app's own log; other executables pick their own (see
+/// [`RotatingLog::named`]) so they can share the folder without sharing files.
 const BASE: &str = "elevenclock-rs";
 
 /// A size-bounded rotating text log inside one folder.
@@ -34,6 +36,7 @@ const BASE: &str = "elevenclock-rs";
 /// `elevenclock-rs.2.log` (older). The folder is created on first write.
 pub struct RotatingLog {
     directory: PathBuf,
+    base: String,
     max_bytes: u64,
     max_files: usize,
     file: Option<File>,
@@ -45,10 +48,20 @@ impl RotatingLog {
         Self::with_limits(directory, MAX_FILE_BYTES, MAX_FILES)
     }
 
+    /// The same bounds under another file name stem, e.g. `launcher` for
+    /// `launcher.log`, `launcher.1.log` and `launcher.2.log`.
+    pub fn named(directory: impl Into<PathBuf>, base: &str) -> Self {
+        Self {
+            base: base.to_owned(),
+            ..Self::new(directory)
+        }
+    }
+
     /// Smaller limits make rotation testable without writing megabytes.
     pub fn with_limits(directory: impl Into<PathBuf>, max_bytes: u64, max_files: usize) -> Self {
         Self {
             directory: directory.into(),
+            base: BASE.to_owned(),
             max_bytes: max_bytes.max(1),
             max_files: max_files.max(1),
             file: None,
@@ -57,7 +70,7 @@ impl RotatingLog {
     }
 
     fn path(&self, index: usize) -> PathBuf {
-        file_path(&self.directory, index)
+        file_path(&self.directory, &self.base, index)
     }
 
     /// Append one line (a newline is added). On error the line is dropped and the
@@ -123,11 +136,11 @@ impl RotatingLog {
     }
 }
 
-fn file_path(directory: &Path, index: usize) -> PathBuf {
+fn file_path(directory: &Path, base: &str, index: usize) -> PathBuf {
     if index == 0 {
-        directory.join(format!("{BASE}.log"))
+        directory.join(format!("{base}.log"))
     } else {
-        directory.join(format!("{BASE}.{index}.log"))
+        directory.join(format!("{base}.{index}.log"))
     }
 }
 
@@ -168,13 +181,18 @@ pub fn enabled() -> bool {
 
 /// Record one transition. A no-op until logging is started, and never fails.
 pub fn log(message: &str) {
-    let flat = message.replace(['\r', '\n'], " ");
-    let line = format!("{} {}", timestamp(), support::redact(&flat));
+    let line = stamped(message);
     if let Ok(mut slot) = LOG.lock()
         && let Some(log) = slot.as_mut()
     {
         let _ = log.write_line(&line);
     }
+}
+
+/// One log line: the UTC time, then the message on a single line and redacted.
+pub fn stamped(message: &str) -> String {
+    let flat = message.replace(['\r', '\n'], " ");
+    format!("{} {}", timestamp(), support::redact(&flat))
 }
 
 fn timestamp() -> String {
@@ -193,6 +211,23 @@ fn timestamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_named_log_uses_its_own_file_names_beside_the_app_log() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = RotatingLog::new(directory.path());
+        let mut other = RotatingLog::named(directory.path(), "launcher");
+        app.write_line("app").unwrap();
+        other.write_line("launcher").unwrap();
+        assert_eq!(
+            names(directory.path()),
+            ["elevenclock-rs.log", "launcher.log"]
+        );
+        assert_eq!(
+            fs::read_to_string(directory.path().join("launcher.log")).unwrap(),
+            "launcher\n"
+        );
+    }
 
     fn names(directory: &Path) -> Vec<String> {
         let mut names: Vec<_> = fs::read_dir(directory)

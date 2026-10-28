@@ -65,7 +65,7 @@ On Linux, optionally type-check and lint the Windows-only app code after install
 `x86_64-pc-windows-msvc` with rustup:
 
 ```sh
-cargo clippy -p clock-windows -p clock-app --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
+cargo clippy -p clock-windows -p clock-app -p clock-launcher --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
 ```
 
 Do not use `--workspace --all-targets` for this cross-target check: Criterion's
@@ -111,7 +111,8 @@ and checks the site for pull requests that touch it and deploys from `main`.
 For the unsigned x64 installer/ZIP workflow, source/notices/checksum companions and
 disposable-account lifecycle harness, see [releasing.md](releasing.md).
 
-Dependency direction: app → windows → core and app → core. Core has only
+Dependency direction: app → windows → core and app → core; the managed launcher
+(`clock-launcher`, [ADR 0004](adr/0004-managed-launcher.md)) sits beside the app: launcher → windows → core. Core has only
 platform-independent chrono datetime values; its graph contains no Windows crate.
 App/core forbid unsafe. `clock-windows` compiles native code only on Windows and
 owns FFI. On Linux the app is a no-op build stub, not a supported product.
@@ -147,7 +148,9 @@ standard-user `asInvoker` and per-monitor DPI-v2 activation. Standard dialog
 processing supplies Tab/Shift+Tab, mnemonics, Escape and default-button handling.
 Check new controls with a keyboard and a screen reader.
 
-Only `clock-app`'s release executable is an app artifact. Tests, examples, probes,
+Only `clock-app`'s release executable is an app artifact, plus the `clock-launcher`
+executable in the managed ZIP only ([ADR 0004](adr/0004-managed-launcher.md)); the
+installer and the portable ZIP never contain the launcher. Tests, examples, probes,
 license inventory scripts and debug binaries are development artifacts and must
 never enter an installer or support flow. See [releasing](releasing.md) for packaging and notices.
 

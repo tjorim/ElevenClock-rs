@@ -180,6 +180,16 @@ function Clear-Startup {
 }
 $startupBackup = @{ Run = Get-Registered; Approved = Get-Approved }
 Clear-Startup
+# A launcher beside the executable makes it a managed copy (ADR 0004), which registers
+# the launcher for startup. This harness covers the plain app, so a build folder that
+# also holds the launcher is tested through a lone copy of the executable.
+$isolated = $null
+$sibling = Join-Path (Split-Path (Resolve-Path -LiteralPath $Executable).Path) 'elevenclock-rs-launcher.exe'
+if (Test-Path -LiteralPath $sibling) {
+    $isolated = Join-Path ([IO.Path]::GetTempPath()) "settings-smoke-$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Path $isolated | Out-Null
+    $Executable = Copy-Item -LiteralPath $Executable -Destination $isolated -PassThru | Select-Object -ExpandProperty FullName
+}
 $app = Start-Process $Executable -PassThru
 function Wait-Settings([bool]$Open, [string]$What) {
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
@@ -591,6 +601,7 @@ try {
     $app.Refresh()
     if (!$app.HasExited) { $app.Kill() }
     $app.Dispose()
+    if ($isolated) { Remove-Item -LiteralPath $isolated -Recurse -Force -ErrorAction SilentlyContinue }
     Remove-ItemProperty -Path $runKey -Name $neighbour -ErrorAction SilentlyContinue
     Clear-Startup
     if ($null -ne $startupBackup.Run) { Set-ItemProperty -Path $runKey -Name $startupName -Value $startupBackup.Run }

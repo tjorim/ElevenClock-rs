@@ -8,7 +8,11 @@
 //!
 //! There is no diagnostics service and no stable schema: the report is text for a
 //! person (or a bug report) to read, and its layout may change between versions.
-use crate::runtime::{Diagnostics, Reason, TaskbarDiagnostic};
+use crate::{
+    managed,
+    runtime::{Diagnostics, Reason, TaskbarDiagnostic},
+    startup::StartupKind,
+};
 use chrono::{DateTime, Utc};
 use clock_core::{DiscoveryStrategy, HiddenReason, OverlayState};
 use std::{sync::OnceLock, time::Duration};
@@ -36,6 +40,10 @@ pub struct Environment {
     pub windows: String,
     pub os_architecture: String,
     pub app_architecture: String,
+    /// The company launcher sits beside the app (managed mode, ADR 0004).
+    pub managed: bool,
+    /// Which program the sign-in startup entry starts, if any.
+    pub startup: StartupKind,
 }
 
 impl Environment {
@@ -47,6 +55,8 @@ impl Environment {
             windows: "unknown".to_owned(),
             os_architecture: "unknown".to_owned(),
             app_architecture: std::env::consts::ARCH.to_owned(),
+            managed: false,
+            startup: StartupKind::Off,
         }
     }
 }
@@ -500,7 +510,7 @@ pub fn status_text(environment: &Environment, diagnostics: &Diagnostics) -> Stri
     let status = status(diagnostics);
     format!(
         "ElevenClock-rs version {}\nWindows {}\nStatus: {}\n{}",
-        environment.app_version,
+        managed::version_text(&environment.app_version, environment.managed),
         environment.windows,
         status.replacement.label(),
         status.explanation,
@@ -556,6 +566,11 @@ pub fn report(
         "Architecture: Windows {}, app {}",
         environment.os_architecture, environment.app_architecture
     ));
+    line(format!(
+        "Managed: {}",
+        if environment.managed { "yes" } else { "no" }
+    ));
+    line(format!("Startup: {}", environment.startup.label()));
     line(String::new());
     line(format!("Clock replacement: {}", status.replacement.label()));
     line(format!("Summary: {}", status.explanation));
