@@ -3,7 +3,7 @@
 ElevenClock-rs (the Rust implementation, its tooling and the original artwork in
 [`assets/`](../assets)) is licensed under the [Apache License 2.0](../LICENSE). The
 inherited Python application and its imagery stay under GPLv3 in Git history; they are
-not part of this tree, its packages or its source companion.
+not part of this tree or its packages.
 
 ## Decision
 
@@ -36,7 +36,8 @@ The original Python application, inherited imagery and historical notices remain
 under their existing GPLv3 terms in Git history. Dependencies, toolchain components
 and their original notices retain their own licenses. The provenance review and
 name/trademark limitations below remain applicable. Release packaging continues
-to retain the separate dependency/toolchain notices and matching source companion.
+to retain the separate dependency/toolchain notices in every package; the source is
+the tagged commit on GitHub.
 
 ## Supporting review
 

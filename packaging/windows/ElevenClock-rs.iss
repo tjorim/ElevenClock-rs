@@ -34,7 +34,7 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\elevenclock-rs.exe
 LicenseFile={#PayloadDir}\LICENSE.txt
-InfoBeforeFile={#PayloadDir}\PACKAGE-README.txt
+InfoBeforeFile={#PayloadDir}\README.txt
 CloseApplications=no
 RestartApplications=no
 SetupMutex=ElevenClock-rs.Setup
@@ -46,9 +46,7 @@ Source: "{#PayloadDir}\elevenclock-rs.exe"; DestDir: "{app}"; Flags: ignoreversi
 Source: "{#PayloadDir}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\RUST-COPYRIGHT.html"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\provenance.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\runtime-dependencies.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\PACKAGE-README.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{userprograms}\ElevenClock-rs"; Filename: "{app}\elevenclock-rs.exe"; WorkingDir: "{app}"; AppUserModelID: "tjorim.ElevenClockRs"

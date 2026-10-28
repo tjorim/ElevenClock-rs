@@ -86,13 +86,11 @@ jobs:
           path: |
             dist/candidate/*-setup.exe
             dist/candidate/*-portable.zip
-            dist/candidate/*-source.zip
             dist/candidate/SHA256SUMS.txt
             dist/candidate/payload/elevenclock-rs.exe
       - uses: actions/upload-artifact@v7
         with:
           name: elevenclock-rs-x64-debug-symbols
-          retention-days: 30
           if-no-files-found: error
           path: dist/candidate/symbols/
       - uses: actions/upload-artifact@v7
@@ -114,10 +112,6 @@ jobs:
         with:
           name: elevenclock-rs-unsigned-x64-candidate
           path: release
-      - uses: actions/download-artifact@v8
-        with:
-          name: elevenclock-rs-x64-debug-symbols
-          path: symbols
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,12 +119,12 @@ jobs:
         run: |
           set -euo pipefail
           name="ElevenClock-rs-${TAG#v}-x64"
-          (cd symbols && zip -q -r "../release/$name-symbols.zip" .)
           cat > notes.md <<NOTES
           Download \`$name-setup.exe\` to install for your account (no administrator
           rights needed), or \`$name-portable.zip\` to run without installing.
           Requires stock Windows 11 x64. The files are not code-signed, so Windows may
           warn about the download. Verify downloads against \`SHA256SUMS.txt\`.
+          The source is the tagged commit; GitHub attaches it below.
 
           See the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/README.md)
           for usage, and the [migration guide](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/migration.md)
@@ -141,4 +135,4 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "ElevenClock-rs ${TAG#v}" --notes-file notes.md \
             "release/$name-setup.exe" "release/$name-portable.zip" \
-            "release/$name-source.zip" "release/$name-symbols.zip" release/SHA256SUMS.txt
+            release/SHA256SUMS.txt

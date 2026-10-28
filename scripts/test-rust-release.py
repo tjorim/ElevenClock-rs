@@ -50,7 +50,7 @@ class Gates(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.inspect_pe(b"not an executable")
 
-    def test_vendor_source_timestamps_before_1980_can_be_archived(self):
+    def test_zip_timestamps_before_1980_can_be_archived(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "source"
@@ -58,8 +58,8 @@ class Gates(unittest.TestCase):
             file = source / "LICENSE"
             file.write_bytes(b"original notice\n")
             os.utime(file, (1, 1))
-            release.zip_tree(source, root / "source.zip")
-            with zipfile.ZipFile(root / "source.zip") as archive:
+            release.zip_tree(source, root / "package.zip")
+            with zipfile.ZipFile(root / "package.zip") as archive:
                 self.assertEqual(archive.read("LICENSE"), b"original notice\n")
 
     def test_finish_rejects_incomplete_artifact_set(self):
@@ -68,6 +68,59 @@ class Gates(unittest.TestCase):
             release.write_json(root / "package.json", {"name": "candidate"})
             with self.assertRaisesRegex(ValueError, "Missing artifact"):
                 release.finish(root)
+
+    def package(self, root, files=None):
+        """A fake candidate: portable ZIP, installer, raw exe and checksums."""
+        exe = bytes(pe())
+        files = files or {name: b"text" for name in release.PORTABLE_FILES}
+        files[f"{release.PORTABLE_FOLDER}/elevenclock-rs.exe"] = exe
+        release.write_json(root / "package.json", {"name": "candidate"})
+        with zipfile.ZipFile(root / "candidate-portable.zip", "w") as archive:
+            for name, data in files.items():
+                archive.writestr(name, data)
+        (root / "candidate-setup.exe").write_bytes(b"installer")
+        (root / "payload").mkdir()
+        (root / "symbols").mkdir()
+        (root / "symbols/elevenclock_rs.pdb").write_bytes(b"pdb")
+        (root / "payload/elevenclock-rs.exe").write_bytes(exe)
+        release.finish(root)
+
+    def test_verify_accepts_single_folder_portable_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.package(root)
+            release.verify(root)
+            self.assertEqual(
+                sorted(line.split("  ", 1)[1] for line in (root / "SHA256SUMS.txt").read_text().splitlines()),
+                ["candidate-portable.zip", "candidate-setup.exe", "payload/elevenclock-rs.exe"],
+            )
+
+    def test_verify_rejects_removed_evidence_and_flat_layout(self):
+        base = {name: b"text" for name in release.PORTABLE_FILES}
+        flat = {name.split("/", 1)[1]: data for name, data in base.items()}
+        for label, extra in (
+            ("provenance", {**base, "ElevenClock-rs/provenance.json": b"{}"}),
+            ("dependencies", {**base, "ElevenClock-rs/runtime-dependencies.json": b"{}"}),
+            ("flat", flat),
+        ):
+            with self.subTest(label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.package(root, dict(extra))
+                with self.assertRaisesRegex(ValueError, "allowlist"):
+                    release.verify(root)
+
+    def test_verify_rejects_unreviewed_import_in_shipped_exe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.package(root)
+            bad = bytes(pe(b"Qt6Core.dll"))
+            with zipfile.ZipFile(root / "candidate-portable.zip", "w") as archive:
+                for name in release.PORTABLE_FILES:
+                    archive.writestr(name, bad if name.endswith(".exe") else b"text")
+            (root / "payload/elevenclock-rs.exe").write_bytes(bad)
+            release.finish(root)
+            with self.assertRaisesRegex(ValueError, "Unreviewed native dependency"):
+                release.verify(root)
 
 
 if __name__ == "__main__":

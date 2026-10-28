@@ -31,7 +31,7 @@ If you used the original ElevenClock, quit it and switch it off in
 explains this and what changed.
 
 The release also has a portable ZIP: extract it to a folder you can write to and
-double-click `elevenclock-rs.exe`.
+double-click `ElevenClock-rs\elevenclock-rs.exe`.
 
 ## Use
 

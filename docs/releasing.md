@@ -1,7 +1,8 @@
 # Packaging and releasing
 
-Releases are unsigned GitHub releases: the installer, the portable ZIP, matching
-source, debug symbols and `SHA256SUMS.txt`. What has been tested is in
+Releases are unsigned GitHub releases with three assets: the installer, the portable
+ZIP and `SHA256SUMS.txt`. The source is the tagged commit, which GitHub also attaches
+to every release as a source archive. What has been tested is in
 [tested configurations](tested-configurations.md). The [code signing policy](../README.md#code-signing-policy) describes the planned
 SignPath signing; winget is a later distribution channel. The name and channels
 are in [product name](product-name.md).
@@ -45,11 +46,19 @@ The PR/manual `rust-release.yml` workflow uploads these development artifacts:
 | Artifact | Contents |
 | --- | --- |
 | `*-setup.exe` | Normal per-user installer, Start menu shortcut, uninstaller |
-| `*-portable.zip` | Explicit app/notices/instructions/provenance/DLL-report file allowlist |
-| `*-source.zip` | Actual repository sources, source-file SHA256 inventory, Cargo.lock, vendored Cargo sources and relocatable offline configuration |
-| `SHA256SUMS.txt` | Installer, both ZIPs and raw executable hashes |
-| Separate symbols artifact | Matching PDB, provenance and its own checksums |
+| `*-portable.zip` | One `ElevenClock-rs/` folder with the executable, `README.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `RUST-COPYRIGHT.html` (an explicit allowlist) |
+| `SHA256SUMS.txt` | Installer, portable ZIP and raw executable hashes |
+| Separate symbols artifact | Matching PDB and its own checksums, for debugging a recent build |
 | Packaging evidence (failed runs only) | Actual installer/lifecycle/Settings logs and environment limitations |
+
+Only the installer, the portable ZIP and `SHA256SUMS.txt` are published on a release.
+The symbols stay a workflow artifact with the default retention, so crash dumps from
+older releases cannot be symbolised. The installer and the portable ZIP each get their
+own readme from `packaging/` (`INSTALLER-README.txt` is the installer's
+`InfoBeforeFile`; `PORTABLE-README.txt` becomes the ZIP's `README.txt`). The PE import
+inspection, the dynamic CRT ban and the system-DLL allowlist run at build time
+(`prepare`, and again on the shipped executable in `verify`); their results are not
+published.
 
 Formatting, linting, unit tests and portable script regressions run in
 `rust-ci.yml`; the packaging workflow only builds and validates the candidate.
@@ -57,22 +66,19 @@ For manual validation, run both workflows against the same ref. The packaging
 build remains separate because it links the static runtime. New runs cancel
 superseded packaging runs on the same ref.
 
-Keep matching source and binary artifacts together. Modified development checkouts
-are recorded honestly: source includes actual tracked and nonignored untracked
-working files, omitting tracked deletions. Keep unrelated nonignored files out of
-a packaging checkout. The snapshot is not falsely labelled as a clean HEAD archive.
-To rebuild offline, extract the source ZIP, **change to its root**, and run:
+The source is the tagged commit on GitHub, and `Cargo.lock` pins the exact dependency
+versions. To rebuild a release, check out the tag and run:
 
 ```powershell
 $env:RUSTFLAGS = '-C target-feature=+crt-static'
-cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked --offline
+cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked
 ```
 
-MSVC/SDK and the recorded Rust toolchain remain build prerequisites. This supplies
-matching source, not a byte-for-byte reproducibility guarantee. Without `.git`, the
-rebuilt Support commit says `unknown`; original provenance stays in the JSON file.
+MSVC/SDK and a current stable Rust toolchain remain build prerequisites. This is not a
+byte-for-byte reproducibility guarantee. Keep unrelated nonignored files out of a
+packaging checkout.
 
-`-Mode Distribution` rejects a dirty checkout and a `PACKAGE-README.txt` that
+`-Mode Distribution` rejects a dirty checkout and a packaging readme that
 says "Distribution is blocked". Pull requests and manual runs build in Development
 mode with read-only permissions; only a `v*` tag runs the `publish` job, which has
 `contents: write` and no signing identity. No product prerequisite installer is run.
@@ -109,8 +115,8 @@ requirement found later is a release blocker. No elevated prerequisite is silent
 replacement icon. The packaging script copies the root Apache LICENSE into
 `LICENSE.txt` for both installer and portable ZIP. The inherited Python application
 and imagery, with GPLv3 and the original credits to Martí Climent and Xavier
-Delugo, were removed from the tree at cutover. They are no longer in the source
-companion and were never installed; they remain in Git history (see the
+Delugo, were removed from the tree at cutover. They are no longer in the tree
+and were never installed; they remain in Git history (see the
 [migration guide](migration.md#legacy-reference)). The stale upstream Apache
 README sentence does not relicense that legacy material. The full dependency
 inventory supplies original notices (including build/test dependencies); Rust's
