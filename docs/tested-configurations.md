@@ -22,6 +22,7 @@ and Explorer-recovery checks on their own hardware.
 | Session and time | Lock/unlock; time-zone changes and clock jumps (the clock matched local time to the second afterwards) |
 | Recovery | Explorer restart ×3 with the same process and flat handles; a forced kill of the app reveals the native clock; quiet `--startup` launch |
 | Startup and install | Per-user install, Start menu launch, startup on/off/repair without UAC on a standard account; update, uninstall and rollback between two development builds |
+| Managed ZIP | On the hosted Windows runner (disposable account): the real launcher deploys from a temporary source folder; the app reports `Managed: yes`; Startup registers the local launcher; a changed source replaces the local copy on the next launch; setup refuses while the managed copy is present; `--uninstall` removes it |
 | Support | Status, Refresh and Copy diagnostics; the report contains no user name or path |
 | Accessibility | UIA name, role and Invoke on the clock; keyboard access to Settings and the tray menu; Settings layout at 100/125/150/200% and in high contrast (CI) |
 
@@ -53,8 +54,10 @@ The script cannot see timer-wake or discovery rates.
   listened to it.
 - **Managed ZIP.** The launcher flow (deploy, managed mode, launcher startup entry,
   update on the next launch, installer refusal, uninstall) runs on the hosted Windows
-  runner only. Not tried: a real file share, a VPN or offline start, or Group Policy
-  deployment.
+  runner only. Not tried: a real file share, the Local intranet zone setup, a VPN or
+  offline start, AppLocker or Software Restriction Policies, or Group Policy or Intune
+  deployment. The [managed deployment guide](managed-deployment.md) says where it relies
+  on this.
 - **Actual sign-out/sign-in startup** and a clean first-run machine without developer
   runtimes.
 - **Secondary taskbars** have no `TrayNotifyWnd`, so a tray re-layout there waits for the
