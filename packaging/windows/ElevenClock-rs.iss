@@ -59,6 +59,13 @@ const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
   ApprovedKey = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
   StartupValue = 'ElevenClockRust';
+  ManagedLauncher = 'elevenclock-rs-launcher.exe';
+
+function ManagedCopyMessage(): String;
+begin
+  Result := 'A copy managed by your organization is installed for this account. ' +
+    'Setup will not change it.';
+end;
 
 function AppIsClosed(): Boolean;
 begin
@@ -67,15 +74,29 @@ begin
     MsgBox('Exit ElevenClock-rs from Settings or the tray menu, then try again.', mbInformation, MB_OK);
 end;
 
+// The managed launcher (ADR 0004) deploys its copy into this same folder. A copy
+// managed by the organization is never overwritten or uninstalled from here.
+function ManagedCopyIn(Folder: String): Boolean;
+begin
+  Result := FileExists(AddBackslash(Folder) + ManagedLauncher);
+end;
+
 function InitializeSetup(): Boolean;
 begin
-  Result := AppIsClosed();
+  Result := not ManagedCopyIn(ExpandConstant('{localappdata}\Programs\ElevenClock-rs'));
+  if not Result then
+    MsgBox(ManagedCopyMessage(), mbError, MB_OK)
+  else
+    Result := AppIsClosed();
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if not AppIsClosed() then
+  // Also covers an installation folder chosen with /DIR.
+  if ManagedCopyIn(ExpandConstant('{app}')) then
+    Result := ManagedCopyMessage()
+  else if not AppIsClosed() then
     Result := 'ElevenClock-rs is still running. Exit it before continuing.';
 end;
 

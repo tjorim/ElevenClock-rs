@@ -19,8 +19,14 @@
 //!   caller reads the state back afterwards, so a failed write leaves the UI showing
 //!   what the OS actually holds.
 //!
+//! In managed mode (the launcher sits beside the app, see [`crate::managed`]) the
+//! registered program is that sibling launcher instead of the app, so every sign-in
+//! goes through the launcher and picks up updates. [`startup_target`] is the one
+//! place that decides; [`reconcile`] accepts either program as this app's own.
+//!
 //! Only an explicit user action changes the registry. A stale or moved registration
 //! is reported and offered for repair; it is never rewritten on launch.
+use crate::managed;
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
@@ -67,6 +73,15 @@ pub fn command_line(executable: &Path) -> Result<String, CommandError> {
         return Err(CommandError::TooLong);
     }
     Ok(command)
+}
+
+/// The program the Run value should start: the sibling launcher in managed mode,
+/// otherwise the app itself. `exists` is injected so the rule needs no file system.
+pub fn startup_target(executable: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
+    match managed::launcher_beside(executable) {
+        Some(launcher) if exists(&launcher) => launcher,
+        _ => executable.to_path_buf(),
+    }
 }
 
 /// Splits a registered command into its program and the remaining arguments, the way
@@ -128,8 +143,55 @@ pub enum Stale {
     Unrecognised,
 }
 
-/// Decide the state of `entry` for the running executable. `exists` is injected so
-/// the rules are testable without a file system.
+/// Which program a working registration starts, for the diagnostics report.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StartupKind {
+    /// Nothing starts at sign-in (no value, or Windows has it turned off).
+    Off,
+    /// The app itself starts.
+    App,
+    /// The sibling launcher starts, which then starts the app.
+    Launcher,
+    /// Registered, but not for this copy.
+    Stale,
+}
+impl StartupKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::App => "app",
+            Self::Launcher => "launcher",
+            Self::Stale => "stale",
+        }
+    }
+}
+
+/// Classify a registration that [`reconcile`] already judged to be `state`.
+pub fn kind(state: &StartupState, entry: &RunEntry, executable: &Path) -> StartupKind {
+    match state {
+        StartupState::Off | StartupState::DisabledInWindows => StartupKind::Off,
+        StartupState::Stale(_) => StartupKind::Stale,
+        StartupState::On => {
+            let launcher = entry
+                .command
+                .as_deref()
+                .and_then(split_command)
+                .zip(managed::launcher_beside(executable))
+                .is_some_and(|((program, _), launcher)| {
+                    same_path(program, &launcher.to_string_lossy())
+                });
+            if launcher {
+                StartupKind::Launcher
+            } else {
+                StartupKind::App
+            }
+        }
+    }
+}
+
+/// Decide the state of `entry` for the running executable. The registered program
+/// counts as this copy's when it is the executable itself or the launcher beside it.
+/// `exists` is injected so the rules are testable without a file system.
 pub fn reconcile(
     entry: &RunEntry,
     executable: &Path,
@@ -147,7 +209,10 @@ pub fn reconcile(
     if arguments != ARGUMENT {
         return StartupState::Stale(Stale::Unrecognised);
     }
-    if same_path(program, &executable.to_string_lossy()) {
+    let own_launcher = managed::launcher_beside(executable)
+        .is_some_and(|launcher| same_path(program, &launcher.to_string_lossy()));
+    // The launcher is only ours while it exists: a removed one starts nothing.
+    if same_path(program, &executable.to_string_lossy()) || (own_launcher && exists(program)) {
         return if entry.approved {
             StartupState::On
         } else {
@@ -207,29 +272,53 @@ pub trait RunKey {
 pub struct StartupController<K> {
     key: K,
     executable: PathBuf,
+    exists: Box<dyn Fn(&Path) -> bool>,
 }
 impl<K: RunKey> StartupController<K> {
     pub fn new(key: K, executable: PathBuf) -> Self {
-        Self { key, executable }
+        Self::with_exists(key, executable, |path| path.is_file())
+    }
+    /// Another file test lets the tests decide which programs exist.
+    pub fn with_exists(
+        key: K,
+        executable: PathBuf,
+        exists: impl Fn(&Path) -> bool + 'static,
+    ) -> Self {
+        Self {
+            key,
+            executable,
+            exists: Box::new(exists),
+        }
     }
 
     /// The state in the registry right now.
     pub fn state(&mut self) -> Result<StartupState, StartupError> {
-        let entry = self.key.read()?;
-        Ok(reconcile(&entry, &self.executable, |program| {
-            Path::new(program).is_file()
-        }))
+        self.status().map(|(state, _)| state)
     }
 
-    /// Register this executable (also turns back on an entry Windows had switched off).
+    /// The state and which program it starts, from one read of the registry.
+    pub fn status(&mut self) -> Result<(StartupState, StartupKind), StartupError> {
+        let entry = self.key.read()?;
+        let state = reconcile(&entry, &self.executable, |program| {
+            (self.exists)(Path::new(program))
+        });
+        let kind = kind(&state, &entry, &self.executable);
+        Ok((state, kind))
+    }
+
+    /// Register the program [`startup_target`] picks: the sibling launcher in managed
+    /// mode, otherwise this executable. Also turns back on an entry Windows had
+    /// switched off.
     pub fn enable(&mut self) -> Result<(), StartupError> {
-        let command = command_line(&self.executable).map_err(StartupError::Command)?;
+        let target = startup_target(&self.executable, &self.exists);
+        let command = command_line(&target).map_err(StartupError::Command)?;
         self.key.write(&command)
     }
     pub fn disable(&mut self) -> Result<(), StartupError> {
         self.key.remove()
     }
-    /// Re-point a stale entry at this executable. The same write as `enable`, kept
+    /// Re-point a stale entry at this copy, resolving the target again so a launcher
+    /// that is gone is no longer used. The same write as `enable`, kept
     /// as its own call so the window can only repair on the user's explicit request.
     pub fn repair(&mut self) -> Result<(), StartupError> {
         self.enable()

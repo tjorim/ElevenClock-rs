@@ -6,7 +6,7 @@
 | --- | --- |
 | Key | `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 | Value name | **`ElevenClockRust`** (`REG_SZ`) |
-| Value data | `"<absolute path to elevenclock-rs.exe>" --startup` |
+| Value data | `"<absolute path to elevenclock-rs.exe>" --startup`; in managed mode `"<folder>\elevenclock-rs-launcher.exe" --startup` (see below) |
 | Windows' own flag | `HKCU\...\Explorer\StartupApproved\Run`, value `ElevenClockRust` (read; deleted when the user turns startup on or off here) |
 
 The legacy ElevenClock writes `elevenClock` to the same key. Registry value names are
@@ -16,6 +16,26 @@ written, deleted or read for writing: no HKLM, no service, no scheduled task, no
 `--startup` is the runtime's private launch marker (`instance::STARTUP_MARKER`): it
 starts the clock quietly, never opens Settings, and does nothing when an instance is
 already running (the existing per-user mutex).
+
+## Managed mode: the launcher is the registered program
+
+When `elevenclock-rs-launcher.exe` sits in the app's own folder, the copy is managed
+([ADR 0004](../adr/0004-managed-launcher.md)). The Startup option is unchanged: it is
+still the user's choice, still off by default, and still only the `ElevenClockRust`
+value. Only the registered program differs:
+
+- `startup_target` is the one resolver. If the sibling launcher exists, the command is
+  `"<folder>\elevenclock-rs-launcher.exe" --startup`, so each sign-in goes through the
+  launcher and picks up updates; otherwise it is the app as before. The file name is
+  fixed and looked up in the app's own folder only, never from configuration, the
+  environment or the registry.
+- `reconcile` accepts both the app and the sibling launcher (each with exactly
+  `--startup`) as this copy's: `On`, or `DisabledInWindows` when Windows switched it off.
+  The sibling launcher counts only while it exists: a removed launcher reads as
+  `Stale::Missing`, and Repair resolves the target again (so it registers the app).
+  A launcher in any other folder reads as `OtherCopy` or `Missing`, never `On`.
+- Diagnostics show `Managed: yes/no` and `Startup: app / launcher / off / stale`, without
+  paths.
 
 ## What the user gets
 
@@ -51,6 +71,7 @@ box when it is clear) writes. Startup is never enabled on the user's behalf.
 
 ## Rules implemented (`clock-windows::startup`, tested on any host)
 
+- `startup_target`: the sibling launcher when it exists, otherwise the executable.
 - `command_line`: absolute path only, wrapped in one pair of double quotes, followed by
   ` --startup`. Refused (with a plain message, before the registry is touched): relative
   paths, a `"` or control character, and anything of 32,767 UTF-16 units or more.

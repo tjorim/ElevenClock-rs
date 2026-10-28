@@ -33,6 +33,11 @@ explains this and what changed.
 The release also has a portable ZIP: extract it to a folder you can write to and
 double-click `ElevenClock-rs\elevenclock-rs.exe`.
 
+Companies that deploy from a central location use the managed ZIP. It holds the same app
+and a launcher that keeps each user's local copy up to date; its `README.txt` is for
+administrators; the [managed deployment guide](https://tjorim.github.io/ElevenClock-rs/docs/managed-deployment/)
+covers setup. Do not combine it with the installer on one account.
+
 ## Use
 
 The first launch opens **Settings**. Closing Settings keeps the clock running.
