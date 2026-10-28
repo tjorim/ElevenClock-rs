@@ -102,6 +102,23 @@ jobs:
           if ($info.ProductName -ne 'ElevenClock-rs' -or $info.ProductVersion -ne $version -or $info.FileVersion -ne $version) {
             throw "Unexpected version resource: $($info.ProductName) $($info.ProductVersion) $($info.FileVersion)"
           }
+      # The managed launcher (ADR 0004) ships only in the managed ZIP, but it must keep
+      # building with its resources. Its size is reported so growth is noticed.
+      - name: Launcher release build, subsystem, version info and size
+        shell: pwsh
+        run: |
+          cargo build -p clock-launcher --release --target x86_64-pc-windows-msvc --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Launcher release build failed' }
+          $exe = 'target/x86_64-pc-windows-msvc/release/elevenclock-rs-launcher.exe'
+          $bytes = [IO.File]::ReadAllBytes($exe)
+          $pe = [BitConverter]::ToInt32($bytes, 0x3c)
+          if ([BitConverter]::ToUInt16($bytes, $pe + 0x5c) -ne 2) { throw 'Expected Windows GUI subsystem' }
+          $info = (Get-Item $exe).VersionInfo
+          if ($info.ProductName -ne 'ElevenClock-rs' -or $info.OriginalFilename -ne 'elevenclock-rs-launcher.exe') {
+            throw "Unexpected launcher version resource: $($info.ProductName) $($info.OriginalFilename)"
+          }
+          $app = (Get-Item 'target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe').Length
+          "Launcher: $($bytes.Length) bytes; app: $app bytes" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
       - name: Native dialog launch, focus, capture and close smoke check
         shell: pwsh
         run: ./scripts/test-rust-settings.ps1

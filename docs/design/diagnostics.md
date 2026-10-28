@@ -116,6 +116,13 @@ discovery failure or recovery, pause/resume, discovery turned off, a refresh req
 a copy, a failed save, start and stop, and a panic message. `Runtime::transition_lines`
 compares against what it last logged, so a minute of ticks writes nothing.
 
+The managed launcher ([ADR 0004](../adr/0004-managed-launcher.md)) writes the same
+bounded log under its own name, `launcher.log`, `launcher.1.log` and `launcher.2.log`
+beside the app's files (`RotatingLog::named`), through the same redaction. It records
+one line per decision (`updated`, `unchanged`, `skipped: running`, `source unreachable`,
+`source invalid: ...`, `refused: installed copy`, `started`) and never a path or user
+name. The Copy diagnostics report does not read these files.
+
 Every write error (no folder, disk full, locked file) is swallowed and the next write
 starts from a fresh look at the disk. Only the primary instance logs. Lines pass through
 `support::redact`. Sample from the harness run:

@@ -1,0 +1,36 @@
+#pragma code_page(65001)
+#include <windows.h>
+
+1 RT_MANIFEST "resources/launcher.manifest"
+
+// Same product name and version as the app (from Cargo, via build.rs). The launcher
+// is told apart from the app by OriginalFilename; the source check in pe.rs relies on it.
+#include "elevenclock_version.h"
+1 VERSIONINFO
+FILEVERSION ELEVENCLOCK_VERSION_NUMBER
+PRODUCTVERSION ELEVENCLOCK_VERSION_NUMBER
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "ElevenClock-rs contributors"
+            VALUE "FileDescription", "ElevenClock-rs launcher"
+            VALUE "FileVersion", ELEVENCLOCK_VERSION_TEXT
+            VALUE "InternalName", "elevenclock-rs-launcher"
+            VALUE "LegalCopyright", "Copyright 2026 ElevenClock-rs contributors. Apache License 2.0."
+            VALUE "OriginalFilename", "elevenclock-rs-launcher.exe"
+            VALUE "ProductName", "ElevenClock-rs"
+            VALUE "ProductVersion", ELEVENCLOCK_VERSION_TEXT
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

@@ -221,6 +221,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clock-launcher"
+version = "0.1.1"
+dependencies = [
+ "clock-windows",
+ "embed-resource",
+ "tempfile",
+ "windows-core",
+]
+
+[[package]]
 name = "clock-windows"
 version = "0.1.1"
 dependencies = [

@@ -239,10 +239,9 @@ pub struct LocalPreferencesStore {
     path: PathBuf,
     recovery_save_allowed: bool,
 }
-/// The app-owned per-user data folder below Known Folder LocalAppData. Preferences
-/// and the bounded logs both live here; never HOME or a path override.
+/// Known Folder LocalAppData (`%LOCALAPPDATA%`), never HOME or a path override.
 #[cfg(windows)]
-pub(crate) fn app_data_dir() -> io::Result<PathBuf> {
+pub fn local_app_data() -> io::Result<PathBuf> {
     use crate::bindings::{
         CoTaskMemFree, FOLDERID_LocalAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
     };
@@ -254,7 +253,14 @@ pub(crate) fn app_data_dir() -> io::Result<PathBuf> {
     use std::os::windows::ffi::OsStringExt;
     let path = PathBuf::from(std::ffi::OsString::from_wide(wide));
     unsafe { CoTaskMemFree(folder.0.cast()) };
-    Ok(path.join("ElevenClock-rs"))
+    Ok(path)
+}
+
+/// The app-owned per-user data folder below Known Folder LocalAppData. Preferences
+/// and the bounded logs both live here; never HOME or a path override.
+#[cfg(windows)]
+pub fn app_data_dir() -> io::Result<PathBuf> {
+    Ok(local_app_data()?.join("ElevenClock-rs"))
 }
 
 #[cfg(windows)]
@@ -374,8 +380,10 @@ impl LocalPreferencesStore {
         }
     }
 }
+/// Replace `target` with `source` (same volume) without ever leaving `target` missing
+/// or half written: `MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)` on Windows.
 #[cfg(windows)]
-fn replace(source: &Path, target: &Path) -> io::Result<()> {
+pub fn replace(source: &Path, target: &Path) -> io::Result<()> {
     use crate::bindings::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW};
     use std::os::windows::ffi::OsStrExt;
     use windows_core::PCWSTR;
@@ -395,7 +403,7 @@ fn replace(source: &Path, target: &Path) -> io::Result<()> {
     .map_err(io::Error::other)
 }
 #[cfg(not(windows))]
-fn replace(source: &Path, target: &Path) -> io::Result<()> {
+pub fn replace(source: &Path, target: &Path) -> io::Result<()> {
     fs::rename(source, target)
 }
 
