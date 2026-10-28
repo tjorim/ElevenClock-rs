@@ -31,8 +31,15 @@ cutover and remain in Git history ([migration guide](migration.md#legacy-referen
 the active icon is [original Apache-licensed artwork](../assets/README.md). Dependency licenses and
 original notices are unchanged.
 The [packaging workflow](releasing.md) includes the original inventory and
-toolchain notices in every package, plus matching vendored
-source.
+toolchain notices in every package. The source is the tagged commit on GitHub, and
+`Cargo.lock` pins the exact dependency versions.
+
+Releases do not ship dependency source, because none of the allowed licenses require
+it: every license in the checker's allowlist is permissive, and where LGPL is offered
+as an alternative, MIT is selected. **A dependency whose license requires source
+distribution (for example MPL-2.0, or (L)GPL without a permissive alternative) must
+not be added without revisiting this decision.** The license checker's allowlist
+rejects these today.
 CI uploads one runnable development build (`elevenclock-dev-x64`) for testing, and
 test evidence (screenshots, JSON, logs) only when a run fails; neither is a release
 package or installer.

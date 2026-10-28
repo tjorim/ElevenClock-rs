@@ -11,6 +11,8 @@ fn environment() -> Environment {
         windows: "10.0.26200.6899 (25H2)".into(),
         os_architecture: "x64".into(),
         app_architecture: "x64".into(),
+        managed: false,
+        startup: StartupKind::Off,
     }
 }
 fn generated() -> DateTime<Utc> {
@@ -135,6 +137,8 @@ App version: 0.1.0
 App commit: 482dd5f0a1b2
 Windows: 10.0.26200.6899 (25H2)
 Architecture: Windows x64, app x64
+Managed: no
+Startup: off
 
 Clock replacement: Active on some taskbars
 Summary: The ElevenClock-rs clock is showing on 1 of 2 taskbars. The Windows clock remains on the others. Taskbar 2: ElevenClock-rs could not verify where the Windows clock is on this taskbar, so it leaves the Windows clock alone. This Windows version may not be supported yet.
@@ -291,6 +295,39 @@ fn status_text_leads_with_version_and_windows_build() {
     let text = status_text(&environment(), &diagnostics(vec![visible(1)]));
     assert!(text.starts_with("ElevenClock-rs version 0.1.0\nWindows 10.0.26200.6899 (25H2)\n"));
     assert!(text.contains("Status: Active\n"));
+}
+
+#[test]
+fn a_managed_copy_says_so_next_to_the_version_and_in_the_report() {
+    let mut managed = environment();
+    managed.managed = true;
+    managed.startup = StartupKind::Launcher;
+    let d = diagnostics(vec![visible(1)]);
+    assert!(
+        status_text(&managed, &d)
+            .starts_with("ElevenClock-rs version 0.1.0 (managed by your organization)\n")
+    );
+    let text = report(&managed, &d, generated());
+    assert!(
+        text.contains("\nManaged: yes\nStartup: launcher\n"),
+        "{text}"
+    );
+}
+
+#[test]
+fn the_startup_line_never_carries_a_path() {
+    for kind in [
+        StartupKind::Off,
+        StartupKind::App,
+        StartupKind::Launcher,
+        StartupKind::Stale,
+    ] {
+        let mut e = environment();
+        e.startup = kind;
+        let text = report(&e, &diagnostics(vec![visible(1)]), generated());
+        assert!(text.contains(&format!("Startup: {}\n", kind.label())));
+        assert!(!text.contains('\\'), "{text}");
+    }
 }
 
 // ---- refresh and clipboard -------------------------------------------------------

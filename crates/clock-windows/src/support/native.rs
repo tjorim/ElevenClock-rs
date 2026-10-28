@@ -7,6 +7,7 @@ use crate::bindings::{
     PROCESSOR_ARCHITECTURE_ARM64, PROCESSOR_ARCHITECTURE_INTEL, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
     RegGetValueW, SYSTEM_INFO, SetClipboardData,
 };
+use crate::startup::StartupKind;
 use std::{thread, time::Duration};
 use windows_core::{PCWSTR, w};
 
@@ -207,6 +208,9 @@ pub fn detect_environment() -> Environment {
         ),
         os_architecture: os_architecture().to_owned(),
         app_architecture: app_architecture().to_owned(),
+        managed: crate::managed::detect(),
+        // The Startup page fills this in from the registry when it is shown.
+        startup: StartupKind::Off,
     }
 }
 

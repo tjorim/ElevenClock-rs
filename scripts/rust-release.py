@@ -14,6 +14,26 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = "x86_64-pc-windows-msvc"
+PORTABLE_FOLDER = "ElevenClock-rs"
+# Each artifact type gets its own readme, shipped as README.txt.
+README_SOURCES = {
+    "installer": "packaging/INSTALLER-README.txt",
+    "portable": "packaging/PORTABLE-README.txt",
+    "managed": "packaging/MANAGED-README.txt",
+}
+APP_EXE = "elevenclock-rs.exe"
+# The managed launcher (ADR 0004) ships only in the managed ZIP.
+LAUNCHER_EXE = "elevenclock-rs-launcher.exe"
+RAW_LAUNCHER = f"launcher/{LAUNCHER_EXE}"
+PORTABLE_FILES = {
+    f"{PORTABLE_FOLDER}/{file}" for file in (
+        APP_EXE, "README.txt", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "RUST-COPYRIGHT.html",
+    )
+}
+# The managed ZIP is the portable ZIP plus the launcher: the same app executable.
+MANAGED_FILES = PORTABLE_FILES | {f"{PORTABLE_FOLDER}/{LAUNCHER_EXE}"}
+# The launcher only copies files: it must never be able to reach a network.
+NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsock32.dll"}
 # In-box DLLs the release executable imports, besides api-ms-win-* API sets. Keep
 # this to what is actually imported: a new entry is a reviewed native dependency.
 SYSTEM_DLLS = {
@@ -21,6 +41,9 @@ SYSTEM_DLLS = {
     "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll",
     "uiautomationcore.dll", "user32.dll", "wtsapi32.dll",
 }
+
+
+ARCHIVE_SUFFIXES = ("-portable.zip", "-managed.zip", "-setup.exe")
 
 
 def run(*args):
@@ -35,8 +58,9 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def inspect_pe(data):
-    """Read the PE32+ import table without executing the candidate."""
+def inspect_pe(data, forbidden=()):
+    """Read the PE32+ import table without executing the candidate. Names in `forbidden`
+    are refused even if they would otherwise be an in-box system DLL."""
     if data[:2] != b"MZ":
         raise ValueError("Not a PE executable")
     pe = struct.unpack_from("<I", data, 0x3C)[0]
@@ -78,6 +102,8 @@ def inspect_pe(data):
         imports.add(data[name:data.index(b"\0", name)].decode("ascii").lower())
         pos += 20
     for name in sorted(imports):
+        if name in forbidden:
+            raise ValueError(f"Forbidden native dependency: {name}")
         api_set = name.startswith(("api-ms-win-", "ext-ms-win-")) and name.endswith(".dll")
         if "crt" in name or name.startswith(("msvcp", "vcruntime")):
             raise ValueError(f"Dynamic CRT dependency is forbidden: {name}")
@@ -91,7 +117,7 @@ def zip_tree(source, destination):
         for file in sorted(source.rglob("*")):
             if file.is_file():
                 if file.is_symlink():
-                    raise ValueError(f"Refusing source symlink: {file}")
+                    raise ValueError(f"Refusing symlink: {file}")
                 archive.write(file, file.relative_to(source).as_posix())
 
 
@@ -105,15 +131,20 @@ def prepare(out, mode):
         if dirty:
             raise ValueError("Distribution requires a clean source checkout")
         # Development checkouts may carry blocked wording; a release must not.
-        if "Distribution is blocked" in (ROOT / "packaging/PACKAGE-README.txt").read_text():
-            raise ValueError("Distribution requires reviewed release notice wording")
+        for readme in README_SOURCES.values():
+            if "Distribution is blocked" in (ROOT / readme).read_text():
+                raise ValueError("Distribution requires reviewed release notice wording")
     out.mkdir(parents=True)
+    # The installer payload is flat; the portable ZIP is zipped from its parent so
+    # that everything extracts into one ElevenClock-rs folder.
     payload = out / "payload"
     payload.mkdir()
+    portable = out / "portable" / PORTABLE_FOLDER
+    portable.mkdir(parents=True)
+    managed = out / "managed" / PORTABLE_FOLDER
+    managed.mkdir(parents=True)
     symbols = out / "symbols"
     symbols.mkdir()
-    source = out / "source"
-    source.mkdir()
     version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
     if mode == "Distribution":
         name = f"ElevenClock-rs-{version}-x64"
@@ -121,14 +152,14 @@ def prepare(out, mode):
         name = f"ElevenClock-rs-{version}-{run('git', 'rev-parse', '--short=12', 'HEAD')}-x64-dev"
     binary_dir = ROOT / "target/packaging" / TARGET / "release"
     binary = binary_dir / "elevenclock-rs.exe"
-    imports = inspect_pe(binary.read_bytes())
-    shutil.copy2(binary, payload / binary.name)
-    pdb = binary_dir / "elevenclock_rs.pdb"
-    if not pdb.is_file():
-        raise ValueError("Missing release PDB")
-    shutil.copy2(pdb, symbols / pdb.name)
-    shutil.copy2(ROOT / "LICENSE", payload / "LICENSE.txt")
-    shutil.copy2(ROOT / "packaging/PACKAGE-README.txt", payload / "PACKAGE-README.txt")
+    inspect_pe(binary.read_bytes())  # Build-time gate: fails on an unreviewed or CRT import.
+    launcher = binary_dir / LAUNCHER_EXE
+    # Same gate, plus: the launcher has no network imports.
+    inspect_pe(launcher.read_bytes(), forbidden=NETWORK_DLLS)
+    for pdb in ("elevenclock_rs.pdb", "elevenclock_rs_launcher.pdb"):
+        if not (binary_dir / pdb).is_file():
+            raise ValueError(f"Missing release PDB: {pdb}")
+        shutil.copy2(binary_dir / pdb, symbols / pdb)
     spec = importlib.util.spec_from_file_location("license_check", ROOT / "scripts/rust-license-check.py")
     checker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(checker)
@@ -136,59 +167,29 @@ def prepare(out, mode):
     notices = io.StringIO()
     if checker.inventory(metadata, out=notices):
         raise ValueError("Dependency license inventory failed")
-    (payload / "THIRD-PARTY-NOTICES.txt").write_text(notices.getvalue(), encoding="utf-8")
     rust_docs = Path(run("rustc", "--print", "sysroot")) / "share/doc/rust"
-    shutil.copy2(rust_docs / "COPYRIGHT.html", payload / "RUST-COPYRIGHT.html")
-    # Exact working sources, including uncommitted development changes, instead of
-    # falsely labelling git archive HEAD as the source of a modified binary.
-    files = run("git", "ls-files", "--cached", "--others", "--exclude-standard", "-z").split("\0")
-    source_hashes = {}
-    for relative in sorted(set(files)):
-        if not relative:
-            continue
-        file = ROOT / relative
-        if not file.exists():
-            continue  # A tracked deletion is absent from this exact source snapshot.
-        if not file.is_file() or file.is_symlink() or not file.resolve().is_relative_to(ROOT):
-            raise ValueError(f"Unsupported source entry: {relative}")
-        target = source / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(file, target)
-        source_hashes[relative] = digest(file)
-    # Matching-source companion: include locked dependency sources and
-    # Cargo's exact offline replacement config, rather than only a GitHub URL.
-    config = run("cargo", "vendor", "--locked", "--offline", "--versioned-dirs", str(source / "vendor"))
-    # Cargo emits an absolute path; make the source archive relocatable.
-    config = config.replace(str(source / "vendor").replace("\\", "\\\\"), "vendor")
-    config = config.replace((source / "vendor").as_posix(), "vendor")
-    (source / ".cargo").mkdir(exist_ok=True)
-    (source / ".cargo/config.toml").write_text(config + "\n", encoding="utf-8")
-    write_json(source / "source-files.json", source_hashes)
-    write_json(payload / "runtime-dependencies.json", {
-        "target": TARGET, "crt": "static", "direct_imports": imports,
-        "note": "Import inspection does not prove clean-machine execution or runtime-loaded system components.",
-    })
-    provenance = {
-        "version": version, "commit": run("git", "rev-parse", "HEAD"),
-        "modified": dirty, "mode": mode, "target": TARGET,
-        "rustc": run("rustc", "-Vv"), "cargo": run("cargo", "-V"),
-        "rustflags": "-C target-feature=+crt-static", "signing": "unsigned",
-        "exe_sha256": digest(binary), "lock_sha256": digest(ROOT / "Cargo.lock"),
-        "source_manifest_sha256": digest(source / "source-files.json"),
-        "source_archive": name + "-source.zip",
-    }
-    for directory in (payload, symbols, source):
-        write_json(directory / "provenance.json", provenance)
-    zip_tree(source, out / (name + "-source.zip"))
-    zip_tree(payload, out / (name + "-portable.zip"))
+    for directory, readme in (
+        (payload, README_SOURCES["installer"]), (portable, README_SOURCES["portable"]),
+        (managed, README_SOURCES["managed"]),
+    ):
+        shutil.copy2(binary, directory / binary.name)
+        shutil.copy2(ROOT / "LICENSE", directory / "LICENSE.txt")
+        shutil.copy2(ROOT / readme, directory / "README.txt")
+        (directory / "THIRD-PARTY-NOTICES.txt").write_text(notices.getvalue(), encoding="utf-8")
+        shutil.copy2(rust_docs / "COPYRIGHT.html", directory / "RUST-COPYRIGHT.html")
+    shutil.copy2(launcher, managed / LAUNCHER_EXE)
+    (out / "launcher").mkdir()
+    shutil.copy2(launcher, out / RAW_LAUNCHER)
+    zip_tree(out / "portable", out / (name + "-portable.zip"))
+    zip_tree(out / "managed", out / (name + "-managed.zip"))
     write_json(out / "package.json", {"name": name, "version": version})
 
 
 def finish(out):
     package = json.loads((out / "package.json").read_text())
     name = package["name"]
-    required = [out / (name + suffix) for suffix in ("-source.zip", "-portable.zip", "-setup.exe")]
-    required += [out / "payload/elevenclock-rs.exe"]
+    required = [out / (name + suffix) for suffix in ARCHIVE_SUFFIXES]
+    required += [out / "payload" / APP_EXE, out / RAW_LAUNCHER]
     for file in required:
         if not file.is_file():
             raise ValueError(f"Missing artifact: {file}")
@@ -206,8 +207,8 @@ def finish(out):
 def verify(out):
     package = json.loads((out / "package.json").read_text())
     name = package["name"]
-    expected = {name + suffix for suffix in ("-source.zip", "-portable.zip", "-setup.exe")}
-    expected.add("payload/elevenclock-rs.exe")
+    expected = {name + suffix for suffix in ARCHIVE_SUFFIXES}
+    expected |= {f"payload/{APP_EXE}", RAW_LAUNCHER}
     hashes = {}
     for line in (out / "SHA256SUMS.txt").read_text().splitlines():
         sha, relative = line.split("  ", 1)
@@ -219,23 +220,24 @@ def verify(out):
     if set(hashes) != expected:
         raise ValueError("Incomplete artifact checksums")
     with zipfile.ZipFile(out / (name + "-portable.zip")) as archive:
-        allowed = {"elevenclock-rs.exe", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt",
-                   "RUST-COPYRIGHT.html", "provenance.json", "runtime-dependencies.json", "PACKAGE-README.txt"}
-        if set(archive.namelist()) != allowed or len(archive.namelist()) != len(allowed):
+        if set(archive.namelist()) != PORTABLE_FILES or len(archive.namelist()) != len(PORTABLE_FILES):
             raise ValueError("Portable ZIP file allowlist differs")
-        if hashlib.sha256(archive.read("elevenclock-rs.exe")).hexdigest() != hashes["payload/elevenclock-rs.exe"]:
+        executable = archive.read(f"{PORTABLE_FOLDER}/{APP_EXE}")
+        if hashlib.sha256(executable).hexdigest() != hashes[f"payload/{APP_EXE}"]:
             raise ValueError("Portable executable differs from checksummed executable")
-        provenance = json.loads(archive.read("provenance.json"))
-    with zipfile.ZipFile(out / (name + "-source.zip")) as archive:
-        manifest = archive.read("source-files.json")
-        if hashlib.sha256(manifest).hexdigest() != provenance["source_manifest_sha256"]:
-            raise ValueError("Source manifest does not match binary provenance")
-        for relative, sha in json.loads(manifest).items():
-            if hashlib.sha256(archive.read(relative)).hexdigest() != sha:
-                raise ValueError(f"Source file differs from manifest: {relative}")
-        config = tomllib.loads(archive.read(".cargo/config.toml").decode())
-        if config["source"]["vendored-sources"]["directory"] != "vendor":
-            raise ValueError("Source vendor config is not relocatable")
+        # The shipped bytes must still pass the import and CRT gate.
+        inspect_pe(executable)
+    with zipfile.ZipFile(out / (name + "-managed.zip")) as archive:
+        if set(archive.namelist()) != MANAGED_FILES or len(archive.namelist()) != len(MANAGED_FILES):
+            raise ValueError("Managed ZIP file allowlist differs")
+        # One app executable everywhere: setup payload, portable ZIP and managed ZIP.
+        executable = archive.read(f"{PORTABLE_FOLDER}/{APP_EXE}")
+        if hashlib.sha256(executable).hexdigest() != hashes[f"payload/{APP_EXE}"]:
+            raise ValueError("Managed ZIP app executable differs from the portable and setup executable")
+        launcher = archive.read(f"{PORTABLE_FOLDER}/{LAUNCHER_EXE}")
+        if hashlib.sha256(launcher).hexdigest() != hashes[RAW_LAUNCHER]:
+            raise ValueError("Managed ZIP launcher differs from checksummed launcher")
+        inspect_pe(launcher, forbidden=NETWORK_DLLS)
 
 
 def main():

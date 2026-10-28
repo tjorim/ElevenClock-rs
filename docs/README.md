@@ -9,6 +9,7 @@ renders them, with relative links rewritten to the published pages, and
 | Folder / file | What it is | Changes when |
 | --- | --- | --- |
 | [`migration.md`](migration.md) | Moving from the Python ElevenClock, removed features, rollback and where the legacy code and development history live in Git | Support or the legacy reference changes |
+| [`managed-deployment.md`](managed-deployment.md) | Admin guide for the managed ZIP: central share, rollout, updates, offline behavior, removal and troubleshooting | The launcher or managed packaging changes |
 | [`tested-configurations.md`](tested-configurations.md) | What has been run on real Windows, resource use and known limitations | Something new is tested |
 | [`contributing.md`](contributing.md) | Workspace layout, commands, CI and the contracts contributors must keep | The workflow changes |
 | [`dependencies.md`](dependencies.md), [`dependency-notices/`](dependency-notices) | Dependency policy and bundled third-party notices | A dependency is added, removed or updated |

@@ -14,6 +14,7 @@ pub use settings::{PlatformError, SettingsWindow};
 pub mod overlay;
 
 pub mod logging;
+pub mod managed;
 pub mod preferences_store;
 pub mod settings_model;
 pub mod startup;

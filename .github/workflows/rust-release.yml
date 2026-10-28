@@ -17,6 +17,7 @@ on:
       - 'scripts/rust-license-check.py'
       - 'scripts/test-rust-license-check.py'
       - 'scripts/test-rust-installer.ps1'
+      - 'scripts/test-rust-managed.ps1'
       - '.github/workflows/rust-release.yml'
       - '.gitattributes'
       - 'LICENSE'
@@ -86,13 +87,13 @@ jobs:
           path: |
             dist/candidate/*-setup.exe
             dist/candidate/*-portable.zip
-            dist/candidate/*-source.zip
+            dist/candidate/*-managed.zip
             dist/candidate/SHA256SUMS.txt
             dist/candidate/payload/elevenclock-rs.exe
+            dist/candidate/launcher/elevenclock-rs-launcher.exe
       - uses: actions/upload-artifact@v7
         with:
           name: elevenclock-rs-x64-debug-symbols
-          retention-days: 30
           if-no-files-found: error
           path: dist/candidate/symbols/
       - uses: actions/upload-artifact@v7
@@ -102,8 +103,30 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           path: native-evidence/packaging/
-  publish:
+  # The managed ZIP (ADR 0004) in its own disposable runner: it uses the same install
+  # folder and private data as the installer lifecycle above.
+  managed:
     needs: package
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: elevenclock-rs-unsigned-x64-candidate
+          path: dist/candidate
+      - name: Managed launcher, managed mode, startup and installer refusal (disposable hosted account)
+        shell: powershell
+        run: ./scripts/test-rust-managed.ps1 -DisposableAccount
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: windows-managed-evidence
+          retention-days: 30
+          if-no-files-found: warn
+          path: native-evidence/managed/
+  publish:
+    needs: [package, managed]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -114,10 +137,6 @@ jobs:
         with:
           name: elevenclock-rs-unsigned-x64-candidate
           path: release
-      - uses: actions/download-artifact@v8
-        with:
-          name: elevenclock-rs-x64-debug-symbols
-          path: symbols
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,12 +144,15 @@ jobs:
         run: |
           set -euo pipefail
           name="ElevenClock-rs-${TAG#v}-x64"
-          (cd symbols && zip -q -r "../release/$name-symbols.zip" .)
           cat > notes.md <<NOTES
           Download \`$name-setup.exe\` to install for your account (no administrator
           rights needed), or \`$name-portable.zip\` to run without installing.
+          Companies deploying from a central location use \`$name-managed.zip\`: the same
+          app plus a launcher that keeps each user's local copy up to date (it does not
+          install, and cannot be combined with the installer on one account).
           Requires stock Windows 11 x64. The files are not code-signed, so Windows may
           warn about the download. Verify downloads against \`SHA256SUMS.txt\`.
+          The source is the tagged commit; GitHub attaches it below.
 
           See the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/README.md)
           for usage, and the [migration guide](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/migration.md)
@@ -141,4 +163,4 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "ElevenClock-rs ${TAG#v}" --notes-file notes.md \
             "release/$name-setup.exe" "release/$name-portable.zip" \
-            "release/$name-source.zip" "release/$name-symbols.zip" release/SHA256SUMS.txt
+            "release/$name-managed.zip" release/SHA256SUMS.txt
