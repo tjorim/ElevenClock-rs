@@ -12,7 +12,7 @@ untouched.
 | `Runtime<P: Platform>` | `clock-windows/src/runtime.rs` | Single coordinator between platform inputs and the core reducer. No second state machine. Pure of OS access; 30 deterministic tests with a scripted platform (plus shell, protocol, gate, candidate, event and time tests). |
 | `NativePlatform`, `run` | `runtime/native.rs`, `runtime/overlay_window.rs` | One UI thread: hidden top-level host window, `SetTimer` one-shots, WinEvent hooks, session notifications, overlay windows, Direct2D, Settings dialog. |
 | `events` | `events.rs`, `events/native.rs` | Window message / WinEvent → `Signal`; coalescing `Pending`; bounded `TransitionPoll`. Callbacks only queue. |
-| `instance` | `instance.rs`, `instance/native.rs` | `Local\ElevenClock.Instance.<SID>` mutex, `HOST_CLASS`/title lookup, `WM_SHOW_SETTINGS`, `Role`/`LaunchMode`. |
+| `instance` | `instance.rs`, `instance/native.rs` | `Local\ElevenClock-rs.Instance.<SID>` mutex, `HOST_CLASS`/title lookup, `WM_SHOW_SETTINGS`, `Role`/`LaunchMode`. |
 | `taskbar::{protocol,worker,helper,candidate}` | `taskbar/` | Wire contract, supervised worker, same-executable helper, candidate selection. See [ADR 0002](../adr/0002-same-executable-discovery-helper.md). |
 | `clock_time` | `clock_time.rs` | One fresh zone/DST-resolved `DateTime<FixedOffset>` per update. |
 | App lifecycle | `clock-app/src/app.rs`, `settings.rs`, `settings.rc` | Modeless Settings; close keeps running; **Exit** button; second launch focuses. |

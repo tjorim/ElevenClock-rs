@@ -17,7 +17,8 @@ reset first-run state. `complete_first_run()` persists internal onboarding state
 login startup is deliberately absent and remains owned by Windows ([startup](startup.md)).
 
 The production store resolves `FOLDERID_LocalAppData` with
-`SHGetKnownFolderPath`, then uses a dedicated `ElevenClockRust` directory. It
+`SHGetKnownFolderPath`, then uses a dedicated `ElevenClock-rs` directory, which holds `preferences.dat` and
+the bounded logs. It
 never consults legacy `.elevenclock` preferences, HOME, command arguments or an
 environment override. The directory inherits the current user's LocalAppData
 ACLs; the app is standard-user and makes no cross-user store. This is private
