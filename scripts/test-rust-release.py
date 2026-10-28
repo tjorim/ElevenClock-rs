@@ -1,4 +1,5 @@
 """Regression tests for binary and packaging checks, without running an app."""
+import hashlib
 import importlib.util
 from pathlib import Path
 import struct
@@ -77,7 +78,9 @@ class Gates(unittest.TestCase):
         files[f"{release.PORTABLE_FOLDER}/elevenclock-rs.exe"] = exe
         if managed is None:
             managed = {name: b"text" for name in release.MANAGED_FILES}
-            managed[f"{release.PORTABLE_FOLDER}/elevenclock-rs.exe"] = exe
+            managed[f"{release.PORTABLE_FOLDER}/elevenclock-rs.data"] = exe
+            managed[f"{release.PORTABLE_FOLDER}/SHA256SUMS.txt"] = (
+                f"{hashlib.sha256(exe).hexdigest()}  elevenclock-rs.data\n".encode())
             managed[f"{release.PORTABLE_FOLDER}/elevenclock-rs-launcher.exe"] = launcher
         release.write_json(root / "package.json", {"name": "candidate"})
         for suffix, contents in (("portable", files), ("managed", managed)):
@@ -134,9 +137,12 @@ class Gates(unittest.TestCase):
                 release.verify(root)
 
 
-    def test_managed_zip_is_the_portable_folder_plus_the_launcher(self):
-        self.assertEqual(release.MANAGED_FILES - release.PORTABLE_FILES, {"ElevenClock-rs/elevenclock-rs-launcher.exe"})
-        self.assertFalse(release.PORTABLE_FILES - release.MANAGED_FILES)
+    def test_managed_zip_is_the_portable_folder_plus_the_launcher_with_a_data_app(self):
+        self.assertEqual(release.MANAGED_FILES - release.PORTABLE_FILES, {
+            "ElevenClock-rs/elevenclock-rs-launcher.exe", "ElevenClock-rs/elevenclock-rs.data",
+            "ElevenClock-rs/SHA256SUMS.txt",
+        })
+        self.assertEqual(release.PORTABLE_FILES - release.MANAGED_FILES, {"ElevenClock-rs/elevenclock-rs.exe"})
 
     def test_verify_rejects_a_managed_zip_with_other_files(self):
         base = {name: b"text" for name in release.MANAGED_FILES}
@@ -157,11 +163,28 @@ class Gates(unittest.TestCase):
             other = bytes(pe(b"USER32.dll"))
             with zipfile.ZipFile(root / "candidate-managed.zip", "w") as archive:
                 for name in release.MANAGED_FILES:
-                    archive.writestr(name, other if name.endswith("/elevenclock-rs.exe") else (
+                    archive.writestr(name, other if name.endswith("/elevenclock-rs.data") else (
                         bytes(pe()) if name.endswith("-launcher.exe") else b"text"))
             release.finish(root)
             with self.assertRaisesRegex(ValueError, "Managed ZIP app executable"):
                 release.verify(root)
+
+    def test_verify_rejects_a_managed_zip_whose_checksum_list_is_stale(self):
+        for label, sums in (
+            ("other hash", b"0" * 64 + b"  elevenclock-rs.data\n"),
+            ("other name", None),
+        ):
+            with self.subTest(label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                exe = bytes(pe())
+                managed = {name: b"text" for name in release.MANAGED_FILES}
+                managed["ElevenClock-rs/elevenclock-rs.data"] = exe
+                managed["ElevenClock-rs/elevenclock-rs-launcher.exe"] = bytes(pe())
+                managed["ElevenClock-rs/SHA256SUMS.txt"] = sums or (
+                    f"{hashlib.sha256(exe).hexdigest()}  elevenclock-rs.exe\n".encode())
+                self.package(root, managed=managed)
+                with self.assertRaisesRegex(ValueError, "SHA256SUMS.txt does not list"):
+                    release.verify(root)
 
     def test_launcher_must_not_import_the_network(self):
         release.inspect_pe(pe(b"KERNEL32.dll"), forbidden=release.NETWORK_DLLS)

@@ -5,12 +5,15 @@ Windows 11 x64). The executables are not code-signed, so Windows may warn about
 the download.
 
 What this package is
-  The same elevenclock-rs.exe as the installer and the portable ZIP, plus
-  elevenclock-rs-launcher.exe. Put the ElevenClock-rs folder on a central location,
+  The same app as the installer and the portable ZIP, plus
+  elevenclock-rs-launcher.exe. The app is stored as elevenclock-rs.data so that
+  nobody starts it from the share by accident; the launcher copies it to the user's
+  machine as elevenclock-rs.exe. Put the ElevenClock-rs folder on a central location,
   such as a file share. Users start elevenclock-rs-launcher.exe from there (for
   example through a shortcut). The launcher copies the app to the user's own
   %LOCALAPPDATA%\Programs\ElevenClock-rs, starts that local copy and exits. The app
-  never runs from the share.
+  never runs from the share. SHA256SUMS.txt lists the hash of the app; the launcher
+  refuses an app that does not match it, so replace both files together.
 
 Updating
   Replace the files in the central folder. Each user's copy is refreshed the next

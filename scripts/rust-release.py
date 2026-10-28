@@ -30,8 +30,15 @@ PORTABLE_FILES = {
         APP_EXE, "README.txt", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "RUST-COPYRIGHT.html",
     )
 }
-# The managed ZIP is the portable ZIP plus the launcher: the same app executable.
-MANAGED_FILES = PORTABLE_FILES | {f"{PORTABLE_FOLDER}/{LAUNCHER_EXE}"}
+# The managed ZIP is the portable ZIP plus the launcher, with the same app bytes stored
+# as .data: users who open the central folder cannot start the app from the share by
+# accident, and the launcher accepts that name.
+MANAGED_APP = "elevenclock-rs.data"
+# SHA256SUMS.txt lists the app, so the launcher refuses a truncated or swapped copy.
+MANAGED_SUMS = "SHA256SUMS.txt"
+MANAGED_FILES = (PORTABLE_FILES - {f"{PORTABLE_FOLDER}/{APP_EXE}"}) | {
+    f"{PORTABLE_FOLDER}/{name}" for name in (MANAGED_APP, LAUNCHER_EXE, MANAGED_SUMS)
+}
 # The launcher only copies files: it must never be able to reach a network.
 NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsock32.dll"}
 # In-box DLLs the release executable imports, besides api-ms-win-* API sets. Keep
@@ -52,6 +59,10 @@ def run(*args):
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def managed_sums(app):
+    return f"{digest(app)}  {app.name}\n"
 
 
 def write_json(path, value):
@@ -177,6 +188,8 @@ def prepare(out, mode):
         shutil.copy2(ROOT / readme, directory / "README.txt")
         (directory / "THIRD-PARTY-NOTICES.txt").write_text(notices.getvalue(), encoding="utf-8")
         shutil.copy2(rust_docs / "COPYRIGHT.html", directory / "RUST-COPYRIGHT.html")
+    (managed / APP_EXE).rename(managed / MANAGED_APP)
+    (managed / MANAGED_SUMS).write_text(managed_sums(managed / MANAGED_APP), encoding="utf-8")
     shutil.copy2(launcher, managed / LAUNCHER_EXE)
     (out / "launcher").mkdir()
     shutil.copy2(launcher, out / RAW_LAUNCHER)
@@ -230,10 +243,14 @@ def verify(out):
     with zipfile.ZipFile(out / (name + "-managed.zip")) as archive:
         if set(archive.namelist()) != MANAGED_FILES or len(archive.namelist()) != len(MANAGED_FILES):
             raise ValueError("Managed ZIP file allowlist differs")
-        # One app executable everywhere: setup payload, portable ZIP and managed ZIP.
-        executable = archive.read(f"{PORTABLE_FOLDER}/{APP_EXE}")
+        # One app executable everywhere: setup payload, portable ZIP and managed ZIP
+        # (the latter stores it as .data).
+        executable = archive.read(f"{PORTABLE_FOLDER}/{MANAGED_APP}")
         if hashlib.sha256(executable).hexdigest() != hashes[f"payload/{APP_EXE}"]:
             raise ValueError("Managed ZIP app executable differs from the portable and setup executable")
+        sums = archive.read(f"{PORTABLE_FOLDER}/{MANAGED_SUMS}").decode("utf-8")
+        if sums != f"{hashlib.sha256(executable).hexdigest()}  {MANAGED_APP}\n":
+            raise ValueError("Managed ZIP SHA256SUMS.txt does not list its app executable")
         launcher = archive.read(f"{PORTABLE_FOLDER}/{LAUNCHER_EXE}")
         if hashlib.sha256(launcher).hexdigest() != hashes[RAW_LAUNCHER]:
             raise ValueError("Managed ZIP launcher differs from checksummed launcher")
