@@ -42,9 +42,11 @@ Removed, with no replacement planned:
 - Choosing a font, custom colours, background tints and opacity. The clock uses the
   Windows UI font and follows the taskbar's colours.
 - Translations: the app is in English only.
-- In-app installation, automatic update checks, update notifications and telemetry.
-  Self-managed copies can manually **Check now** in Settings and open the release
-  page; update installation remains manual. Managed copies use their launcher.
+- In-app installation and telemetry. Self-managed copies can **Check now** or
+  opt into **Check for updates automatically** in Settings (off by default,
+  including upgrades). Automatic checks offer one tray notification per newer
+  version; clicking opens its release page. Installation remains manual.
+  Managed copies use their launcher and have no GitHub update checks.
 - Importing settings from the original app.
 
 ## Supported Windows

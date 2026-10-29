@@ -6,7 +6,7 @@
 integer pt and the format string, normalizing CRLF. `ValidatedPreferences` has
 private fields and carries the compiled format. Runtime consumers borrow it;
 `draft()` returns a separate editable copy. Initial preferences are primary,
-9 pt, system theme and `%H:%M\n%g%V.%u`.
+9 pt, system theme, automatic update checks off and `%H:%M\n%g%V.%u`.
 
 `clock-windows::preferences_store::PreferenceSession` loads safe defaults on
 missing data or an error. `load_error()` is the recoverable Settings status.
@@ -28,9 +28,12 @@ manual-edit interface.
 
 Maintained Serde + serde_json provide a compact internal UTF-8 encoding with a
 version envelope. Reads are capped at 64 KiB; typed payload validation rejects
-unknown fields, missing fields, invalid enums, bounds and formats. Version 1 is
-initial; no older rewrite encoding exists, and no legacy import is supported.
-Future migrations must be explicit and preserve their input before commit.
+unknown fields, missing fields, invalid enums, bounds and formats. Version 2
+is the current writer; version 1 remains readable. No legacy import is supported. Version 1 migration copies and flushes the original before atomically
+committing version 2. It retains format, monitors, font, theme and onboarding;
+`update_check_enabled` is false and the update history starts empty. A failed
+preservation or commit leaves the original intact, retains the old clock values
+with checks off, and blocks background writes until recovery in Settings.
 Unsupported versions (including newer versions) are detected before decoding
 version-specific fields, preserved and blocked from all save/recovery actions.
 
@@ -73,11 +76,20 @@ regenerate compatibility inputs from the encoder under test. Fixtures contain no
 real user data. Add a fixture when extending the persisted contract, including
 relevant enum/optional-field cases; ordinary same-format UI changes need none.
 
-Version 1 remains the only supported encoding. There is no migration framework.
-Before changing the format, specify whether old files can be read, the version
-bump and exact upgrade transformation, defaults for added fields, and what a user
-rolling back the executable will see. A migration must preserve its original input
-before committing and publish active values only after a successful save. Retain
+Version 2 adds the editable `update_check_enabled` flag and private update history:
+`last_update_check` (UTC epoch seconds or none), `last_notified_version` (or none),
+and `backoff_until` (UTC epoch seconds). The `v2-defaults.json` and `v2-custom.json`
+fixtures record the expected migrated values; `v2-updates-enabled.json` records
+opt-in with nonempty attempt, notification and backoff state. The UI thread serializes background
+history commits and Settings Apply through the same session, preserving unsaved
+drafts and the latest committed opt-in. Attempt time is saved before dispatch;
+notification version is saved before the tray call. Failed saves prevent those
+actions. A future attempt time defers checks after clock rollback. Managed mode
+ignores the flag and keeps it intact, including when other Settings are applied.
+
+An older version-1 executable treats version 2 as unsupported and cannot save it;
+returning to this executable retains the version-2 data. A migration must preserve
+its original input before committing and publish active values only after a successful save. Retain
 fixtures for every supported source version and expected target, with tests for
 upgrade, interrupted/failed commit, reopening and rollback expectations. If older
 files become unsupported, document that explicitly rather than treating them as

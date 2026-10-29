@@ -3458,9 +3458,11 @@ pub struct MSG {
     pub pt: POINT,
 }
 pub const NIF_ICON: i32 = 2;
+pub const NIF_INFO: i32 = 16;
 pub const NIF_MESSAGE: i32 = 1;
 pub const NIF_SHOWTIP: i32 = 128;
 pub const NIF_TIP: i32 = 4;
+pub const NIIF_INFO: i32 = 1;
 pub const NIM_ADD: i32 = 0;
 pub const NIM_DELETE: i32 = 2;
 pub const NIM_MODIFY: i32 = 1;
@@ -3705,6 +3707,7 @@ pub const SW_RESTORE: i32 = 9;
 pub const SW_SHOW: i32 = 5;
 pub const SW_SHOWMINNOACTIVE: i32 = 7;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
+pub const SW_SHOWNORMAL: i32 = 1;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct SYSTEMTIME {

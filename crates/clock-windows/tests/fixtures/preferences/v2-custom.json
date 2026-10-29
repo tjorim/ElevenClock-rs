@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "format": "%Y-%m-%d %H:%M:%S",
+  "monitors": "all",
+  "font_size_pt": 24,
+  "theme": "dark",
+  "first_run_completed": true,
+  "update_check_enabled": false,
+  "updates": {
+    "last_update_check": null,
+    "last_notified_version": null,
+    "backoff_until": 0
+  }
+}

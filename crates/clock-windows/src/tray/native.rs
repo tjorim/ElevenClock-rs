@@ -16,6 +16,7 @@ pub struct Tray {
     icon: HICON,
     paused: bool,
     registered: bool,
+    release_url: Option<String>,
 }
 
 impl Tray {
@@ -26,6 +27,7 @@ impl Tray {
             icon,
             paused: false,
             registered: false,
+            release_url: None,
         }
     }
 
@@ -74,6 +76,54 @@ impl Tray {
             self.registered = added;
         }
         self.registered
+    }
+
+    /// Marker has already been committed before this call. Shell owns display
+    /// timing (including Do Not Disturb); the app never retries a balloon.
+    pub fn notify_update(&mut self, version: &str, url: &str) {
+        if crate::managed::detect() || !crate::update_check::valid_release_url(url) {
+            return;
+        }
+        let mut data = self.data();
+        data.uFlags = crate::bindings::NIF_INFO as u32;
+        let message = format!("ElevenClock-rs {version} is available");
+        for (slot, unit) in data.szInfo.iter_mut().take(255).zip(message.encode_utf16()) {
+            *slot = unit;
+        }
+        for (slot, unit) in data
+            .szInfoTitle
+            .iter_mut()
+            .zip("ElevenClock-rs update".encode_utf16())
+        {
+            *slot = unit;
+        }
+        data.dwInfoFlags = crate::bindings::NIIF_INFO as u32;
+        self.release_url = Some(url.to_owned());
+        // SAFETY: initialized structure and bounded NUL-terminated inline buffers;
+        // this call runs on the tray's owning UI thread.
+        unsafe {
+            let _ = Shell_NotifyIconW(NIM_MODIFY as u32, &data);
+        }
+    }
+    pub fn open_update(&self) {
+        if crate::managed::detect() {
+            return;
+        }
+        if let Some(url) = &self.release_url {
+            let url: Vec<u16> = url.encode_utf16().chain(Some(0)).collect();
+            // SAFETY: only a validated HTTPS release URL is retained. The owned
+            // NUL-terminated buffer lives through the synchronous shell call.
+            unsafe {
+                crate::bindings::ShellExecuteW(
+                    Some(self.host),
+                    windows_core::w!("open"),
+                    windows_core::PCWSTR(url.as_ptr()),
+                    None,
+                    None,
+                    crate::bindings::SW_SHOWNORMAL,
+                );
+            }
+        }
     }
 
     /// Update the tooltip for the replacement mode.

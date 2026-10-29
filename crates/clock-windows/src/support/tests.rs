@@ -12,6 +12,7 @@ fn environment() -> Environment {
         os_architecture: "x64".into(),
         app_architecture: "x64".into(),
         managed: false,
+        update_automatic: false,
         update_result: crate::update_check::ResultKind::NotChecked,
         startup: StartupKind::Off,
     }
@@ -448,4 +449,14 @@ fn update_diagnostics_expose_only_the_result_kind() {
             assert!(!text.contains(secret), "{text}");
         }
     }
+}
+
+#[test]
+fn automatic_mode_and_managed_override_are_bounded_diagnostics() {
+    let mut env = environment();
+    env.update_automatic = true;
+    let d = diagnostics(vec![visible(1)]);
+    assert!(report(&env, &d, generated()).contains("Update checks: automatic"));
+    env.managed = true;
+    assert!(report(&env, &d, generated()).contains("Update checks: disabled (managed)"));
 }

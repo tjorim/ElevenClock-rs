@@ -9,7 +9,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-const VERSION: u64 = 1;
+const VERSION: u64 = 2;
 const MAX_BYTES: u64 = 64 * 1024;
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -52,6 +52,8 @@ impl From<io::Error> for StoreError {
 pub struct StoredPreferences {
     preferences: ValidatedPreferences,
     first_run_completed: bool,
+    updates: UpdateHistory,
+    needs_migration: bool,
 }
 impl Default for StoredPreferences {
     fn default() -> Self {
@@ -60,8 +62,18 @@ impl Default for StoredPreferences {
                 .validate()
                 .expect("built-in defaults are valid"),
             first_run_completed: false,
+            updates: UpdateHistory::default(),
+            needs_migration: false,
         }
     }
+}
+/// Bounded private update state; timestamps are UTC epoch seconds.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateHistory {
+    pub last_update_check: Option<u64>,
+    pub last_notified_version: Option<String>,
+    pub backoff_until: u64,
 }
 /// Safe storage boundary. Implementations must leave prior data intact on failed save.
 /// Missing storage returns defaults. Recovery preserves the unreadable original.
@@ -77,9 +89,19 @@ pub struct PreferenceSession<S> {
     load_error: Option<StoreError>,
 }
 impl<S: PreferencesStore> PreferenceSession<S> {
-    pub fn open(store: S) -> Self {
+    pub fn open(mut store: S) -> Self {
         let (active, load_error) = match store.load() {
-            Ok(value) => (value, None),
+            Ok(mut value) => {
+                let error = if value.needs_migration {
+                    store.save(&value).err()
+                } else {
+                    None
+                };
+                if error.is_none() {
+                    value.needs_migration = false;
+                }
+                (value, error)
+            }
             Err(e) => (StoredPreferences::default(), Some(e)),
         };
         Self {
@@ -87,6 +109,20 @@ impl<S: PreferencesStore> PreferenceSession<S> {
             active,
             load_error,
         }
+    }
+    pub fn update_history(&self) -> &UpdateHistory {
+        &self.active.updates
+    }
+    /// Shares the Settings commit boundary; never publishes a failed write.
+    pub fn save_update_history(&mut self, updates: UpdateHistory) -> Result<(), StoreError> {
+        if self.load_error.is_some() {
+            return Err(StoreError::RecoveryRequired);
+        }
+        let mut next = self.active.clone();
+        next.updates = updates;
+        self.store.save(&next)?;
+        self.active = next;
+        Ok(())
     }
     pub fn active(&self) -> &ValidatedPreferences {
         &self.active.preferences
@@ -132,6 +168,8 @@ impl<S: PreferencesStore> PreferenceSession<S> {
         let next = StoredPreferences {
             preferences,
             first_run_completed,
+            updates: self.active.updates.clone(),
+            needs_migration: false,
         };
         self.store.save(&next)?;
         self.active = next;
@@ -182,6 +220,10 @@ struct Document {
     font_size_pt: i64,
     theme: String,
     first_run_completed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    update_check_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    updates: Option<UpdateHistory>,
 }
 fn decode(bytes: &[u8]) -> Result<StoredPreferences, StoreError> {
     // Read the version before decoding this version's fields, including when a newer
@@ -192,10 +234,22 @@ fn decode(bytes: &[u8]) -> Result<StoredPreferences, StoreError> {
         .get("version")
         .and_then(|v| v.as_u64())
         .ok_or(StoreError::DamagedData)?;
-    if version != VERSION {
+    if version != 1 && version != VERSION {
         return Err(StoreError::UnsupportedVersion(version));
     }
     let doc: Document = serde_json::from_slice(bytes).map_err(|_| StoreError::DamagedData)?;
+    if (version == 1 && (raw.get("update_check_enabled").is_some() || raw.get("updates").is_some()))
+        || (version == 2 && (doc.update_check_enabled.is_none() || doc.updates.is_none()))
+        || doc
+            .updates
+            .as_ref()
+            .and_then(|u| u.last_notified_version.as_ref())
+            .is_some_and(|v| {
+                v.len() > 256 || crate::update_check::version(v).is_none_or(|(_, pre)| pre)
+            })
+    {
+        return Err(StoreError::DamagedData);
+    }
     let preferences = (|| {
         Preferences {
             format: doc.format,
@@ -203,6 +257,7 @@ fn decode(bytes: &[u8]) -> Result<StoredPreferences, StoreError> {
             font_size_pt: u8::try_from(doc.font_size_pt)
                 .map_err(|_| PreferencesError::FontSizeOutOfRange(doc.font_size_pt))?,
             theme: Theme::try_from(doc.theme.as_str())?,
+            update_check_enabled: doc.update_check_enabled.unwrap_or(false),
         }
         .validate()
     })()
@@ -210,6 +265,8 @@ fn decode(bytes: &[u8]) -> Result<StoredPreferences, StoreError> {
     Ok(StoredPreferences {
         preferences,
         first_run_completed: doc.first_run_completed,
+        updates: doc.updates.unwrap_or_default(),
+        needs_migration: version == 1,
     })
 }
 fn encode(value: &StoredPreferences) -> Result<Vec<u8>, StoreError> {
@@ -230,6 +287,8 @@ fn encode(value: &StoredPreferences) -> Result<Vec<u8>, StoreError> {
         }
         .into(),
         first_run_completed: value.first_run_completed,
+        update_check_enabled: Some(p.update_check_enabled()),
+        updates: Some(value.updates.clone()),
     })
     .map_err(|_| StoreError::DamagedData)
 }
@@ -290,14 +349,20 @@ impl PreferencesStore for LocalPreferencesStore {
     }
     fn save(&mut self, value: &StoredPreferences) -> Result<(), StoreError> {
         // Also guard direct trait callers, rather than relying only on a session.
-        match self.load() {
+        let migration_required = match self.load() {
             Err(StoreError::UnsupportedVersion(v)) => {
                 return Err(StoreError::UnsupportedVersion(v));
             }
             Err(StoreError::DamagedData | StoreError::InvalidPreferences(_))
-                if self.recovery_save_allowed => {}
+                if self.recovery_save_allowed =>
+            {
+                false
+            }
             Err(e) => return Err(e),
-            Ok(_) => (),
+            Ok(value) => value.needs_migration,
+        };
+        if migration_required {
+            self.preserve_for_recovery()?;
         }
         self.recovery_save_allowed = false;
         self.write(value, || Ok(()))
@@ -447,9 +512,135 @@ mod tests {
             let original: serde_json::Value = serde_json::from_slice(bytes).unwrap();
             let encoded: serde_json::Value =
                 serde_json::from_slice(&encode(&stored).unwrap()).unwrap();
-            assert_eq!(encoded, original);
+            let mut expected = original;
+            expected["version"] = 2.into();
+            expected["update_check_enabled"] = false.into();
+            expected["updates"] = serde_json::json!({"last_update_check":null,"last_notified_version":null,"backoff_until":0});
+            assert_eq!(encoded, expected);
         }
     }
+    #[test]
+    fn migration_preserves_original_reopens_v2_and_matches_retained_target() {
+        for (source, target) in [
+            (
+                include_bytes!("../tests/fixtures/preferences/v1-defaults.json").as_slice(),
+                include_bytes!("../tests/fixtures/preferences/v2-defaults.json").as_slice(),
+            ),
+            (
+                include_bytes!("../tests/fixtures/preferences/v1-custom.json").as_slice(),
+                include_bytes!("../tests/fixtures/preferences/v2-custom.json").as_slice(),
+            ),
+        ] {
+            let (_dir, store) = temporary();
+            fs::create_dir_all(store.path.parent().unwrap()).unwrap();
+            fs::write(&store.path, source).unwrap();
+            let path = store.path.clone();
+            let session = PreferenceSession::open(store);
+            assert!(session.load_error().is_none());
+            assert!(!session.active().update_check_enabled());
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap(),
+                serde_json::from_slice::<serde_json::Value>(target).unwrap()
+            );
+            let backups: Vec<_> = fs::read_dir(path.parent().unwrap())
+                .unwrap()
+                .flatten()
+                .filter(|e| e.path().extension().is_some_and(|s| s == "preserved"))
+                .collect();
+            assert_eq!(backups.len(), 1);
+            assert_eq!(fs::read(backups[0].path()).unwrap(), source);
+            let reopened = PreferenceSession::open(LocalPreferencesStore::temporary(path));
+            assert_eq!(reopened.active(), session.active());
+            assert_eq!(
+                reopened.first_run_completed(),
+                session.first_run_completed()
+            );
+        }
+    }
+    #[test]
+    fn background_commits_preserve_settings_and_failed_writes_do_not_publish() {
+        let mut session = PreferenceSession::open(MemoryPreferencesStore::default());
+        session.apply(changed()).unwrap();
+        let history = UpdateHistory {
+            last_update_check: Some(123),
+            last_notified_version: Some("1.2.3".into()),
+            backoff_until: 456,
+        };
+        session.save_update_history(history.clone()).unwrap();
+        session.apply(Preferences::default()).unwrap();
+        assert_eq!(session.update_history(), &history);
+        let mut failed = PreferenceSession::open(FailingStore(MemoryPreferencesStore::default()));
+        assert!(failed.save_update_history(history).is_err());
+        assert_eq!(failed.update_history(), &UpdateHistory::default());
+    }
+
+    #[test]
+    fn failed_migration_preservation_or_commit_keeps_input_and_checks_off() {
+        struct MigrationFailure {
+            store: LocalPreferencesStore,
+            preserve_fails: bool,
+        }
+        impl PreferencesStore for MigrationFailure {
+            fn load(&self) -> Result<StoredPreferences, StoreError> {
+                self.store.load()
+            }
+            fn save(&mut self, value: &StoredPreferences) -> Result<(), StoreError> {
+                if self.preserve_fails {
+                    return Err(io::Error::other("injected preservation failure").into());
+                }
+                self.store.preserve_for_recovery()?;
+                self.store
+                    .write(value, || Err(io::Error::other("injected commit failure")))
+            }
+            fn preserve_for_recovery(&mut self) -> Result<(), StoreError> {
+                self.store.preserve_for_recovery()
+            }
+        }
+        for preserve_fails in [true, false] {
+            let (_dir, store) = temporary();
+            let source = include_bytes!("../tests/fixtures/preferences/v1-custom.json");
+            fs::create_dir_all(store.path.parent().unwrap()).unwrap();
+            fs::write(&store.path, source).unwrap();
+            let path = store.path.clone();
+            let mut session = PreferenceSession::open(MigrationFailure {
+                store,
+                preserve_fails,
+            });
+            assert!(session.load_error().is_some());
+            assert_eq!(session.active().format_source(), "%Y-%m-%d %H:%M:%S");
+            assert!(!session.active().update_check_enabled());
+            assert!(
+                session
+                    .save_update_history(UpdateHistory::default())
+                    .is_err()
+            );
+            assert_eq!(fs::read(path).unwrap(), source);
+        }
+    }
+
+    #[test]
+    fn retained_v2_update_state_roundtrips_and_survives_settings_commit() {
+        let bytes = include_bytes!("../tests/fixtures/preferences/v2-updates-enabled.json");
+        let stored = decode(bytes).unwrap();
+        assert!(!stored.needs_migration);
+        assert!(stored.preferences.update_check_enabled());
+        assert_eq!(
+            stored.updates.last_notified_version.as_deref(),
+            Some("1.2.3")
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&encode(&stored).unwrap()).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(bytes).unwrap()
+        );
+        let expected = stored.updates.clone();
+        let mut session = PreferenceSession::open(MemoryPreferencesStore {
+            value: Some(stored),
+        });
+        session.apply(changed()).unwrap();
+        let reopened = PreferenceSession::open(session.store);
+        assert_eq!(reopened.update_history(), &expected);
+    }
+
     #[test]
     fn unavailable_store_runs_on_defaults_and_fails_every_save_visibly() {
         let mut session = PreferenceSession::open(UnavailableStore);
@@ -532,7 +723,7 @@ mod tests {
             decode(&serde_json::to_vec(&raw).unwrap()),
             Err(StoreError::InvalidPreferences(PreferencesError::Format(_)))
         ));
-        for version in [0, 2, u64::MAX] {
+        for version in [0, 3, u64::MAX] {
             assert!(
                 matches!(decode(format!("{{\"version\":{version},\"future\":true}}").as_bytes()), Err(StoreError::UnsupportedVersion(v)) if v == version)
             );
@@ -570,29 +761,29 @@ mod tests {
     fn unsupported_version_cannot_be_overwritten() {
         let (_dir, mut store) = temporary();
         fs::create_dir_all(store.path.parent().unwrap()).unwrap();
-        let bytes = b"{\"version\":2,\"new_shape\":true}";
+        let bytes = b"{\"version\":3,\"new_shape\":true}";
         fs::write(&store.path, bytes).unwrap();
         assert!(matches!(
             store.save(&StoredPreferences::default()),
-            Err(StoreError::UnsupportedVersion(2))
+            Err(StoreError::UnsupportedVersion(3))
         ));
         assert!(matches!(
             store.preserve_for_recovery(),
-            Err(StoreError::UnsupportedVersion(2))
+            Err(StoreError::UnsupportedVersion(3))
         ));
         let path = store.path.clone();
         let mut session = PreferenceSession::open(store);
         assert!(matches!(
             session.apply(changed()),
-            Err(StoreError::UnsupportedVersion(2))
+            Err(StoreError::UnsupportedVersion(3))
         ));
         assert!(matches!(
             session.recover(changed()),
-            Err(StoreError::UnsupportedVersion(2))
+            Err(StoreError::UnsupportedVersion(3))
         ));
         assert!(matches!(
             session.complete_first_run(),
-            Err(StoreError::UnsupportedVersion(2))
+            Err(StoreError::UnsupportedVersion(3))
         ));
         assert_eq!(fs::read(path).unwrap(), bytes);
     }
@@ -604,6 +795,8 @@ mod tests {
         let next = StoredPreferences {
             preferences: changed().validate().unwrap(),
             first_run_completed: true,
+            updates: UpdateHistory::default(),
+            needs_migration: false,
         };
         assert!(
             store
