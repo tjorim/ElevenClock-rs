@@ -432,3 +432,7 @@ Windows.Win32.WinHttpSendRequest
 Windows.Win32.WinHttpSetOption
 Windows.Win32.WinHttpSetStatusCallback
 Windows.Win32.WinHttpSetTimeouts
+
+Windows.Win32.NIF_INFO
+Windows.Win32.NIIF_INFO
+Windows.Win32.SW_SHOWNORMAL

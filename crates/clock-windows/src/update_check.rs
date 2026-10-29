@@ -1,4 +1,4 @@
-//! Manual, bounded GitHub release checks (ADR 0003). No work starts on construction.
+//! Optional, bounded GitHub release checks (ADR 0003). No work starts on construction.
 use serde::Deserialize;
 
 #[cfg(windows)]
@@ -71,7 +71,7 @@ struct Release {
 }
 
 // Bounded numeric SemVer parser; metadata never participates in precedence.
-fn version(input: &str) -> Option<([u64; 3], bool)> {
+pub(crate) fn version(input: &str) -> Option<([u64; 3], bool)> {
     let (precedence, build) = input
         .split_once('+')
         .map_or((input, None), |(a, b)| (a, Some(b)));
@@ -331,5 +331,404 @@ mod tests {
         assert_eq!(backoff(100, Some("120"), Some("150")), 220);
         assert_eq!(backoff(100, Some("bad"), Some("99")), 86500);
         assert_eq!(backoff(0, Some("Thu, 01 Jan 1970 00:02:00 GMT"), None), 120);
+    }
+}
+
+/// Runtime policy for the shared manual/automatic worker. All clocks are inputs;
+/// persistence is serialized through the same session as Settings Apply.
+#[derive(Default)]
+pub struct UpdateRuntime {
+    coordinator: Coordinator,
+    automatic: bool,
+    cancelled: bool,
+    active: bool,
+    active_epoch: u64,
+    due: Option<std::time::Duration>,
+    epoch: Option<u64>,
+    allowed: bool,
+    retry_not_before: std::time::Duration,
+}
+#[derive(Clone, Copy)]
+pub struct UpdateContext {
+    pub managed: bool,
+    pub allowed: bool,
+    pub epoch: u64,
+    pub wall: u64,
+    pub monotonic: std::time::Duration,
+}
+impl UpdateRuntime {
+    /// Returns the absolute monotonic deadline for a single one-shot timer.
+    pub fn schedule<S: crate::preferences_store::PreferencesStore>(
+        &mut self,
+        session: &crate::preferences_store::PreferenceSession<S>,
+        context: UpdateContext,
+    ) -> Option<std::time::Duration> {
+        let allowed = !context.managed && context.allowed;
+        let enabled =
+            allowed && session.active().update_check_enabled() && session.load_error().is_none();
+        if !allowed
+            || (self.active && self.active_epoch != context.epoch)
+            || (self.automatic && !enabled)
+        {
+            self.cancel();
+        }
+        let resumed = self.epoch != Some(context.epoch) || !self.allowed;
+        self.epoch = Some(context.epoch);
+        self.allowed = allowed;
+        if !enabled || self.active {
+            self.due = None;
+        } else if self.due.is_none() || resumed {
+            let history = session.update_history();
+            let next = history
+                .last_update_check
+                .map(|t| t.saturating_add(86400))
+                .unwrap_or(0)
+                .max(history.backoff_until)
+                .max(self.coordinator.backoff_until);
+            self.due = Some(
+                context
+                    .monotonic
+                    .saturating_add(std::time::Duration::from_secs(
+                        next.saturating_sub(context.wall).max(180),
+                    ))
+                    .max(self.retry_not_before),
+            );
+        }
+        self.due
+    }
+    pub fn is_due(&self, now: std::time::Duration) -> bool {
+        self.due.is_some_and(|due| now >= due)
+    }
+    pub fn defer(&mut self) {
+        self.due = None;
+    }
+    pub fn is_automatic(&self) -> bool {
+        self.automatic && self.active
+    }
+    pub fn needs_cancel(&self) -> bool {
+        self.active && self.cancelled
+    }
+    pub fn cancel(&mut self) {
+        self.coordinator.cancel();
+        self.cancelled = true;
+        self.due = None;
+    }
+    pub fn begin<S: crate::preferences_store::PreferencesStore>(
+        &mut self,
+        session: &mut crate::preferences_store::PreferenceSession<S>,
+        context: UpdateContext,
+        automatic: bool,
+    ) -> bool {
+        if self.active
+            || context.managed
+            || !context.allowed
+            || context.wall
+                < session
+                    .update_history()
+                    .backoff_until
+                    .max(self.coordinator.backoff_until)
+            || (automatic
+                && (!session.active().update_check_enabled()
+                    || context.monotonic < self.retry_not_before
+                    || !self.is_due(context.monotonic)
+                    || session
+                        .update_history()
+                        .last_update_check
+                        .is_some_and(|last| context.wall < last.saturating_add(86400))))
+        {
+            return false;
+        }
+        let mut history = session.update_history().clone();
+        history.last_update_check = Some(context.wall.max(history.last_update_check.unwrap_or(0)));
+        if session.save_update_history(history).is_err() {
+            self.retry_not_before = context
+                .monotonic
+                .saturating_add(std::time::Duration::from_secs(86400));
+            self.due = None;
+            return false;
+        }
+        if !self.coordinator.begin(context.managed, context.wall) {
+            return false;
+        }
+        self.active = true;
+        self.active_epoch = context.epoch;
+        self.automatic = automatic;
+        self.cancelled = false;
+        self.due = None;
+        true
+    }
+    pub fn accepts_result<S: crate::preferences_store::PreferencesStore>(
+        &self,
+        session: &crate::preferences_store::PreferenceSession<S>,
+        context: UpdateContext,
+    ) -> bool {
+        self.active
+            && self.active_epoch == context.epoch
+            && !self.cancelled
+            && !context.managed
+            && context.allowed
+            && (!self.automatic || session.active().update_check_enabled())
+    }
+    /// A cancelled worker remains in flight until completion, preventing overlap.
+    /// Returns (show manual result, emit automatic notification).
+    pub fn complete<S: crate::preferences_store::PreferencesStore>(
+        &mut self,
+        session: &mut crate::preferences_store::PreferenceSession<S>,
+        result: &CheckResult,
+        context: UpdateContext,
+    ) -> (bool, bool) {
+        let mut history = session.update_history().clone();
+        if let CheckResult::Failed(Failure::RateLimited { until }) = result {
+            history.backoff_until = history.backoff_until.max(*until);
+        }
+        let eligible = self.accepts_result(session, context);
+        let notify = eligible
+            && self.automatic
+            && match result {
+                CheckResult::Available { version, .. } => {
+                    let fresh = history.last_notified_version.as_ref().is_none_or(|last| {
+                        match (self::version(version), self::version(last)) {
+                            (Some((new, _)), Some((old, _))) => new > old,
+                            _ => false,
+                        }
+                    });
+                    if fresh {
+                        history.last_notified_version = Some(version.clone());
+                    }
+                    fresh
+                }
+                _ => false,
+            };
+        let saved = if history != *session.update_history() {
+            session.save_update_history(history).is_ok()
+        } else {
+            true
+        };
+        self.coordinator.complete(result, !eligible);
+        self.active = false;
+        self.due = None;
+        (eligible && !self.automatic, notify && saved)
+    }
+}
+
+#[cfg(test)]
+mod automatic_tests {
+    use super::*;
+    use crate::preferences_store::{MemoryPreferencesStore, PreferenceSession};
+    use std::time::Duration;
+
+    fn context(seconds: u64) -> UpdateContext {
+        UpdateContext {
+            managed: false,
+            allowed: true,
+            epoch: 0,
+            wall: 1000 + seconds,
+            monotonic: Duration::from_secs(seconds),
+        }
+    }
+    fn session(enabled: bool) -> PreferenceSession<MemoryPreferencesStore> {
+        let mut session = PreferenceSession::open(MemoryPreferencesStore::default());
+        let mut draft = session.active().draft();
+        draft.update_check_enabled = enabled;
+        session.apply(draft).unwrap();
+        session
+    }
+    fn available(version: &str) -> CheckResult {
+        CheckResult::Available {
+            version: version.into(),
+            url: format!("https://github.com/tjorim/ElevenClock-rs/releases/tag/v{version}"),
+        }
+    }
+    #[test]
+    fn default_off_and_managed_never_schedule_or_dispatch() {
+        for (enabled, managed) in [(false, false), (false, true), (true, true)] {
+            let mut session = session(enabled);
+            let mut runtime = UpdateRuntime::default();
+            let ctx = UpdateContext {
+                managed,
+                ..context(0)
+            };
+            assert_eq!(runtime.schedule(&session, ctx), None);
+            assert!(!runtime.begin(&mut session, ctx, true));
+            if managed {
+                assert!(!runtime.begin(&mut session, ctx, false));
+            }
+            assert_eq!(session.update_history().last_update_check, None);
+        }
+        let mut session = session(false);
+        let mut runtime = UpdateRuntime::default();
+        assert!(runtime.begin(&mut session, context(0), false));
+        assert_eq!(
+            runtime.complete(&mut session, &available("1.0.0"), context(1)),
+            (true, false)
+        );
+    }
+    #[test]
+    fn delayed_daily_offline_restart_rollback_and_manual_throttle() {
+        let mut session = session(true);
+        let mut runtime = UpdateRuntime::default();
+        assert_eq!(
+            runtime.schedule(&session, context(0)),
+            Some(Duration::from_secs(180))
+        );
+        assert!(!runtime.begin(&mut session, context(179), true));
+        assert!(runtime.begin(&mut session, context(180), true));
+        assert_eq!(session.update_history().last_update_check, Some(1180));
+        assert!(!runtime.begin(&mut session, context(181), false));
+        assert_eq!(
+            runtime.complete(
+                &mut session,
+                &CheckResult::Failed(Failure::Network),
+                context(181)
+            ),
+            (false, false)
+        );
+        let mut restarted = UpdateRuntime::default();
+        assert_eq!(
+            restarted.schedule(&session, context(0)),
+            Some(Duration::from_secs(86580))
+        );
+        assert!(!restarted.begin(&mut session, context(86579), true));
+        assert!(restarted.begin(&mut session, context(86580), true));
+        restarted.complete(&mut session, &CheckResult::UpToDate, context(86581));
+        // A deliberate manual attempt also advances the daily deadline.
+        assert!(restarted.begin(&mut session, context(86600), false));
+        restarted.complete(&mut session, &CheckResult::UpToDate, context(86601));
+        assert_eq!(
+            restarted.schedule(&session, context(86601)),
+            Some(Duration::from_secs(173000))
+        );
+    }
+    #[test]
+    fn notification_marker_committed_once_and_never_regresses() {
+        let mut session = session(true);
+        for (day, release, notify) in [
+            (0, "1.0.0", true),
+            (1, "1.0.0", false),
+            (2, "2.0.0", true),
+            (3, "1.0.0", false),
+        ] {
+            let start = day * 86400;
+            let mut runtime = UpdateRuntime::default();
+            runtime.schedule(&session, context(start));
+            assert!(runtime.begin(&mut session, context(start + 180), true));
+            assert_eq!(
+                runtime.complete(&mut session, &available(release), context(start + 181)),
+                (false, notify)
+            );
+        }
+        assert_eq!(
+            session.update_history().last_notified_version.as_deref(),
+            Some("2.0.0")
+        );
+    }
+    #[test]
+    fn disable_lock_managed_and_exit_suppress_late_results_without_overlap() {
+        for cause in 0..4 {
+            let mut session = session(true);
+            let mut runtime = UpdateRuntime::default();
+            runtime.schedule(&session, context(0));
+            assert!(runtime.begin(&mut session, context(180), true));
+            let mut ctx = context(181);
+            match cause {
+                0 => {
+                    let mut draft = session.active().draft();
+                    draft.update_check_enabled = false;
+                    session.apply(draft).unwrap();
+                }
+                1 => ctx.allowed = false,
+                2 => ctx.managed = true,
+                _ => runtime.cancel(),
+            }
+            runtime.schedule(&session, ctx);
+            assert!(runtime.needs_cancel());
+            assert!(!runtime.begin(&mut session, context(182), false));
+            assert_eq!(
+                runtime.complete(&mut session, &available("1.0.0"), ctx),
+                (false, false)
+            );
+            assert_eq!(session.update_history().last_notified_version, None);
+        }
+    }
+    #[test]
+    fn resume_restarts_grace_and_persisted_rate_limit_blocks_both_paths() {
+        let mut session = session(true);
+        let mut runtime = UpdateRuntime::default();
+        runtime.schedule(&session, context(0));
+        let resumed = UpdateContext {
+            epoch: 1,
+            ..context(100)
+        };
+        assert_eq!(
+            runtime.schedule(&session, resumed),
+            Some(Duration::from_secs(280))
+        );
+        assert!(runtime.begin(&mut session, context(280), true));
+        runtime.complete(
+            &mut session,
+            &CheckResult::Failed(Failure::RateLimited { until: 200000 }),
+            context(281),
+        );
+        let mut restarted = UpdateRuntime::default();
+        assert!(!restarted.begin(&mut session, context(282), false));
+        assert_eq!(
+            restarted.schedule(&session, context(282)),
+            Some(Duration::from_secs(199000))
+        );
+    }
+    #[test]
+    fn failed_attempt_and_notification_commits_suppress_side_effects() {
+        use crate::preferences_store::{PreferencesStore, StoreError, StoredPreferences};
+        use std::{cell::Cell, rc::Rc};
+        struct Store {
+            inner: MemoryPreferencesStore,
+            fail: Rc<Cell<bool>>,
+        }
+        impl PreferencesStore for Store {
+            fn load(&self) -> Result<StoredPreferences, StoreError> {
+                self.inner.load()
+            }
+            fn save(&mut self, value: &StoredPreferences) -> Result<(), StoreError> {
+                if self.fail.get() {
+                    return Err(StoreError::Io(std::io::Error::other("injected")));
+                }
+                self.inner.save(value)
+            }
+            fn preserve_for_recovery(&mut self) -> Result<(), StoreError> {
+                Ok(())
+            }
+        }
+        let fail = Rc::new(Cell::new(false));
+        let mut session = PreferenceSession::open(Store {
+            inner: MemoryPreferencesStore::default(),
+            fail: fail.clone(),
+        });
+        let mut draft = session.active().draft();
+        draft.update_check_enabled = true;
+        session.apply(draft).unwrap();
+        let mut runtime = UpdateRuntime::default();
+        runtime.schedule(&session, context(0));
+        fail.set(true);
+        assert!(!runtime.begin(&mut session, context(180), true));
+        assert_eq!(session.update_history().last_update_check, None);
+        assert_eq!(
+            runtime.schedule(&session, context(180)),
+            Some(Duration::from_secs(86580))
+        );
+        fail.set(false);
+        assert!(runtime.begin(&mut session, context(86580), true));
+        fail.set(true);
+        assert_eq!(
+            runtime.complete(&mut session, &available("1.0.0"), context(86581)),
+            (false, false)
+        );
+        assert_eq!(session.update_history().last_notified_version, None);
+        fail.set(false);
+        runtime.schedule(&session, context(86581));
+        assert!(runtime.begin(&mut session, context(172980), true));
+        assert_eq!(
+            runtime.complete(&mut session, &available("1.0.0"), context(172981)),
+            (false, true)
+        );
     }
 }

@@ -82,9 +82,11 @@ marks a build from uncommitted changes; `unknown` means no git checkout).
   flattened to one line and cut at 200 characters.
 - **Copy diagnostics stays local**: it only copies this text to the clipboard.
   There is no telemetry, upload or crash reporter. The app's only network request is
-  the manual **Check now** action in Settings ([ADR 0003](../adr/0003-update-checks.md));
+  **Check now** in Settings or automatic checks after explicit opt-in (off by default)
+  ([ADR 0003](../adr/0003-update-checks.md));
   managed copies never check GitHub. GitHub receives the IP and app version, never
-  the report. Diagnostics record the check mode and last result kind only, without
+  the report. Diagnostics record manual only, automatic, or disabled (managed), and the last
+  result kind only, without
   URLs, response bodies, headers, IPs or raw network errors.
 
 ## Bounded refresh, with no blocking

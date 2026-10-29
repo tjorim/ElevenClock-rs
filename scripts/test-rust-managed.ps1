@@ -118,7 +118,7 @@ try {
     Assert ($status -like 'ElevenClock-rs version * (managed by your organization)*') "Support status lacks the managed note: $status"
     $report = Wait-Report $window 'Managed: yes'
     Assert ($report.Contains('Startup: off')) "Startup should start off: $report"
-    foreach ($id in 1108, 1109) {
+    foreach ($id in 1108, 1109, 1110) {
         Assert (![ManagedWindow]::IsWindowVisible((Control $window 0 $id))) "Managed mode must hide update control $id"
     }
     [ManagedWindow]::SendMessage($window, 0x0111, [IntPtr]1109, [IntPtr]::Zero) | Out-Null

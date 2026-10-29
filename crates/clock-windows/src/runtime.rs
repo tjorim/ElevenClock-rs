@@ -175,6 +175,8 @@ pub trait Platform {
     /// (Re-)register the notification-area icon. Called once at start and from the
     /// one shell-replacement path; failure is expected while Explorer starts.
     fn restore_tray(&mut self) {}
+    fn arm_update_timer(&mut self, _delay: Option<Duration>) {}
+    fn notify_update(&mut self, _version: &str, _url: &str) {}
     /// Replacement was paused or resumed: update anything that shows the mode.
     fn paused_changed(&mut self, _paused: bool) {}
     /// Cheap upkeep after each observation pass: for example, re-anchor overlay
@@ -335,6 +337,8 @@ pub struct Runtime<P: Platform> {
     activation: ActivationGate,
     menu: ActivationGate,
     finished: bool,
+    update_suspended: bool,
+    update_epoch: u64,
 }
 
 impl<P: Platform> Runtime<P> {
@@ -369,6 +373,8 @@ impl<P: Platform> Runtime<P> {
             activation: ActivationGate::default(),
             menu: ActivationGate::default(),
             finished: false,
+            update_suspended: false,
+            update_epoch: 0,
         }
     }
 
@@ -387,6 +393,18 @@ impl<P: Platform> Runtime<P> {
         self.rearm_poll();
     }
 
+    pub fn update_context(&mut self, managed: bool) -> crate::update_check::UpdateContext {
+        crate::update_check::UpdateContext {
+            managed,
+            allowed: !self.finished
+                && !self.update_suspended
+                && !self.state().is_locked()
+                && !self.state().is_paused(),
+            epoch: self.update_epoch,
+            wall: self.platform.local_now().timestamp().max(0) as u64,
+            monotonic: self.platform.monotonic(),
+        }
+    }
     pub fn is_finished(&self) -> bool {
         self.finished
     }
@@ -609,6 +627,20 @@ impl<P: Platform> Runtime<P> {
     // ---- signals -------------------------------------------------------
 
     fn signal(&mut self, signal: Signal) {
+        match signal {
+            Signal::Suspended | Signal::EndSession => {
+                self.update_suspended = true;
+                self.update_epoch = self.update_epoch.wrapping_add(1);
+            }
+            Signal::SessionLocked => self.update_epoch = self.update_epoch.wrapping_add(1),
+            Signal::Resumed | Signal::SessionUnlocked | Signal::TimeChanged => {
+                if signal == Signal::Resumed {
+                    self.update_suspended = false;
+                }
+                self.update_epoch = self.update_epoch.wrapping_add(1);
+            }
+            _ => {}
+        }
         match signal {
             Signal::TopologyChanged => {
                 self.unverified_retry.reset();
@@ -1165,6 +1197,7 @@ impl<P: Platform> Runtime<P> {
         // failed calendar action.
         self.faults
             .retain(|_, reason| !matches!(reason, Reason::ActionFailed(_)));
+        self.update_epoch = self.update_epoch.wrapping_add(1);
         self.dispatch(Event::SetPaused(paused));
         self.platform.paused_changed(paused);
     }

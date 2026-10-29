@@ -20,15 +20,26 @@ when clicked. The disabled button shows “Checking…” while Settings remains
 The status says “You have the latest version.”, “Version X.Y.Z is available”, or
 “Couldn't check for updates.” An available result makes GitHub Releases open that release's
 validated page, and explains updating: run the new setup, or exit and replace the
-portable exe. Nothing is downloaded or installed. There are no automatic checks.
+portable exe. Nothing is downloaded or installed.
+
+**Check for updates automatically** starts unchecked for new installs and upgrades.
+Apply or OK saves consent; Cancel discards it. There is no first-run prompt. When
+enabled, a one-shot timer waits at least three minutes after startup, resume or
+unlock, and checks at most once per 24 hours. Failed checks are quiet and wait for
+the next daily opportunity. A manual check also advances that deadline. One tray
+notification per newer version says “ElevenClock-rs X.Y.Z is available”; clicking
+opens the validated release page. Windows may suppress notifications (for example,
+Do Not Disturb); they are not retried.
 
 Both buttons support Tab then Enter or Space; status changes are announced to screen
 readers. A release-opening failure appears in the Settings status. Closing Settings
-cancels pending work and discards late results; Exit never waits for the network.
+cancels a manual check; automatic checks continue without the dialog. Turning the
+option off, locking, suspending or pausing cancels automatic work and removes its
+wakeup; late results cannot notify. Exit never waits for the network.
 Requests time out after ten seconds overall, accept at most 64 KiB, never overlap,
-and respect server rate-limit backoff for the remainder of this app session.
+and respect server rate-limit backoff, persisted across restarts.
 Managed copies show “managed by your organization” beside the version, hide both
-buttons and reject request dispatch, because their launcher handles updates.
+buttons and the automatic checkbox and reject request dispatch, because their launcher handles updates.
 See [ADR 0003](../adr/0003-update-checks.md) for data sent and GitHub retention.
 
 Buttons: **Exit ElevenClock-rs**, **Reset to defaults**, **OK**, **Cancel**, **Apply**.

@@ -42,7 +42,7 @@ END
 // with the display (the manifest declares per-monitor DPI v2). The tab strip is only
 // as tall as its tabs; the four page dialogs below are placed over the hidden 1106
 // anchor, so no control overlaps another and tab order is simply document order.
-101 DIALOGEX 0, 0, 340, 366
+101 DIALOGEX 0, 0, 340, 384
 STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
 EXSTYLE WS_EX_APPWINDOW
 CAPTION "ElevenClock-rs Settings"
@@ -54,12 +54,13 @@ BEGIN
     LTEXT "", 1107, 8, 266, 324, 12
     PUSHBUTTON "GitH&ub Releases", 1108, 8, 282, 90, 14, WS_TABSTOP
     PUSHBUTTON "Check &now", 1109, 104, 282, 66, 14, WS_TABSTOP
-    LTEXT "", 1102, 8, 302, 324, 36
-    PUSHBUTTON "E&xit ElevenClock-rs", 1003, 8, 344, 84, 14, WS_TABSTOP
-    PUSHBUTTON "&Reset to defaults", 1104, 98, 344, 72, 14, WS_TABSTOP
-    DEFPUSHBUTTON "OK", IDOK, 176, 344, 50, 14, WS_TABSTOP
-    PUSHBUTTON "&Cancel", IDCANCEL, 230, 344, 50, 14, WS_TABSTOP
-    PUSHBUTTON "&Apply", 1105, 284, 344, 48, 14, WS_TABSTOP
+    AUTOCHECKBOX "Check for updates auto&matically", 1110, 8, 302, 324, 12, WS_TABSTOP
+    LTEXT "", 1102, 8, 320, 324, 36
+    PUSHBUTTON "E&xit ElevenClock-rs", 1003, 8, 362, 84, 14, WS_TABSTOP
+    PUSHBUTTON "&Reset to defaults", 1104, 98, 362, 72, 14, WS_TABSTOP
+    DEFPUSHBUTTON "OK", IDOK, 176, 362, 50, 14, WS_TABSTOP
+    PUSHBUTTON "&Cancel", IDCANCEL, 230, 362, 50, 14, WS_TABSTOP
+    PUSHBUTTON "&Apply", 1105, 284, 362, 48, 14, WS_TABSTOP
 END
 
 // Page 1: Date and time.

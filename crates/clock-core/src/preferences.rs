@@ -19,6 +19,7 @@ pub struct Preferences {
     pub monitors: Monitors,
     pub font_size_pt: u8,
     pub theme: Theme,
+    pub update_check_enabled: bool,
 }
 impl Default for Preferences {
     fn default() -> Self {
@@ -27,6 +28,7 @@ impl Default for Preferences {
             monitors: Monitors::Primary,
             font_size_pt: 9,
             theme: Theme::System,
+            update_check_enabled: false,
         }
     }
 }
@@ -84,6 +86,9 @@ impl ValidatedPreferences {
     }
     pub fn font_size_pt(&self) -> u8 {
         self.draft.font_size_pt
+    }
+    pub fn update_check_enabled(&self) -> bool {
+        self.draft.update_check_enabled
     }
     pub fn theme(&self) -> Theme {
         self.draft.theme
