@@ -121,9 +121,11 @@ repository's GitHub Actions workflow, and each release is approved by hand.
 - Committers and reviewers: [tjorim](https://github.com/tjorim)
 - Approvers: [tjorim](https://github.com/tjorim)
 
-**Privacy policy:** This program will not transfer any information to other networked
-systems unless specifically requested by the user or the person installing or
-operating it.
+**Privacy policy:** The app makes no network requests except when you click
+**Check now** in Settings, which contacts GitHub Releases with your IP address and
+app version ([details and GitHub retention](docs/adr/0003-update-checks.md)). Managed
+copies never check GitHub. There is no telemetry, upload or crash reporter;
+Copy diagnostics only copies local text to your clipboard.
 
 ## License
 

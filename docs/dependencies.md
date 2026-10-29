@@ -93,6 +93,10 @@ the Windows CI runner instead of cross-checking from Linux.
   (generated formatter inputs) and **Criterion** 0.8 (parse/render measurements). None
   of them enters the app's normal dependency graph; the license check covers them too.
 
+The manual release check uses the Windows OS component **WinHTTP** (`winhttp.dll`),
+under [ADR 0003](adr/0003-update-checks.md). It adds no crate or bundled notice; JSON
+uses the existing serde_json dependency. The launcher still forbids network DLLs.
+
 ## Optional features
 
 A heavyweight or network-dependent capability requires an explicit design decision

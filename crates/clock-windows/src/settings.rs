@@ -16,11 +16,15 @@ use crate::{
     logging, managed,
     preferences_store::{PreferenceSession, PreferencesStore},
     runtime::{Diagnostics, Input, Platform, Reason, Runtime},
-    settings_model::{ApplyOutcome, FONT_MAX, FONT_MIN, Field, SettingsController, TOKEN_HELP},
+    settings_model::{
+        ApplyOutcome, FONT_MAX, FONT_MIN, Field, SettingsController, TOKEN_HELP,
+        update_checks_available,
+    },
     startup::{self, RegistryRunKey, StartupController, StartupState, current_executable},
     support::{
         self, Clipboard, Environment, Progress, RefreshWatch, WindowsClipboard, copy_message,
     },
+    update_check::{self, CheckResult, Coordinator, Failure, native::Worker},
 };
 use clock_core::{Monitors, Theme, format::PRESETS};
 use std::{cell::Cell, cell::RefCell, fmt, time::Instant};
@@ -44,6 +48,7 @@ pub const ID_APPLY: i32 = 1105;
 const ID_ANCHOR: i32 = 1106;
 pub const ID_VERSION: i32 = 1107;
 pub const ID_UPDATES: i32 = 1108;
+pub const ID_CHECK_NOW: i32 = 1109;
 
 pub const ID_PRESET: i32 = 1201;
 pub const ID_FORMAT: i32 = 1202;
@@ -403,6 +408,9 @@ pub struct SettingsWindow<S> {
     welcome: bool,
     support: SupportPage,
     startup: StartupPage,
+    updates: Coordinator,
+    update_worker: Option<Worker>,
+    release_url: String,
 }
 
 /// Startup page state. Nothing here is a preference: the registry is read each time
@@ -448,6 +456,9 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 icon: icon.0 as isize,
                 controller: SettingsController::new(session),
                 status: String::new(),
+                updates: Coordinator::default(),
+                update_worker: None,
+                release_url: update_check::RELEASES_URL.into(),
                 welcome: false,
                 support: SupportPage {
                     environment: support::detect_environment(),
@@ -523,13 +534,27 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 managed::version_text(env!("CARGO_PKG_VERSION"), managed)
             ),
         );
-        // SAFETY: this is our own button; hidden controls leave the tab order.
+        // SAFETY: these are our own buttons; hidden controls leave the tab order.
         unsafe {
-            let _ = ShowWindow(
-                item(dialog, ID_UPDATES),
-                if managed { SW_HIDE } else { SW_SHOW },
-            );
+            for id in [ID_UPDATES, ID_CHECK_NOW] {
+                let _ = ShowWindow(
+                    item(dialog, id),
+                    if update_checks_available(managed) {
+                        SW_SHOW
+                    } else {
+                        SW_HIDE
+                    },
+                );
+            }
         }
+        if managed {
+            self.cancel_update();
+        }
+        enable(
+            dialog,
+            item(dialog, ID_CHECK_NOW),
+            self.update_worker.is_none(),
+        );
         // Before the Support page is filled: the report names the startup program.
         self.show_startup(dialog);
         self.update_support(dialog, runtime);
@@ -908,6 +933,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
 
     /// Call after every message: handles what the window procedures queued.
     pub fn service<P: Platform>(&mut self, runtime: &mut Runtime<P>) -> Result<(), PlatformError> {
+        self.poll_update(runtime);
         for event in take_events() {
             let Some(dialog) = open_dialog() else {
                 break;
@@ -915,6 +941,99 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             self.handle(dialog, event, runtime);
         }
         Ok(())
+    }
+
+    fn cancel_update(&mut self) {
+        self.updates.cancel();
+        if let Some(worker) = &self.update_worker {
+            worker.cancel();
+        }
+    }
+
+    fn start_update<P: Platform>(&mut self, dialog: HWND, runtime: &Runtime<P>) {
+        if managed::detect() {
+            return;
+        }
+        if !self.updates.begin(
+            self.support.environment.managed,
+            update_check::native::now(),
+        ) {
+            self.status = "Couldn't check for updates.".into();
+            self.show_status(dialog, runtime);
+            return;
+        }
+        // SAFETY: numeric id of this UI thread; the worker posts only a wakeup.
+        self.update_worker = Worker::start(unsafe { GetCurrentThreadId() }, WM_WAKE_SERVICE);
+        if self.update_worker.is_none() {
+            self.show_update(dialog, CheckResult::Failed(Failure::Network), runtime);
+            return;
+        }
+        enable(dialog, item(dialog, ID_CHECK_NOW), false);
+        set_text(item(dialog, ID_CHECK_NOW), "Checking…");
+        self.status = "Checking…".into();
+        self.show_status(dialog, runtime);
+    }
+
+    fn poll_update<P: Platform>(&mut self, runtime: &Runtime<P>) {
+        let result =
+            self.update_worker
+                .as_ref()
+                .and_then(|worker| match worker.results.try_recv() {
+                    Ok(result) => Some(result),
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        Some(CheckResult::Failed(Failure::Network))
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                });
+        if let Some(result) = result {
+            self.update_worker = None;
+            if let Some(dialog) = open_dialog() {
+                self.show_update(dialog, result, runtime);
+                enable(dialog, item(dialog, ID_CHECK_NOW), true);
+                set_text(item(dialog, ID_CHECK_NOW), "Check &now");
+            } else {
+                self.updates
+                    .complete(&result, self.support.environment.managed);
+            }
+        }
+    }
+
+    fn show_update<P: Platform>(
+        &mut self,
+        dialog: HWND,
+        result: CheckResult,
+        runtime: &Runtime<P>,
+    ) {
+        if !self.updates.complete(
+            &result,
+            self.support.environment.managed || managed::detect(),
+        ) {
+            return;
+        }
+        // Only a fixed result/failure vocabulary reaches the bounded log.
+        match &result {
+            CheckResult::Failed(failure) => {
+                let kind = match failure {
+                    Failure::Network => "network",
+                    Failure::Timeout => "timeout",
+                    Failure::BadResponse => "bad response",
+                    Failure::Oversized => "oversized response",
+                    Failure::RateLimited { .. } => "rate limited",
+                    Failure::Cancelled => "cancelled",
+                };
+                logging::log(&format!("update check failed ({kind})"));
+            }
+            _ => logging::log(&format!("update check: {}", result.kind().label())),
+        }
+        self.release_url = match &result {
+            CheckResult::Available { url, .. } => url.clone(),
+            _ => update_check::RELEASES_URL.into(),
+        };
+        self.support.environment.update_result = result.kind();
+        self.support.shown = None;
+        self.status = result.message();
+        self.show_status(dialog, runtime);
+        self.update_support(dialog, runtime);
     }
 
     /// Take the text of both edit controls as the draft. Multi-line edits send no
@@ -948,14 +1067,18 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 (id, _) if id == IDCANCEL => self.finish(dialog),
                 (id, _) if id == IDOK => self.apply(dialog, runtime, true),
                 (ID_APPLY, _) => self.apply(dialog, runtime, false),
-                (ID_UPDATES, 0) if !self.support.environment.managed => {
-                    // SAFETY: fixed, NUL-terminated strings; no borrowed state crosses
+                (ID_CHECK_NOW, 0) if update_checks_available(self.support.environment.managed) => {
+                    self.start_update(dialog, runtime)
+                }
+                (ID_UPDATES, 0) if update_checks_available(self.support.environment.managed) => {
+                    let url: Vec<u16> = self.release_url.encode_utf16().chain(Some(0)).collect();
+                    // SAFETY: validated URL, NUL-terminated strings; no borrowed state crosses
                     // the shell call. This runs on the dialog thread outside callbacks.
                     let result = unsafe {
                         ShellExecuteW(
                             Some(dialog),
                             w!("open"),
-                            w!("https://github.com/tjorim/ElevenClock-rs/releases/latest"),
+                            PCWSTR(url.as_ptr()),
                             None,
                             None,
                             SW_SHOW,
@@ -1134,6 +1257,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
 
     /// Close without applying: whatever was not applied is discarded.
     fn finish(&mut self, dialog: HWND) {
+        self.cancel_update();
         self.controller.finish_first_run();
         self.controller.discard();
         self.status.clear();
@@ -1185,6 +1309,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
 
     /// Destroy the window at shutdown. Nothing is saved.
     pub fn close(&mut self) {
+        self.cancel_update();
         if let Some(dialog) = open_dialog() {
             self.controller.discard();
             // SAFETY: destroys our own dialog on its owning thread.

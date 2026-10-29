@@ -220,7 +220,7 @@ try {
     $steps.firstRun = 'Welcome text shown on the first launch'
 
     # 2. Structure: every page and control the contract names exists.
-    foreach ($id in 1100, 1102, 1107, 1108, 1003, 1104, 1105, 1, 2) { Assert ((Control $window 0 $id) -ne [IntPtr]::Zero) "Missing main control $id" }
+    foreach ($id in 1100, 1102, 1107, 1108, 1109, 1003, 1104, 1105, 1, 2) { Assert ((Control $window 0 $id) -ne [IntPtr]::Zero) "Missing main control $id" }
     foreach ($id in 1201, 1202, 1203, 1204, 1205) { Assert ((Control $window $PAGE.Date $id) -ne [IntPtr]::Zero) "Missing Date and time control $id" }
     foreach ($id in 1301, 1302, 1303, 1304, 1305, 1306) { Assert ((Control $window $PAGE.Appearance $id) -ne [IntPtr]::Zero) "Missing Appearance control $id" }
     Assert ((Control $window $PAGE.Startup 1401) -ne [IntPtr]::Zero) 'Missing Startup page'
@@ -230,13 +230,14 @@ try {
     $fileVersion = $app.MainModule.FileVersionInfo.ProductVersion
     Assert ([SettingsNative]::Text((Control $window 0 1107)) -eq "ElevenClock-rs $fileVersion") 'Settings version must match the executable product version'
     $updates = Control $window 0 1108
-    Assert ([SettingsNative]::AccessibleName($updates) -eq 'Check for updates') 'Update button must have an accessible name'
+    Assert ([SettingsNative]::AccessibleName($updates) -eq 'GitHub Releases') 'Update button must have an accessible name'
     Assert (([SettingsNative]::AccessibleState($updates) -band 0x100000) -ne 0) 'Update button must be keyboard focusable'
+    Assert ([SettingsNative]::AccessibleName((Control $window 0 1109)) -eq 'Check now') 'Check now must have an accessible name'
     $steps.structure = 'All pages and controls present; Apply disabled when clean'
 
     # 3. Tab order and mnemonics, through the real input queue.
     Foreground $window
-    $expected = 1100, 1201, 1202, 1204, 1205, 1108, 1003, 1104, 1, 2
+    $expected = 1100, 1201, 1202, 1204, 1205, 1108, 1109, 1003, 1104, 1, 2
     $actual = @(Focused-Id $window)
     1..($expected.Count - 1) | ForEach-Object { Press 9; $actual += Focused-Id $window }
     Assert (($actual -join ',') -eq ($expected -join ',')) "Tab order was $($actual -join ',') but expected $($expected -join ',')"

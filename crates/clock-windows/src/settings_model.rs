@@ -443,6 +443,11 @@ fn fit_message(problems: &[FitProblem]) -> String {
     )
 }
 
+/// Managed deployments obtain updates only through their launcher.
+pub fn update_checks_available(managed: bool) -> bool {
+    !managed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

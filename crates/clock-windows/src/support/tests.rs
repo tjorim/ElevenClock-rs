@@ -12,6 +12,7 @@ fn environment() -> Environment {
         os_architecture: "x64".into(),
         app_architecture: "x64".into(),
         managed: false,
+        update_result: crate::update_check::ResultKind::NotChecked,
         startup: StartupKind::Off,
     }
 }
@@ -138,6 +139,8 @@ App commit: 482dd5f0a1b2
 Windows: 10.0.26200.6899 (25H2)
 Architecture: Windows x64, app x64
 Managed: no
+Update checks: manual only
+Last update check: not checked
 Startup: off
 
 Clock replacement: Active on some taskbars
@@ -309,7 +312,7 @@ fn a_managed_copy_says_so_next_to_the_version_and_in_the_report() {
     );
     let text = report(&managed, &d, generated());
     assert!(
-        text.contains("\nManaged: yes\nStartup: launcher\n"),
+        text.contains("\nManaged: yes\nUpdate checks: disabled (managed)\nLast update check: not checked\nStartup: launcher\n"),
         "{text}"
     );
 }
@@ -417,4 +420,32 @@ fn a_display_left_out_in_settings_is_a_choice_not_a_partial_failure() {
         report(&environment(), &d, generated())
             .contains("2. Secondary taskbar: not used: this display is not selected in Settings")
     );
+}
+
+#[test]
+fn update_diagnostics_expose_only_the_result_kind() {
+    use crate::update_check::{CheckResult, Failure};
+    let d = diagnostics(vec![visible(1)]);
+    for result in [
+        CheckResult::UpToDate,
+        CheckResult::Available {
+            version: "private-user".into(),
+            url: "https://example.test/private/path?ip=1.2.3.4".into(),
+        },
+        CheckResult::Failed(Failure::RateLimited { until: 123456789 }),
+    ] {
+        let mut env = environment();
+        env.update_result = result.kind();
+        let text = report(&env, &d, generated());
+        assert!(text.contains(&format!("Last update check: {}", result.kind().label())));
+        for secret in [
+            "private-user",
+            "example.test",
+            "private/path",
+            "1.2.3.4",
+            "123456789",
+        ] {
+            assert!(!text.contains(secret), "{text}");
+        }
+    }
 }

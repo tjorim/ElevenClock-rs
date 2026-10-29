@@ -209,6 +209,7 @@ pub fn detect_environment() -> Environment {
         os_architecture: os_architecture().to_owned(),
         app_architecture: app_architecture().to_owned(),
         managed: crate::managed::detect(),
+        update_result: crate::update_check::ResultKind::NotChecked,
         // The Startup page fills this in from the registry when it is shown.
         startup: StartupKind::Off,
     }

@@ -13,12 +13,23 @@ One window, four pages (a tab strip; `Ctrl+Tab`, `Ctrl+Shift+Tab` and
 | Support | Status, Refresh status and Copy diagnostics ([details](diagnostics.md)) |
 
 Below every page, Settings shows the running app version, taken from the same
-Cargo workspace version as the executable's file properties. **Check for updates**
-opens [the latest GitHub release](https://github.com/tjorim/ElevenClock-rs/releases/latest)
-in your default browser. The app makes no network request. The button supports
-Tab followed by Enter or Space; an opening failure appears in the Settings status.
-Managed copies show “managed by your organization” beside the version and hide
-this button, because their launcher handles updates.
+Cargo workspace version as the executable's file properties. **GitHub Releases** opens
+[GitHub Releases](https://github.com/tjorim/ElevenClock-rs/releases/latest) in your
+default browser. **Check now** makes one bounded GitHub request on a worker, only
+when clicked. The disabled button shows “Checking…” while Settings remains usable.
+The status says “You have the latest version.”, “Version X.Y.Z is available”, or
+“Couldn't check for updates.” An available result makes GitHub Releases open that release's
+validated page, and explains updating: run the new setup, or exit and replace the
+portable exe. Nothing is downloaded or installed. There are no automatic checks.
+
+Both buttons support Tab then Enter or Space; status changes are announced to screen
+readers. A release-opening failure appears in the Settings status. Closing Settings
+cancels pending work and discards late results; Exit never waits for the network.
+Requests time out after ten seconds overall, accept at most 64 KiB, never overlap,
+and respect server rate-limit backoff for the remainder of this app session.
+Managed copies show “managed by your organization” beside the version, hide both
+buttons and reject request dispatch, because their launcher handles updates.
+See [ADR 0003](../adr/0003-update-checks.md) for data sent and GitHub retention.
 
 Buttons: **Exit ElevenClock-rs**, **Reset to defaults**, **OK**, **Cancel**, **Apply**.
 
@@ -124,7 +135,7 @@ needed for current behavior.
 | Menu Settings; second-instance launch | Native show request converges on `SettingsWindow::show_or_focus`; an existing draft is retained | Settings desktop harness for window/focus behavior |
 | Menu Exit; Settings Exit; host close/session end | Menu calls runtime quit; Settings/host queue Exit, pumped as `Input::Quit`; runtime owns teardown | Runtime menu-exit, quit and end-session tests; lifecycle harness for native teardown |
 | Apply/OK; Reset; Cancel/close | Settings controller owns validation/save/recovery; OK closes only after success, Reset stages a draft, Cancel discards it | `settings_model` and `preferences_store` portable tests; Settings desktop harness |
-| Check for updates | Settings queues the button command, rejects it in managed mode, then opens the fixed release URL through the shell on the UI thread; failures use the announced Settings status | Settings desktop harness checks version, accessible name and tab order; browser activation requires Windows desktop verification |
+| GitHub Releases / Check now | Settings queues owned commands; managed policy guards both UI and native request dispatch. GitHub Releases opens the validated release URL; Check now starts one cancellable worker and posts a result wakeup | Portable response, version, backoff and cancellation-policy tests; Windows-only WinHTTP loopback tests for response decoding, redirects, rate limits, streamed overflow, deadlines, cancellation and callback cleanup; desktop harness checks accessible names and tab order. Live GitHub/offline behavior and screen-reader announcements require Windows desktop verification |
 | Startup checkbox; Support Refresh/Copy | Separate typed startup/support policies, serviced outside callbacks; startup changes require explicit user action | Startup/support portable tests and native registry/clipboard tests |
 
 Pause/Resume is available through the shared menu; Settings does not duplicate it.
