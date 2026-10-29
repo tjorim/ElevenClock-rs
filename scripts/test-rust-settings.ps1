@@ -234,7 +234,7 @@ try {
     Assert (([SettingsNative]::AccessibleState($updates) -band 0x100000) -ne 0) 'Update button must be keyboard focusable'
     Assert ([SettingsNative]::AccessibleName((Control $window 0 1109)) -eq 'Check now') 'Check now must have an accessible name'
     Assert ([SettingsNative]::AccessibleName((Control $window 0 1110)) -eq 'Check for updates automatically') 'Automatic checkbox must have an accessible name'
-    Assert ([SettingsNative]::SendMessage((Control $window 0 1110), 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Automatic checks must default to off'
+    Assert ([SettingsNative]::SendMessageW((Control $window 0 1110), 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Automatic checks must default to off'
     $steps.structure = 'All pages and controls present; Apply disabled when clean'
 
     # 3. Tab order and mnemonics, through the real input queue.
@@ -248,13 +248,15 @@ try {
     Press 70 18; Assert ((Focused-Id $window) -eq 1202) 'Alt+F must focus the format editor'
     Press 77 18; Assert ((Focused-Id $window) -eq 1110) 'Alt+M must focus the automatic update checkbox'
     Press 77 18
-    Assert ([SettingsNative]::SendMessage((Control $window 0 1110), 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Toggling automatic checks twice must restore off without applying'
+    Assert ([SettingsNative]::SendMessageW((Control $window 0 1110), 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Toggling automatic checks twice must restore off without applying'
     $steps.keyboard = "Tab order $($expected -join ' > '), wrap, Shift+Tab and Alt+F passed"
 
     # 4. Live preview: the documented fixture and the ISO year boundary.
     $preview = [SettingsNative]::Text((Control $window $PAGE.Date 1204))
     Assert ($preview -match 'Tue 13 Oct 2026 \(ISO week-year 2026, week 42\): 12:34 . 2642\.2') "Fixture preview missing: $preview"
     Assert ($preview -match 'Fri 1 Jan 2027 \(ISO week-year 2026, week 53\): 12:34 . 2653\.5') "ISO year boundary preview missing: $preview"
+    # The automatic-update mnemonic checks leave focus on their checkbox.
+    Press 70 18; Assert ((Focused-Id $window) -eq 1202) 'Alt+F must return focus to the format editor before typing'
     Press 65 0x11                  # Ctrl+A in the format editor
     Type-Text '%y%V.%u'            # calendar-year preset, typed
     $preview = [SettingsNative]::Text((Control $window $PAGE.Date 1204))
