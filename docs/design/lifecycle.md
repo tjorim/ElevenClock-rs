@@ -140,3 +140,22 @@ pixels. Stale geometry releases the cover before the bounded helper finishes.
 Visible, selected, on-monitor clocks that remain unverified after a successful batch
 get four bounded settling retries (2, 4, 8, 16 seconds); unsupported layouts do not
 create an endless discovery loop.
+
+## Optional update checks
+
+The runtime supplies managed mode, lock/pause/suspend/exit eligibility, a resume
+sequence, UTC seconds and monotonic time to the portable `UpdateRuntime` policy.
+The UI-thread update service owns the single worker and uses the Settings session
+for serialized persistence even when no Settings dialog exists. A dedicated one-shot
+host timer wakes at the next opportunity, with at least three minutes of startup or
+resume grace and at least 24 hours between attempts. No timer is armed by default
+or in managed mode; existing clock and shell timers do not initiate requests.
+
+Both manual and automatic requests use the same bounded worker and coordinator.
+Lock, suspend and pause cancel work and remove the automatic timer. Turning consent
+off cancels automatic work; Exit cancels either kind. Cancelled workers retain their
+in-flight slot until their bounded completion, preventing overlap, and cannot notify.
+Shutdown drops the worker without joining network operations. Explorer replacement
+does not reset the update schedule or start a check. Rate-limit deadlines and
+notification markers survive restart; failed automatic checks are quiet. See
+[ADR 0003](../adr/0003-update-checks.md) and [preferences](preferences.md).

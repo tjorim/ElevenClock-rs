@@ -4,7 +4,7 @@ Releases are unsigned GitHub releases with four assets: the installer, the porta
 ZIP, the managed ZIP for company deployments and `SHA256SUMS.txt`. The source is the tagged commit, which GitHub also attaches
 to every release as a source archive. What has been tested is in
 [tested configurations](tested-configurations.md). The [code signing policy](../README.md#code-signing-policy) describes the planned
-SignPath signing; winget is a later distribution channel. The name and channels
+SignPath signing; the winget submission procedure is below. The name and channels
 are in [product name](product-name.md).
 
 ## Publishing a release
@@ -176,3 +176,65 @@ does not establish cross-version release compatibility. See
 [tested configurations](tested-configurations.md) for the validation scope. Returning
 to the native clock immediately requires only Exit/uninstall: the underlying clock
 was never disabled. Start legacy ElevenClock only after the Rust app has exited.
+
+## WinGet submission
+
+The candidate manifests in `packaging/winget/manifests/t/tjorim/ElevenClock-rs/0.2.0`
+refer to the published 0.2.0 standard installer. Its downloaded SHA-256 was checked
+against the release's `SHA256SUMS.txt`. These files are submission inputs, not evidence
+that the package is available in the community catalog. Do not publish the managed
+or portable ZIP under this identifier.
+
+For each release, copy the version directory, update all package/display versions,
+release and license links, the versioned installer URL and its SHA-256 (download the
+setup and use `winget hash`). Never use a latest-release URL or replace a published
+installer. Keep the Inno uninstall key `{97911B67-52D7-4D9B-B833-29303BC540A7}_is1`
+as both ProductCode and AppsAndFeaturesEntries ProductCode, and the publisher/name
+identical to the installer. This is how downloaded-setup installs are recognised.
+
+On Windows, validate before submitting:
+
+```powershell
+$manifest = 'packaging/winget/manifests/t/tjorim/ElevenClock-rs/0.2.0'
+winget validate --manifest $manifest
+# Enabling local manifests may require an elevated terminal; installation must not.
+winget settings --enable LocalManifestFiles
+winget install --manifest $manifest --scope user
+```
+
+Use a disposable standard-user Windows 11 x64 account and retain the terminal output
+and installer logs. Verify no UAC, then exit the app before each upgrade/uninstall.
+Install an older downloaded setup, enable startup and save custom preferences, then
+use the candidate local manifest to upgrade; check the executable version, startup
+and preferences. Uninstall with `winget uninstall --id tjorim.ElevenClock-rs --exact`;
+verify preferences remain and the owned Run value is removed, as with normal setup.
+In a separate account deploy the managed ZIP: check that `winget upgrade --all`
+does not select it and local-manifest installation refuses without changing its files.
+After catalog acceptance repeat install and upgrade through the community source,
+including detection of a downloaded older setup.
+
+Setup's `/SUPPRESSMSGBOXES` hides the explanatory refusal dialogs. Do not rely on
+winget displaying the reason: capture the client output on Windows. Inno reports a
+failed initialization (code 1), or a Preparing to Install refusal (code 7); neither
+uniquely identifies a managed copy or a running app. For diagnosis rerun setup with
+`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="setup.log"`. Managed refusal logs
+`refused: managed copy present`; builds after 0.2.0 also log
+`refused: app still running`. Exit via Settings or the tray and retry for the latter;
+for a managed copy, use the organization's launcher instead. Do not map these shared
+Inno codes to a specific WinGet ExpectedReturnCodes response.
+See [Inno exit codes](https://jrsoftware.org/ishelp/topic_setupexitcodes.htm).
+
+Copy the tested version directory into the same `manifests/t/tjorim/ElevenClock-rs/`
+path in a fork of [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs),
+and submit a PR following its contributing guide. Retain its validation results and
+resolve failures before calling the package available. The unsigned EXE still needs
+URL/SmartScreen reputation, malware scanning and unattended installation validation;
+a hash match does not establish acceptance. See the upstream
+[validation requirements](https://github.com/microsoft/winget-pkgs/blob/master/doc/Validation.md).
+Do not bypass SmartScreen or promise acceptance of unsigned installers.
+
+After acceptance, add `winget install --id tjorim.ElevenClock-rs --exact --scope user`
+to the README install options, with `winget upgrade --id tjorim.ElevenClock-rs --exact`
+and the instruction to exit the app first. Until then the downloaded setup is the
+supported install route. Manifest updates are manual; no repository token or release
+workflow permissions are added for this channel.

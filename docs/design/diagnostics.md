@@ -80,8 +80,14 @@ marks a build from uncommitted changes; `unknown` means no git checkout).
   other `C:\...`, `C:/...`, `\\server\...` or `\\?\...` path becomes `<path>`, and the
   user name becomes `<user>` (case-insensitive, whole words only). Reasons are also
   flattened to one line and cut at 200 characters.
-- **Nothing is sent**: there is no network code, upload, telemetry or crash reporter.
-  The only way text leaves the app is the user's click on Copy diagnostics.
+- **Copy diagnostics stays local**: it only copies this text to the clipboard.
+  There is no telemetry, upload or crash reporter. The app's only network request is
+  **Check now** in Settings or automatic checks after explicit opt-in (off by default)
+  ([ADR 0003](../adr/0003-update-checks.md));
+  managed copies never check GitHub. GitHub receives the IP and app version, never
+  the report. Diagnostics record manual only, automatic, or disabled (managed), and the last
+  result kind only, without
+  URLs, response bodies, headers, IPs or raw network errors.
 
 ## Bounded refresh, with no blocking
 

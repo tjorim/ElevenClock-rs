@@ -14,7 +14,8 @@ disabled; it sits underneath, so exiting always brings it straight back.
 - **Self-contained.** One native executable: no Python, Qt or Visual C++ runtime to
   install.
 - **Stays out of the way.** Installs for your account without administrator rights,
-  starts at sign-in only if you turn that on, and never connects to the internet.
+  starts at sign-in only if you turn that on, and goes online only to check for
+  updates when you ask it to or opt in.
 
 ## Install
 
@@ -121,9 +122,12 @@ repository's GitHub Actions workflow, and each release is approved by hand.
 - Committers and reviewers: [tjorim](https://github.com/tjorim)
 - Approvers: [tjorim](https://github.com/tjorim)
 
-**Privacy policy:** This program will not transfer any information to other networked
-systems unless specifically requested by the user or the person installing or
-operating it.
+**Privacy policy:** The app makes no network requests except when you click
+**Check now** in Settings or enable **Check for updates automatically** (off by
+default). These checks contact GitHub Releases with your IP address and
+app version ([details and GitHub retention](docs/adr/0003-update-checks.md)). Managed
+copies never check GitHub. There is no telemetry, upload or crash reporter;
+Copy diagnostics only copies local text to your clipboard.
 
 ## License
 

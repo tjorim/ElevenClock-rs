@@ -70,8 +70,10 @@ end;
 function AppIsClosed(): Boolean;
 begin
   Result := FindWindowByClassName('ElevenClock-rs.Runtime.Host') = 0;
-  if not Result then
+  if not Result then begin
+    Log('refused: app still running; exit ElevenClock-rs before installing or uninstalling');
     SuppressibleMsgBox('Exit ElevenClock-rs from Settings or the tray menu, then try again.', mbInformation, MB_OK, IDOK);
+  end;
 end;
 
 // The managed launcher (ADR 0004) deploys its copy into this same folder. A copy
@@ -96,8 +98,10 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   // Also covers an installation folder chosen with /DIR.
-  if ManagedCopyIn(ExpandConstant('{app}')) then
-    Result := ManagedCopyMessage()
+  if ManagedCopyIn(ExpandConstant('{app}')) then begin
+    Log('refused: managed copy present');
+    Result := ManagedCopyMessage();
+  end
   else if not AppIsClosed() then
     Result := 'ElevenClock-rs is still running. Exit it before continuing.';
 end;

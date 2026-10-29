@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "format": "%H:%M\n%g%V.%u",
+  "monitors": "primary",
+  "font_size_pt": 9,
+  "theme": "system",
+  "first_run_completed": false,
+  "update_check_enabled": false,
+  "updates": {
+    "last_update_check": null,
+    "last_notified_version": null,
+    "backoff_until": 0
+  }
+}

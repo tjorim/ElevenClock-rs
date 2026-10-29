@@ -220,30 +220,43 @@ try {
     $steps.firstRun = 'Welcome text shown on the first launch'
 
     # 2. Structure: every page and control the contract names exists.
-    foreach ($id in 1100, 1102, 1003, 1104, 1105, 1, 2) { Assert ((Control $window 0 $id) -ne [IntPtr]::Zero) "Missing main control $id" }
+    foreach ($id in 1100, 1102, 1107, 1108, 1109, 1110, 1003, 1104, 1105, 1, 2) { Assert ((Control $window 0 $id) -ne [IntPtr]::Zero) "Missing main control $id" }
     foreach ($id in 1201, 1202, 1203, 1204, 1205) { Assert ((Control $window $PAGE.Date $id) -ne [IntPtr]::Zero) "Missing Date and time control $id" }
     foreach ($id in 1301, 1302, 1303, 1304, 1305, 1306) { Assert ((Control $window $PAGE.Appearance $id) -ne [IntPtr]::Zero) "Missing Appearance control $id" }
     Assert ((Control $window $PAGE.Startup 1401) -ne [IntPtr]::Zero) 'Missing Startup page'
     Assert ((Control $window $PAGE.Support 1501) -ne [IntPtr]::Zero) 'Missing Support page'
     Assert ([SettingsNative]::Text((Control $window $PAGE.Support 1501)) -like '*version*') 'Support page must show the version'
     Assert (-not [SettingsNative]::IsWindowEnabled((Control $window 0 1105))) 'Apply must be disabled while nothing changed'
+    $fileVersion = $app.MainModule.FileVersionInfo.ProductVersion
+    Assert ([SettingsNative]::Text((Control $window 0 1107)) -eq "ElevenClock-rs $fileVersion") 'Settings version must match the executable product version'
+    $updates = Control $window 0 1108
+    Assert ([SettingsNative]::AccessibleName($updates) -eq 'GitHub Releases') 'Update button must have an accessible name'
+    Assert (([SettingsNative]::AccessibleState($updates) -band 0x100000) -ne 0) 'Update button must be keyboard focusable'
+    Assert ([SettingsNative]::AccessibleName((Control $window 0 1109)) -eq 'Check now') 'Check now must have an accessible name'
+    Assert ([SettingsNative]::AccessibleName((Control $window 0 1110)) -eq 'Check for updates automatically') 'Automatic checkbox must have an accessible name'
+    Assert ([SettingsNative]::SendMessageW((Control $window 0 1110), 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Automatic checks must default to off'
     $steps.structure = 'All pages and controls present; Apply disabled when clean'
 
     # 3. Tab order and mnemonics, through the real input queue.
     Foreground $window
-    $expected = 1100, 1201, 1202, 1204, 1205, 1003, 1104, 1, 2
+    $expected = 1100, 1201, 1202, 1204, 1205, 1108, 1109, 1110, 1003, 1104, 1, 2
     $actual = @(Focused-Id $window)
     1..($expected.Count - 1) | ForEach-Object { Press 9; $actual += Focused-Id $window }
     Assert (($actual -join ',') -eq ($expected -join ',')) "Tab order was $($actual -join ',') but expected $($expected -join ',')"
     Press 9; Assert ((Focused-Id $window) -eq 1100) 'Tab cycle must wrap to the page tabs'
     Press 9 0x10; Assert ((Focused-Id $window) -eq 2) 'Shift+Tab must go back'
     Press 70 18; Assert ((Focused-Id $window) -eq 1202) 'Alt+F must focus the format editor'
+    Press 77 18; Assert ((Focused-Id $window) -eq 1110) 'Alt+M must focus the automatic update checkbox'
+    Press 77 18
+    Assert ([SettingsNative]::SendMessageW((Control $window 0 1110), 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Toggling automatic checks twice must restore off without applying'
     $steps.keyboard = "Tab order $($expected -join ' > '), wrap, Shift+Tab and Alt+F passed"
 
     # 4. Live preview: the documented fixture and the ISO year boundary.
     $preview = [SettingsNative]::Text((Control $window $PAGE.Date 1204))
     Assert ($preview -match 'Tue 13 Oct 2026 \(ISO week-year 2026, week 42\): 12:34 . 2642\.2') "Fixture preview missing: $preview"
     Assert ($preview -match 'Fri 1 Jan 2027 \(ISO week-year 2026, week 53\): 12:34 . 2653\.5') "ISO year boundary preview missing: $preview"
+    # The automatic-update mnemonic checks leave focus on their checkbox.
+    Press 70 18; Assert ((Focused-Id $window) -eq 1202) 'Alt+F must return focus to the format editor before typing'
     Press 65 0x11                  # Ctrl+A in the format editor
     Type-Text '%y%V.%u'            # calendar-year preset, typed
     $preview = [SettingsNative]::Text((Control $window $PAGE.Date 1204))
@@ -295,6 +308,29 @@ try {
     Assert ([SettingsNative]::Text((Control $window 0 1101)) -like 'ElevenClock-rs keeps running*') 'Welcome text must only show once'
     Assert ([SettingsNative]::GetForegroundWindow() -eq $window) 'The second launch must bring Settings to the front'
     $steps.cancel = 'Cancel discarded the draft, the clock kept running and a second launch refocused Settings'
+
+    # 8-consent. Automatic update checks are opt-in: enabling one is applied, persisted
+    #     and shown again after reopening; it is switched back off so the run makes no
+    #     further update traffic.
+    $auto = Control $window 0 1110
+    Assert ([SettingsNative]::SendMessageW($auto, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Automatic checks must still be off after Cancel'
+    Click $auto
+    Assert ([SettingsNative]::SendMessageW($auto, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero).ToInt32() -eq 1) 'Clicking the automatic checkbox must check it'
+    Click (Control $window 0 1105)
+    Assert ((Get-Content $preferences -Raw) -match '"update_check_enabled"\s*:\s*true') 'Enabled consent was not persisted'
+    Click (Control $window 0 2)
+    Wait-Settings $false 'Cancel to close Settings after enabling checks'
+    $again = Start-Process $Executable -PassThru
+    if (!$again.WaitForExit(15000)) { $again.Kill(); throw 'Relaunch after enabling checks did not exit' }
+    Wait-Settings $true 'relaunch to show Settings after enabling checks'
+    $window = [SettingsNative]::Settings($app.Id)
+    Start-Sleep -Milliseconds 500
+    $auto = Control $window 0 1110
+    Assert ([SettingsNative]::SendMessageW($auto, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero).ToInt32() -eq 1) 'Enabled consent must be checked after reopening Settings'
+    Click $auto
+    Click (Control $window 0 1105)
+    Assert ((Get-Content $preferences -Raw) -match '"update_check_enabled"\s*:\s*false') 'Disabled consent was not persisted'
+    $steps.consent = 'Automatic-check consent persisted when enabled, survived a reopen and was switched back off'
 
     # 8a. Startup (R12): the checkbox is the real HKCU Run registration, read back from
     #     Windows after every action. Off by default; only the dedicated value changes.

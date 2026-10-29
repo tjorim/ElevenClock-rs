@@ -40,6 +40,8 @@ public static class ManagedWindow {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int max);
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr window, uint msg, IntPtr w, IntPtr l);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr window, uint msg, int w, StringBuilder text);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr dialog, int id);
   public static IntPtr Settings(int process) {
     IntPtr result = IntPtr.Zero;
@@ -60,6 +62,7 @@ public static class ManagedWindow {
 # Pages are children of the dialog and controls children of pages (settings.rc).
 $PAGE = @{ Startup = 113; Support = 114 }
 function Control([IntPtr]$window, [int]$page, [int]$id) {
+    if ($page -eq 0) { return [ManagedWindow]::GetDlgItem($window, $id) }
     [ManagedWindow]::GetDlgItem([ManagedWindow]::GetDlgItem($window, $page), $id)
 }
 function Wait-App {
@@ -117,6 +120,17 @@ try {
     Assert ($status -like 'ElevenClock-rs version * (managed by your organization)*') "Support status lacks the managed note: $status"
     $report = Wait-Report $window 'Managed: yes'
     Assert ($report.Contains('Startup: off')) "Startup should start off: $report"
+    foreach ($id in 1108, 1109, 1110) {
+        $control = Control $window 0 $id
+        Assert ($control -ne [IntPtr]::Zero) "Update control $id is missing from Settings"
+        Assert (![ManagedWindow]::IsWindowVisible($control)) "Managed mode must hide update control $id"
+    }
+    [ManagedWindow]::SendMessage($window, 0x0111, [IntPtr]1109, [IntPtr]::Zero) | Out-Null
+    # A started check disables the button until it completes.
+    Assert ([ManagedWindow]::IsWindowEnabled((Control $window 0 1109))) 'Synthetic Check now must not start a managed check'
+    $report = [ManagedWindow]::Text((Control $window $PAGE.Support 1503))
+    Assert ($report -like '*Update checks: disabled (managed)*') 'Managed update policy missing from diagnostics'
+    Assert ($report -like '*Last update check: not checked*') 'Synthetic Check now must not start a managed check'
     $results.managedMode = 'passed: version note and "Managed: yes" in diagnostics'
 
     # 3. Startup stays the user's choice, but registers the sibling launcher.

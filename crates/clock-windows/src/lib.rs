@@ -19,6 +19,7 @@ pub mod preferences_store;
 pub mod settings_model;
 pub mod startup;
 pub mod support;
+pub mod update_check;
 
 pub mod render;
 pub mod theme;
