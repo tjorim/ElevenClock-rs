@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+
+PackageIdentifier: tjorim.ElevenClock-rs
+PackageVersion: 0.2.0
+PackageLocale: en-US
+Publisher: ElevenClock-rs contributors
+PublisherUrl: https://github.com/tjorim/ElevenClock-rs
+PublisherSupportUrl: https://github.com/tjorim/ElevenClock-rs/issues
+PackageName: ElevenClock-rs
+PackageUrl: https://tjorim.github.io/ElevenClock-rs/
+License: Apache-2.0
+LicenseUrl: https://github.com/tjorim/ElevenClock-rs/blob/v0.2.0/LICENSE
+ShortDescription: A customizable clock for the Windows 11 taskbar.
+Tags:
+- clock
+- taskbar
+- windows11
+ReleaseNotesUrl: https://github.com/tjorim/ElevenClock-rs/releases/tag/v0.2.0
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0
