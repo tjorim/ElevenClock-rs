@@ -32,6 +32,8 @@ use windows_core::{PCWSTR, PWSTR, w};
 
 // Resource ids shared with `settings.rc`, the hosted UI checks and the tests.
 const DIALOG: usize = 101;
+/// Status text while a manual update check is in flight.
+const CHECKING_STATUS: &str = "Checking…";
 const PAGE_DATE: i32 = 111;
 const PAGE_APPEARANCE: i32 = 112;
 const PAGE_STARTUP: i32 = 113;
@@ -975,7 +977,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         }
         enable(dialog, item(dialog, ID_CHECK_NOW), false);
         set_text(item(dialog, ID_CHECK_NOW), "Checking…");
-        self.status = "Checking…".into();
+        self.status = CHECKING_STATUS.into();
         self.show_status(dialog, runtime);
     }
 
@@ -988,8 +990,14 @@ impl<S: PreferencesStore> SettingsWindow<S> {
     /// The Settings session also owns background commits, even without a dialog.
     pub fn service_updates<P: Platform>(&mut self, runtime: &mut Runtime<P>) {
         let context = runtime.update_context(managed::detect());
-        self.support.environment.managed = context.managed;
-        self.support.environment.update_automatic = self.controller.active().update_check_enabled();
+        let update_automatic = self.controller.active().update_check_enabled();
+        if self.support.environment.managed != context.managed
+            || self.support.environment.update_automatic != update_automatic
+        {
+            self.support.environment.managed = context.managed;
+            self.support.environment.update_automatic = update_automatic;
+            self.support.shown = None;
+        }
         self.updates.schedule(&self.controller.session, context);
         if self.updates.needs_cancel()
             && let Some(worker) = &self.update_worker
@@ -1066,6 +1074,14 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 self.support.environment.update_result = result.kind();
                 self.support.shown = None;
             }
+            // A manual check that became ineligible (cancelled, managed) must not
+            // leave its progress text behind.
+            if self.status == CHECKING_STATUS {
+                self.status.clear();
+                if let Some(dialog) = open_dialog() {
+                    self.show_status(dialog, runtime);
+                }
+            }
             return;
         }
         // Only a fixed result/failure vocabulary reaches the bounded log.
@@ -1138,7 +1154,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 (ID_CHECK_NOW, 0) if update_checks_available(self.support.environment.managed) => {
                     self.start_update(dialog, runtime)
                 }
-                (ID_UPDATES, 0) if update_checks_available(self.support.environment.managed) => {
+                (ID_UPDATES, 0) if update_checks_available(managed::detect()) => {
                     let url: Vec<u16> = self.release_url.encode_utf16().chain(Some(0)).collect();
                     // SAFETY: validated URL, NUL-terminated strings; no borrowed state crosses
                     // the shell call. This runs on the dialog thread outside callbacks.

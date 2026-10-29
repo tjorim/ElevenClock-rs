@@ -118,6 +118,9 @@ impl<S: PreferencesStore> PreferenceSession<S> {
         if self.load_error.is_some() {
             return Err(StoreError::RecoveryRequired);
         }
+        if !valid_update_history(&updates) {
+            return Err(StoreError::DamagedData);
+        }
         let mut next = self.active.clone();
         next.updates = updates;
         self.store.save(&next)?;
@@ -225,6 +228,12 @@ struct Document {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     updates: Option<UpdateHistory>,
 }
+/// What `decode` accepts; saving anything else would be rejected on the next load.
+fn valid_update_history(updates: &UpdateHistory) -> bool {
+    updates.last_notified_version.as_ref().is_none_or(|v| {
+        v.len() <= 256 && crate::update_check::version(v).is_some_and(|(_, pre)| !pre)
+    })
+}
 fn decode(bytes: &[u8]) -> Result<StoredPreferences, StoreError> {
     // Read the version before decoding this version's fields, including when a newer
     // writer changed the entire payload shape. Never rewrite an unsupported version.
@@ -243,10 +252,7 @@ fn decode(bytes: &[u8]) -> Result<StoredPreferences, StoreError> {
         || doc
             .updates
             .as_ref()
-            .and_then(|u| u.last_notified_version.as_ref())
-            .is_some_and(|v| {
-                v.len() > 256 || crate::update_check::version(v).is_none_or(|(_, pre)| pre)
-            })
+            .is_some_and(|u| !valid_update_history(u))
     {
         return Err(StoreError::DamagedData);
     }
@@ -572,6 +578,18 @@ mod tests {
         let mut failed = PreferenceSession::open(FailingStore(MemoryPreferencesStore::default()));
         assert!(failed.save_update_history(history).is_err());
         assert_eq!(failed.update_history(), &UpdateHistory::default());
+    }
+    #[test]
+    fn update_history_that_decode_rejects_is_never_saved() {
+        let mut session = PreferenceSession::open(MemoryPreferencesStore::default());
+        for version in ["1.2.3-rc.1", "not a version", &"9".repeat(300)] {
+            let history = UpdateHistory {
+                last_notified_version: Some(version.into()),
+                ..UpdateHistory::default()
+            };
+            assert!(session.save_update_history(history).is_err());
+            assert_eq!(session.update_history(), &UpdateHistory::default());
+        }
     }
 
     #[test]

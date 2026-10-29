@@ -14,7 +14,8 @@ disabled; it sits underneath, so exiting always brings it straight back.
 - **Self-contained.** One native executable: no Python, Qt or Visual C++ runtime to
   install.
 - **Stays out of the way.** Installs for your account without administrator rights,
-  starts at sign-in only if you turn that on, and never connects to the internet.
+  starts at sign-in only if you turn that on, and goes online only to check for
+  updates when you ask it to or opt in.
 
 ## Install
 

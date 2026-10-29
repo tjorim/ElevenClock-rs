@@ -309,6 +309,29 @@ try {
     Assert ([SettingsNative]::GetForegroundWindow() -eq $window) 'The second launch must bring Settings to the front'
     $steps.cancel = 'Cancel discarded the draft, the clock kept running and a second launch refocused Settings'
 
+    # 8-consent. Automatic update checks are opt-in: enabling one is applied, persisted
+    #     and shown again after reopening; it is switched back off so the run makes no
+    #     further update traffic.
+    $auto = Control $window 0 1110
+    Assert ([SettingsNative]::SendMessageW($auto, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]::Zero) 'Automatic checks must still be off after Cancel'
+    Click $auto
+    Assert ([SettingsNative]::SendMessageW($auto, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero).ToInt32() -eq 1) 'Clicking the automatic checkbox must check it'
+    Click (Control $window 0 1105)
+    Assert ((Get-Content $preferences -Raw) -match '"update_check_enabled"\s*:\s*true') 'Enabled consent was not persisted'
+    Click (Control $window 0 2)
+    Wait-Settings $false 'Cancel to close Settings after enabling checks'
+    $again = Start-Process $Executable -PassThru
+    if (!$again.WaitForExit(15000)) { $again.Kill(); throw 'Relaunch after enabling checks did not exit' }
+    Wait-Settings $true 'relaunch to show Settings after enabling checks'
+    $window = [SettingsNative]::Settings($app.Id)
+    Start-Sleep -Milliseconds 500
+    $auto = Control $window 0 1110
+    Assert ([SettingsNative]::SendMessageW($auto, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero).ToInt32() -eq 1) 'Enabled consent must be checked after reopening Settings'
+    Click $auto
+    Click (Control $window 0 1105)
+    Assert ((Get-Content $preferences -Raw) -match '"update_check_enabled"\s*:\s*false') 'Disabled consent was not persisted'
+    $steps.consent = 'Automatic-check consent persisted when enabled, survived a reopen and was switched back off'
+
     # 8a. Startup (R12): the checkbox is the real HKCU Run registration, read back from
     #     Windows after every action. Off by default; only the dedicated value changes.
     Foreground $window
