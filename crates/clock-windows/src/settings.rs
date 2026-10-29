@@ -42,6 +42,8 @@ pub const ID_EXIT: i32 = 1003;
 pub const ID_RESET: i32 = 1104;
 pub const ID_APPLY: i32 = 1105;
 const ID_ANCHOR: i32 = 1106;
+pub const ID_VERSION: i32 = 1107;
+pub const ID_UPDATES: i32 = 1108;
 
 pub const ID_PRESET: i32 = 1201;
 pub const ID_FORMAT: i32 = 1202;
@@ -514,6 +516,20 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             self.support.environment.managed = managed;
             self.support.shown = None;
         }
+        set_text(
+            item(dialog, ID_VERSION),
+            &format!(
+                "ElevenClock-rs {}",
+                managed::version_text(env!("CARGO_PKG_VERSION"), managed)
+            ),
+        );
+        // SAFETY: this is our own button; hidden controls leave the tab order.
+        unsafe {
+            let _ = ShowWindow(
+                item(dialog, ID_UPDATES),
+                if managed { SW_HIDE } else { SW_SHOW },
+            );
+        }
         // Before the Support page is filled: the report names the startup program.
         self.show_startup(dialog);
         self.update_support(dialog, runtime);
@@ -932,6 +948,28 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 (id, _) if id == IDCANCEL => self.finish(dialog),
                 (id, _) if id == IDOK => self.apply(dialog, runtime, true),
                 (ID_APPLY, _) => self.apply(dialog, runtime, false),
+                (ID_UPDATES, 0) if !self.support.environment.managed => {
+                    // SAFETY: fixed, NUL-terminated strings; no borrowed state crosses
+                    // the shell call. This runs on the dialog thread outside callbacks.
+                    let result = unsafe {
+                        ShellExecuteW(
+                            Some(dialog),
+                            w!("open"),
+                            w!("https://github.com/tjorim/ElevenClock-rs/releases/latest"),
+                            None,
+                            None,
+                            SW_SHOW,
+                        )
+                    };
+                    // ShellExecute returns a value greater than 32 on success,
+                    // not an owned instance handle or a GetLastError result.
+                    self.status = if result.0 as isize <= 32 {
+                        "Could not open the release page. Try again or visit GitHub Releases in your browser.".into()
+                    } else {
+                        "Opened GitHub Releases in your default browser.".into()
+                    };
+                    self.show_status(dialog, runtime);
+                }
                 (ID_RESET, _) => {
                     self.controller.reset_to_defaults();
                     self.status.clear();

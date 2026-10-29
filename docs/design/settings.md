@@ -12,6 +12,14 @@ One window, four pages (a tab strip; `Ctrl+Tab`, `Ctrl+Shift+Tab` and
 | Startup | The opt-in login-startup checkbox ([details](startup.md)). It is the Windows registration itself, not a stored preference, so nothing can drift from the OS-owned state |
 | Support | Status, Refresh status and Copy diagnostics ([details](diagnostics.md)) |
 
+Below every page, Settings shows the running app version, taken from the same
+Cargo workspace version as the executable's file properties. **Check for updates**
+opens [the latest GitHub release](https://github.com/tjorim/ElevenClock-rs/releases/latest)
+in your default browser. The app makes no network request. The button supports
+Tab followed by Enter or Space; an opening failure appears in the Settings status.
+Managed copies show “managed by your organization” beside the version and hide
+this button, because their launcher handles updates.
+
 Buttons: **Exit ElevenClock-rs**, **Reset to defaults**, **OK**, **Cancel**, **Apply**.
 
 The window uses the Windows 11 text font (Segoe UI Variable) and the Mica material
@@ -116,6 +124,7 @@ needed for current behavior.
 | Menu Settings; second-instance launch | Native show request converges on `SettingsWindow::show_or_focus`; an existing draft is retained | Settings desktop harness for window/focus behavior |
 | Menu Exit; Settings Exit; host close/session end | Menu calls runtime quit; Settings/host queue Exit, pumped as `Input::Quit`; runtime owns teardown | Runtime menu-exit, quit and end-session tests; lifecycle harness for native teardown |
 | Apply/OK; Reset; Cancel/close | Settings controller owns validation/save/recovery; OK closes only after success, Reset stages a draft, Cancel discards it | `settings_model` and `preferences_store` portable tests; Settings desktop harness |
+| Check for updates | Settings queues the button command, rejects it in managed mode, then opens the fixed release URL through the shell on the UI thread; failures use the announced Settings status | Settings desktop harness checks version, accessible name and tab order; browser activation requires Windows desktop verification |
 | Startup checkbox; Support Refresh/Copy | Separate typed startup/support policies, serviced outside callbacks; startup changes require explicit user action | Startup/support portable tests and native registry/clipboard tests |
 
 Pause/Resume is available through the shared menu; Settings does not duplicate it.

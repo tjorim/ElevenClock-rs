@@ -1126,6 +1126,33 @@ where
     unsafe { SetWindowTextW(hwnd, lpstring.param().abi()) }
 }
 #[inline]
+pub unsafe fn ShellExecuteW<P1, P2, P3, P4>(
+    hwnd: Option<HWND>,
+    lpoperation: P1,
+    lpfile: P2,
+    lpparameters: P3,
+    lpdirectory: P4,
+    nshowcmd: i32,
+) -> HINSTANCE
+where
+    P1: windows_core::Param<windows_core::PCWSTR>,
+    P2: windows_core::Param<windows_core::PCWSTR>,
+    P3: windows_core::Param<windows_core::PCWSTR>,
+    P4: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("shell32.dll" "system" fn ShellExecuteW(hwnd : HWND, lpoperation : windows_core::PCWSTR, lpfile : windows_core::PCWSTR, lpparameters : windows_core::PCWSTR, lpdirectory : windows_core::PCWSTR, nshowcmd : i32) -> HINSTANCE);
+    unsafe {
+        ShellExecuteW(
+            hwnd.unwrap_or(core::mem::zeroed()) as _,
+            lpoperation.param().abi(),
+            lpfile.param().abi(),
+            lpparameters.param().abi(),
+            lpdirectory.param().abi(),
+            nshowcmd,
+        )
+    }
+}
+#[inline]
 pub unsafe fn Shell_NotifyIconW(
     dwmessage: u32,
     lpdata: *const NOTIFYICONDATAW,

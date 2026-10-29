@@ -310,6 +310,7 @@ Windows.Win32.SetWindowLongPtrW
 Windows.Win32.SetWindowPlacement
 Windows.Win32.SetWindowPos
 Windows.Win32.SetWindowTextW
+Windows.Win32.ShellExecuteW
 Windows.Win32.Shell_NotifyIconW
 Windows.Win32.ShowWindow
 Windows.Win32.SystemParametersInfoW
