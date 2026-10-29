@@ -255,6 +255,8 @@ try {
     $preview = [SettingsNative]::Text((Control $window $PAGE.Date 1204))
     Assert ($preview -match 'Tue 13 Oct 2026 \(ISO week-year 2026, week 42\): 12:34 . 2642\.2') "Fixture preview missing: $preview"
     Assert ($preview -match 'Fri 1 Jan 2027 \(ISO week-year 2026, week 53\): 12:34 . 2653\.5') "ISO year boundary preview missing: $preview"
+    # The automatic-update mnemonic checks leave focus on their checkbox.
+    Press 70 18; Assert ((Focused-Id $window) -eq 1202) 'Alt+F must return focus to the format editor before typing'
     Press 65 0x11                  # Ctrl+A in the format editor
     Type-Text '%y%V.%u'            # calendar-year preset, typed
     $preview = [SettingsNative]::Text((Control $window $PAGE.Date 1204))
