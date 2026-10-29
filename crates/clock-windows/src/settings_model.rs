@@ -49,6 +49,7 @@ pub struct Draft {
     pub font_size: String,
     pub monitors: Monitors,
     pub theme: Theme,
+    pub update_check_enabled: bool,
 }
 impl Draft {
     pub fn from_preferences(preferences: &Preferences) -> Self {
@@ -57,6 +58,7 @@ impl Draft {
             font_size: preferences.font_size_pt.to_string(),
             monitors: preferences.monitors,
             theme: preferences.theme,
+            update_check_enabled: preferences.update_check_enabled,
         }
     }
     fn font(&self) -> Result<u8, String> {
@@ -74,11 +76,13 @@ impl Draft {
             monitors: self.monitors,
             font_size_pt: self.font().ok()?,
             theme: self.theme,
+            update_check_enabled: self.update_check_enabled,
         })
     }
     /// Same effective values; "09" and "9" are the same font size.
     fn same_as(&self, other: &Draft) -> bool {
-        self.format == other.format
+        self.update_check_enabled == other.update_check_enabled
+            && self.format == other.format
             && self.monitors == other.monitors
             && self.theme == other.theme
             && match (self.font(), other.font()) {
@@ -166,7 +170,7 @@ pub enum ApplyOutcome {
 }
 
 pub struct SettingsController<S> {
-    session: PreferenceSession<S>,
+    pub(crate) session: PreferenceSession<S>,
     draft: Draft,
 }
 impl<S: PreferencesStore> SettingsController<S> {
@@ -196,6 +200,9 @@ impl<S: PreferencesStore> SettingsController<S> {
     }
     pub fn set_monitors(&mut self, monitors: Monitors) {
         self.draft.monitors = monitors;
+    }
+    pub fn set_update_check_enabled(&mut self, enabled: bool) {
+        self.draft.update_check_enabled = enabled;
     }
     pub fn set_theme(&mut self, theme: Theme) {
         self.draft.theme = theme;
@@ -441,6 +448,11 @@ fn fit_message(problems: &[FitProblem]) -> String {
         "This does not fit the clock space on {} even at 6 pt. Use a shorter format or fewer lines.",
         places.join(" and ")
     )
+}
+
+/// Managed deployments obtain updates only through their launcher.
+pub fn update_checks_available(managed: bool) -> bool {
+    !managed
 }
 
 #[cfg(test)]

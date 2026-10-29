@@ -46,7 +46,7 @@ NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsoc
 SYSTEM_DLLS = {
     "advapi32.dll", "bcryptprimitives.dll", "comctl32.dll", "d2d1.dll", "dwmapi.dll", "dwrite.dll",
     "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll",
-    "uiautomationcore.dll", "user32.dll", "wtsapi32.dll",
+    "uiautomationcore.dll", "user32.dll", "winhttp.dll", "wtsapi32.dll",
 }
 
 

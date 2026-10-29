@@ -21,6 +21,7 @@ export const navigation = [
   ['Decisions', [
     ['docs/adr/0001-taskbar-discovery.md', 'ADR 0001: taskbar discovery'],
     ['docs/adr/0002-same-executable-discovery-helper.md', 'ADR 0002: discovery helper'],
+    ['docs/adr/0003-update-checks.md', 'ADR 0003: update checks'],
     ['docs/adr/0004-managed-launcher.md', 'ADR 0004: managed launcher'],
   ]],
   ['Project', [

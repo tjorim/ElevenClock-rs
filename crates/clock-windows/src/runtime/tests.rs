@@ -1790,6 +1790,7 @@ fn only_a_changed_format_source_resamples_the_worst_case() {
     discover(&mut runtime, 0, vec![bar(0, 1, true), bar(0, 2, true)]);
     let apply = |runtime: &mut Runtime<Fake>, format: &str, font_size_pt: u8, theme: Theme| {
         let preferences = Preferences {
+            update_check_enabled: false,
             format: format.into(),
             font_size_pt,
             theme,
@@ -2206,4 +2207,83 @@ fn settings_fit_cache_reuses_measurements_and_invalidates_changed_inputs() {
     check(&mut runtime, 9, now);
     runtime.platform.fit_needs_width = Some(140);
     assert_eq!(check(&mut runtime, 9, now).len(), 1);
+}
+
+#[test]
+fn update_policy_uses_scripted_lifecycle_and_independent_managed_input() {
+    use crate::{
+        preferences_store::{MemoryPreferencesStore, PreferenceSession},
+        update_check::UpdateRuntime,
+    };
+    let mut runtime = runtime(Monitors::Primary);
+    let mut session = PreferenceSession::open(MemoryPreferencesStore::default());
+    let mut draft = session.active().draft();
+    draft.update_check_enabled = true;
+    session.apply(draft).unwrap();
+    let mut updates = UpdateRuntime::default();
+    let initial = runtime.update_context(false);
+    assert_eq!(
+        updates.schedule(&session, initial),
+        Some(initial.monotonic + Duration::from_secs(180))
+    );
+    assert_eq!(
+        updates.schedule(&session, runtime.update_context(true)),
+        None
+    );
+    assert!(session.active().update_check_enabled());
+    runtime.handle(Input::Signal(Signal::SessionLocked));
+    runtime.handle(Input::Signal(Signal::Suspended));
+    runtime.handle(Input::Signal(Signal::Resumed));
+    assert!(
+        !runtime.update_context(false).allowed,
+        "resume must not unlock the session"
+    );
+    runtime.handle(Input::Signal(Signal::SessionUnlocked));
+    let resumed = runtime.update_context(false);
+    assert!(resumed.allowed);
+    assert_ne!(resumed.epoch, initial.epoch);
+    assert_eq!(
+        updates.schedule(&session, resumed),
+        Some(resumed.monotonic + Duration::from_secs(180))
+    );
+    runtime.platform_mut().mono += Duration::from_secs(180);
+    assert!(updates.begin(&mut session, runtime.update_context(false), true));
+    runtime.handle(Input::Quit);
+    let quit = runtime.update_context(false);
+    assert!(!quit.allowed);
+    assert_eq!(updates.schedule(&session, quit), None);
+    assert_eq!(
+        updates.complete(
+            &mut session,
+            &crate::update_check::CheckResult::Available {
+                version: "9.0.0".into(),
+                url: "https://github.com/tjorim/ElevenClock-rs/releases/tag/v9.0.0".into()
+            },
+            quit
+        ),
+        (false, false)
+    );
+}
+
+#[test]
+fn update_cancellation_survives_lock_and_unlock_in_one_message_batch() {
+    use crate::{
+        preferences_store::{MemoryPreferencesStore, PreferenceSession},
+        update_check::{CheckResult, UpdateRuntime},
+    };
+    let mut runtime = runtime(Monitors::Primary);
+    let mut session = PreferenceSession::open(MemoryPreferencesStore::default());
+    let mut updates = UpdateRuntime::default();
+    assert!(updates.begin(&mut session, runtime.update_context(false), false));
+    runtime.handle(Input::Signal(Signal::SessionLocked));
+    runtime.handle(Input::Signal(Signal::SessionUnlocked));
+    let context = runtime.update_context(false);
+    assert!(context.allowed);
+    updates.schedule(&session, context);
+    assert!(updates.needs_cancel());
+    assert!(!updates.accepts_result(&session, context));
+    assert_eq!(
+        updates.complete(&mut session, &CheckResult::UpToDate, context),
+        (false, false)
+    );
 }

@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+
+PackageIdentifier: tjorim.ElevenClock-rs
+PackageVersion: 0.2.0
+InstallerType: inno
+Scope: user
+MinimumOSVersion: 10.0.22000.0
+UpgradeBehavior: install
+ElevationRequirement: elevationProhibited
+InstallerSwitches:
+  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART
+ProductCode: '{97911B67-52D7-4D9B-B833-29303BC540A7}_is1'
+AppsAndFeaturesEntries:
+- DisplayName: ElevenClock-rs
+  Publisher: ElevenClock-rs contributors
+  DisplayVersion: 0.2.0
+  ProductCode: '{97911B67-52D7-4D9B-B833-29303BC540A7}_is1'
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/tjorim/ElevenClock-rs/releases/download/v0.2.0/ElevenClock-rs-0.2.0-x64-setup.exe
+  InstallerSha256: A59CC135A1734C4E1301E889D36E44324C150E890BD258E82AEA3AEFC6C52139
+ManifestType: installer
+ManifestVersion: 1.10.0

@@ -22,6 +22,11 @@ const NIN_SELECT: u32 = 0x0400;
 /// Keyboard selection (Enter or Space on the focused icon).
 const NIN_KEYSELECT: u32 = 0x0401;
 
+/// Balloon clicks use the low word, just like menu callbacks.
+pub fn notification_clicked(lparam: isize) -> bool {
+    lparam as usize & 0xffff == 0x0405 // NIN_BALLOONUSERCLICK
+}
+
 /// Decode a version 4 tray callback. Hover, balloon and popup notifications and
 /// mouse-move traffic produce no action.
 pub fn interaction_for_message(wparam: usize, lparam: isize) -> Option<Interaction> {
@@ -81,6 +86,21 @@ mod tests {
         assert_eq!(interaction_for_message(0, only_id), None);
     }
 
+    #[test]
+    fn notification_click_is_distinct_from_menu_and_ignores_icon_id() {
+        assert!(notification_clicked((1 << 16) | 0x0405));
+        assert_eq!(interaction_for_message(0, (1 << 16) | 0x0405), None);
+        for event in [
+            WM_CONTEXTMENU,
+            NIN_SELECT,
+            NIN_KEYSELECT,
+            0x0402,
+            0x0403,
+            0x0404,
+        ] {
+            assert!(!notification_clicked(event as isize));
+        }
+    }
     #[test]
     fn other_notifications_do_nothing() {
         // WM_MOUSEMOVE, WM_LBUTTONDOWN, NIN_BALLOONSHOW, NIN_POPUPOPEN, NIN_POPUPCLOSE.
