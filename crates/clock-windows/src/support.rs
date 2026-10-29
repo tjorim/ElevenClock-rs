@@ -42,6 +42,9 @@ pub struct Environment {
     pub app_architecture: String,
     /// The company launcher sits beside the app (managed mode, ADR 0004).
     pub managed: bool,
+    /// Result vocabulary only; never release data, headers or network errors.
+    pub update_automatic: bool,
+    pub update_result: crate::update_check::ResultKind,
     /// Which program the sign-in startup entry starts, if any.
     pub startup: StartupKind,
 }
@@ -56,6 +59,8 @@ impl Environment {
             os_architecture: "unknown".to_owned(),
             app_architecture: std::env::consts::ARCH.to_owned(),
             managed: false,
+            update_automatic: false,
+            update_result: crate::update_check::ResultKind::NotChecked,
             startup: StartupKind::Off,
         }
     }
@@ -569,6 +574,20 @@ pub fn report(
     line(format!(
         "Managed: {}",
         if environment.managed { "yes" } else { "no" }
+    ));
+    line(format!(
+        "Update checks: {}",
+        if environment.managed {
+            "disabled (managed)"
+        } else if environment.update_automatic {
+            "automatic"
+        } else {
+            "manual only"
+        }
+    ));
+    line(format!(
+        "Last update check: {}",
+        environment.update_result.label()
     ));
     line(format!("Startup: {}", environment.startup.label()));
     line(String::new());

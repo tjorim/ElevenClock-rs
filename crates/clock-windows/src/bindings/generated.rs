@@ -357,6 +357,11 @@ pub unsafe fn GetCurrentProcessId() -> u32 {
     unsafe { GetCurrentProcessId() }
 }
 #[inline]
+pub unsafe fn GetCurrentThreadId() -> u32 {
+    windows_core::link!("kernel32.dll" "system" fn GetCurrentThreadId() -> u32);
+    unsafe { GetCurrentThreadId() }
+}
+#[inline]
 pub unsafe fn GetCursorPos(lppoint: *mut POINT) -> windows_core::BOOL {
     windows_core::link!("user32.dll" "system" fn GetCursorPos(lppoint : *mut POINT) -> windows_core::BOOL);
     unsafe { GetCursorPos(lppoint as _) }
@@ -806,6 +811,16 @@ pub unsafe fn PostMessageW(
 pub unsafe fn PostQuitMessage(nexitcode: i32) {
     windows_core::link!("user32.dll" "system" fn PostQuitMessage(nexitcode : i32));
     unsafe { PostQuitMessage(nexitcode) }
+}
+#[inline]
+pub unsafe fn PostThreadMessageW(
+    idthread: u32,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> windows_core::BOOL {
+    windows_core::link!("user32.dll" "system" fn PostThreadMessageW(idthread : u32, msg : u32, wparam : WPARAM, lparam : LPARAM) -> windows_core::BOOL);
+    unsafe { PostThreadMessageW(idthread, msg, wparam, lparam) }
 }
 #[inline]
 pub unsafe fn RegCloseKey(hkey: HKEY) -> LSTATUS {
@@ -1267,6 +1282,208 @@ pub unsafe fn WTSUnRegisterSessionNotification(hwnd: HWND) -> windows_core::BOOL
     windows_core::link!("wtsapi32.dll" "system" fn WTSUnRegisterSessionNotification(hwnd : HWND) -> windows_core::BOOL);
     unsafe { WTSUnRegisterSessionNotification(hwnd) }
 }
+#[inline]
+pub unsafe fn WinHttpCloseHandle(hinternet: HINTERNET) -> windows_core::BOOL {
+    windows_core::link!("winhttp.dll" "system" fn WinHttpCloseHandle(hinternet : HINTERNET) -> windows_core::BOOL);
+    unsafe { WinHttpCloseHandle(hinternet) }
+}
+#[inline]
+pub unsafe fn WinHttpConnect<P1>(
+    hsession: HINTERNET,
+    pswzservername: P1,
+    nserverport: INTERNET_PORT,
+    dwreserved: u32,
+) -> HINTERNET
+where
+    P1: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("winhttp.dll" "system" fn WinHttpConnect(hsession : HINTERNET, pswzservername : windows_core::PCWSTR, nserverport : INTERNET_PORT, dwreserved : u32) -> HINTERNET);
+    unsafe {
+        WinHttpConnect(
+            hsession,
+            pswzservername.param().abi(),
+            nserverport,
+            dwreserved,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpOpen<P0, P2, P3>(
+    pszagentw: P0,
+    dwaccesstype: u32,
+    pszproxyw: P2,
+    pszproxybypassw: P3,
+    dwflags: u32,
+) -> HINTERNET
+where
+    P0: windows_core::Param<windows_core::PCWSTR>,
+    P2: windows_core::Param<windows_core::PCWSTR>,
+    P3: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("winhttp.dll" "system" fn WinHttpOpen(pszagentw : windows_core::PCWSTR, dwaccesstype : u32, pszproxyw : windows_core::PCWSTR, pszproxybypassw : windows_core::PCWSTR, dwflags : u32) -> HINTERNET);
+    unsafe {
+        WinHttpOpen(
+            pszagentw.param().abi(),
+            dwaccesstype,
+            pszproxyw.param().abi(),
+            pszproxybypassw.param().abi(),
+            dwflags,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpOpenRequest<P1, P2, P3, P4>(
+    hconnect: HINTERNET,
+    pwszverb: P1,
+    pwszobjectname: P2,
+    pwszversion: P3,
+    pwszreferrer: P4,
+    ppwszaccepttypes: Option<*const windows_core::PCWSTR>,
+    dwflags: u32,
+) -> HINTERNET
+where
+    P1: windows_core::Param<windows_core::PCWSTR>,
+    P2: windows_core::Param<windows_core::PCWSTR>,
+    P3: windows_core::Param<windows_core::PCWSTR>,
+    P4: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("winhttp.dll" "system" fn WinHttpOpenRequest(hconnect : HINTERNET, pwszverb : windows_core::PCWSTR, pwszobjectname : windows_core::PCWSTR, pwszversion : windows_core::PCWSTR, pwszreferrer : windows_core::PCWSTR, ppwszaccepttypes : *const windows_core::PCWSTR, dwflags : u32) -> HINTERNET);
+    unsafe {
+        WinHttpOpenRequest(
+            hconnect,
+            pwszverb.param().abi(),
+            pwszobjectname.param().abi(),
+            pwszversion.param().abi(),
+            pwszreferrer.param().abi(),
+            ppwszaccepttypes.unwrap_or(core::mem::zeroed()) as _,
+            dwflags,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpQueryHeaders<P2>(
+    hrequest: HINTERNET,
+    dwinfolevel: u32,
+    pwszname: P2,
+    lpbuffer: Option<*mut core::ffi::c_void>,
+    lpdwbufferlength: *mut u32,
+    lpdwindex: Option<*mut u32>,
+) -> windows_core::BOOL
+where
+    P2: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("winhttp.dll" "system" fn WinHttpQueryHeaders(hrequest : HINTERNET, dwinfolevel : u32, pwszname : windows_core::PCWSTR, lpbuffer : *mut core::ffi::c_void, lpdwbufferlength : *mut u32, lpdwindex : *mut u32) -> windows_core::BOOL);
+    unsafe {
+        WinHttpQueryHeaders(
+            hrequest,
+            dwinfolevel,
+            pwszname.param().abi(),
+            lpbuffer.unwrap_or(core::mem::zeroed()) as _,
+            lpdwbufferlength as _,
+            lpdwindex.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpReadData(
+    hrequest: HINTERNET,
+    lpbuffer: *mut core::ffi::c_void,
+    dwnumberofbytestoread: u32,
+    lpdwnumberofbytesread: *mut u32,
+) -> windows_core::BOOL {
+    windows_core::link!("winhttp.dll" "system" fn WinHttpReadData(hrequest : HINTERNET, lpbuffer : *mut core::ffi::c_void, dwnumberofbytestoread : u32, lpdwnumberofbytesread : *mut u32) -> windows_core::BOOL);
+    unsafe {
+        WinHttpReadData(
+            hrequest,
+            lpbuffer as _,
+            dwnumberofbytestoread,
+            lpdwnumberofbytesread as _,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpReceiveResponse(
+    hrequest: HINTERNET,
+    lpreserved: *const core::ffi::c_void,
+) -> windows_core::BOOL {
+    windows_core::link!("winhttp.dll" "system" fn WinHttpReceiveResponse(hrequest : HINTERNET, lpreserved : *const core::ffi::c_void) -> windows_core::BOOL);
+    unsafe { WinHttpReceiveResponse(hrequest, lpreserved) }
+}
+#[inline]
+pub unsafe fn WinHttpSendRequest(
+    hrequest: HINTERNET,
+    lpszheaders: Option<&[u16]>,
+    lpoptional: Option<*const core::ffi::c_void>,
+    dwoptionallength: u32,
+    dwtotallength: u32,
+    dwcontext: usize,
+) -> windows_core::BOOL {
+    windows_core::link!("winhttp.dll" "system" fn WinHttpSendRequest(hrequest : HINTERNET, lpszheaders : windows_core::PCWSTR, dwheaderslength : u32, lpoptional : *const core::ffi::c_void, dwoptionallength : u32, dwtotallength : u32, dwcontext : usize) -> windows_core::BOOL);
+    unsafe {
+        WinHttpSendRequest(
+            hrequest,
+            core::mem::transmute(lpszheaders.map_or(core::ptr::null(), |slice| slice.as_ptr())),
+            lpszheaders.map_or(0, |slice| slice.len().try_into().unwrap()),
+            lpoptional.unwrap_or(core::mem::zeroed()) as _,
+            dwoptionallength,
+            dwtotallength,
+            dwcontext,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpSetOption(
+    hinternet: Option<HINTERNET>,
+    dwoption: u32,
+    lpbuffer: *mut core::ffi::c_void,
+    dwbufferlength: u32,
+) -> windows_core::BOOL {
+    windows_core::link!("winhttp.dll" "system" fn WinHttpSetOption(hinternet : HINTERNET, dwoption : u32, lpbuffer : *mut core::ffi::c_void, dwbufferlength : u32) -> windows_core::BOOL);
+    unsafe {
+        WinHttpSetOption(
+            hinternet.unwrap_or(core::mem::zeroed()) as _,
+            dwoption,
+            lpbuffer as _,
+            dwbufferlength,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpSetStatusCallback(
+    hinternet: HINTERNET,
+    lpfninternetcallback: WINHTTP_STATUS_CALLBACK,
+    dwnotificationflags: u32,
+    dwreserved: usize,
+) -> WINHTTP_STATUS_CALLBACK {
+    windows_core::link!("winhttp.dll" "system" fn WinHttpSetStatusCallback(hinternet : HINTERNET, lpfninternetcallback : WINHTTP_STATUS_CALLBACK, dwnotificationflags : u32, dwreserved : usize) -> WINHTTP_STATUS_CALLBACK);
+    unsafe {
+        WinHttpSetStatusCallback(
+            hinternet,
+            lpfninternetcallback,
+            dwnotificationflags,
+            dwreserved,
+        )
+    }
+}
+#[inline]
+pub unsafe fn WinHttpSetTimeouts(
+    hinternet: HINTERNET,
+    nresolvetimeout: i32,
+    nconnecttimeout: i32,
+    nsendtimeout: i32,
+    nreceivetimeout: i32,
+) -> windows_core::BOOL {
+    windows_core::link!("winhttp.dll" "system" fn WinHttpSetTimeouts(hinternet : HINTERNET, nresolvetimeout : i32, nconnecttimeout : i32, nsendtimeout : i32, nreceivetimeout : i32) -> windows_core::BOOL);
+    unsafe {
+        WinHttpSetTimeouts(
+            hinternet,
+            nresolvetimeout,
+            nconnecttimeout,
+            nsendtimeout,
+            nreceivetimeout,
+        )
+    }
+}
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ACCESS_MASK(pub u32);
@@ -1524,6 +1741,9 @@ pub struct HIGHCONTRASTW {
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct HINSTANCE(pub *mut core::ffi::c_void);
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct HINTERNET(pub *mut core::ffi::c_void);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct HKEY(pub *mut core::ffi::c_void);
@@ -2291,6 +2511,9 @@ impl Default for INPUT_0 {
     }
 }
 pub const INPUT_KEYBOARD: i32 = 1;
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct INTERNET_PORT(pub u16);
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct IO_COUNTERS {
@@ -3235,9 +3458,11 @@ pub struct MSG {
     pub pt: POINT,
 }
 pub const NIF_ICON: i32 = 2;
+pub const NIF_INFO: i32 = 16;
 pub const NIF_MESSAGE: i32 = 1;
 pub const NIF_SHOWTIP: i32 = 128;
 pub const NIF_TIP: i32 = 4;
+pub const NIIF_INFO: i32 = 1;
 pub const NIM_ADD: i32 = 0;
 pub const NIM_DELETE: i32 = 2;
 pub const NIM_MODIFY: i32 = 1;
@@ -3482,6 +3707,7 @@ pub const SW_RESTORE: i32 = 9;
 pub const SW_SHOW: i32 = 5;
 pub const SW_SHOWMINNOACTIVE: i32 = 7;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
+pub const SW_SHOWNORMAL: i32 = 1;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct SYSTEMTIME {
@@ -3757,6 +3983,33 @@ pub type WINEVENTPROC = Option<
 >;
 pub const WINEVENT_OUTOFCONTEXT: i32 = 0;
 pub const WINEVENT_SKIPOWNPROCESS: i32 = 2;
+pub const WINHTTP_ACCESS_TYPE_NO_PROXY: i32 = 1;
+pub const WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS: i32 = 159252480;
+pub const WINHTTP_CALLBACK_FLAG_HANDLES: i32 = 3072;
+pub const WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING: i32 = 2048;
+pub const WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE: i32 = 131072;
+pub const WINHTTP_CALLBACK_STATUS_READ_COMPLETE: i32 = 524288;
+pub const WINHTTP_CALLBACK_STATUS_REQUEST_ERROR: i32 = 2097152;
+pub const WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE: i32 = 4194304;
+pub const WINHTTP_DISABLE_AUTHENTICATION: i32 = 4;
+pub const WINHTTP_DISABLE_COOKIES: i32 = 1;
+pub const WINHTTP_DISABLE_REDIRECTS: i32 = 2;
+pub const WINHTTP_FLAG_ASYNC: i32 = 268435456;
+pub const WINHTTP_FLAG_SECURE: i32 = 8388608;
+pub const WINHTTP_OPTION_CONTEXT_VALUE: i32 = 45;
+pub const WINHTTP_OPTION_DISABLE_FEATURE: i32 = 63;
+pub const WINHTTP_QUERY_CUSTOM: i32 = 65535;
+pub const WINHTTP_QUERY_FLAG_NUMBER: i32 = 536870912;
+pub const WINHTTP_QUERY_STATUS_CODE: i32 = 19;
+pub type WINHTTP_STATUS_CALLBACK = Option<
+    unsafe extern "system" fn(
+        hinternet: HINTERNET,
+        dwcontext: usize,
+        dwinternetstatus: u32,
+        lpvstatusinformation: *mut core::ffi::c_void,
+        dwstatusinformationlength: u32,
+    ),
+>;
 pub const WM_APP: i32 = 32768;
 pub const WM_CANCELMODE: i32 = 31;
 pub const WM_CAPTURECHANGED: i32 = 533;

@@ -50,6 +50,10 @@ impl State {
     pub fn preferences(&self) -> &ValidatedPreferences {
         &self.preferences
     }
+    /// True while the session is locked.
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
     /// True while the user has paused clock replacement; every overlay is hidden.
     pub fn is_paused(&self) -> bool {
         self.paused

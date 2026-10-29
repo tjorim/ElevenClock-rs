@@ -45,8 +45,11 @@ use windows_core::{HSTRING, PCWSTR, PWSTR, w};
 const WM_DISCOVERY: u32 = WM_APP as u32 + 3;
 const TIMER_CLOCK: usize = 1;
 const TIMER_POLL: usize = 2;
+const TIMER_UPDATE: usize = 3;
 
 thread_local! {
+    static UPDATE_CLICK: Cell<bool> = const { Cell::new(false) };
+    static UPDATE_TIMER: Cell<bool> = const { Cell::new(false) };
     static CLOCK_TIMER: Cell<bool> = const { Cell::new(false) };
     static POLL_TIMER: Cell<bool> = const { Cell::new(false) };
     static DISCOVERY_READY: Cell<bool> = const { Cell::new(false) };
@@ -470,6 +473,20 @@ impl Platform for NativePlatform {
     fn take_overlay_failures(&mut self) -> Vec<(TaskbarKey, Reason)> {
         std::mem::take(&mut self.overlay_failures)
     }
+    fn arm_update_timer(&mut self, delay: Option<Duration>) {
+        // SAFETY: removes only this host window's private update timer.
+        unsafe {
+            let _ = KillTimer(Some(self.host), TIMER_UPDATE);
+        }
+        if let Some(delay) = delay {
+            set_timer(self.host, TIMER_UPDATE, delay);
+        }
+    }
+    fn notify_update(&mut self, version: &str, url: &str) {
+        if let Some(tray) = &mut self.tray {
+            tray.notify_update(version, url);
+        }
+    }
     fn arm_timer(&mut self, delay: Duration) {
         set_timer(self.host, TIMER_CLOCK, delay);
     }
@@ -481,6 +498,7 @@ impl Platform for NativePlatform {
         unsafe {
             let _ = KillTimer(Some(self.host), TIMER_CLOCK);
             let _ = KillTimer(Some(self.host), TIMER_POLL);
+            let _ = KillTimer(Some(self.host), TIMER_UPDATE);
         }
         self.overlays.clear();
         self.tray = None;
@@ -508,6 +526,7 @@ fn guard(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
                 let _ = KillTimer(Some(hwnd), wparam.0);
             }
             match wparam.0 {
+                TIMER_UPDATE => UPDATE_TIMER.set(true),
                 TIMER_CLOCK => CLOCK_TIMER.set(true),
                 TIMER_POLL => POLL_TIMER.set(true),
                 _ => {}
@@ -526,6 +545,9 @@ fn guard(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         // Notification-area icon (version 4 callback): mouse selection, keyboard
         // selection and the context-menu key all queue the same fixed menu.
         WM_TRAYICON => {
+            if crate::tray::notification_clicked(lparam.0) {
+                UPDATE_CLICK.set(true);
+            }
             if let Some(menu) = interaction_for_message(wparam.0, lparam.0) {
                 interaction::post_interaction(menu);
             }
@@ -704,6 +726,7 @@ pub fn run<S: PreferencesStore>(
     };
     let mut runtime = Runtime::new(platform, initial);
     runtime.start();
+    settings.service_updates(&mut runtime);
     if launch == LaunchMode::Interactive {
         settings.show_or_focus(&mut runtime)?;
     }
@@ -791,6 +814,15 @@ fn pump<S: PreferencesStore>(
     }
     if runtime.is_finished() {
         return Ok(());
+    }
+    if UPDATE_TIMER.take() {
+        settings.update_timer_fired();
+    }
+    settings.service_updates(runtime);
+    if UPDATE_CLICK.take()
+        && let Some(tray) = &runtime.platform().tray
+    {
+        tray.open_update();
     }
     runtime.platform_mut().repaint_invalidated();
     runtime.sync_overlay_failures();

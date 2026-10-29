@@ -195,6 +195,9 @@ class Gates(unittest.TestCase):
                 (folder / release.MANAGED_SUMS).read_bytes(),
                 f"{hashlib.sha256(b'app').hexdigest()}  elevenclock-rs.data\n".encode())
 
+    def test_app_may_import_winhttp_for_explicit_release_checks(self):
+        release.inspect_pe(pe(b"WINHTTP.dll"))
+
     def test_launcher_must_not_import_the_network(self):
         release.inspect_pe(pe(b"KERNEL32.dll"), forbidden=release.NETWORK_DLLS)
         for dll in (b"WINHTTP.dll", b"WININET.dll", b"WS2_32.dll"):
