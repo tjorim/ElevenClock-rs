@@ -118,3 +118,17 @@ fn publication_status_is_local_on_failure_and_cleared_on_success() {
     assert!(publish_saved(root.path(), saved.clone(), local.path(), || false).is_err());
     assert_eq!(crate::inventory::read_latest(&local_path).unwrap(), saved);
 }
+
+/// Manual check against a real drop-box folder (see docs/managed-deployment.md):
+/// `ELEVENCLOCK_DROP_BOX=<folder> cargo test -p clock-launcher drop_box_folder -- --ignored`.
+/// Publishes twice, so the second write exercises the rewrite-without-read path.
+#[test]
+#[ignore = "needs a configured drop-box folder"]
+fn drop_box_folder_accepts_create_and_rewrite() {
+    let root = std::env::var_os("ELEVENCLOCK_DROP_BOX").expect("set ELEVENCLOCK_DROP_BOX");
+    let mut value = snapshot();
+    publish(Path::new(&root), &value, || Ok(())).unwrap();
+    value.observed_utc = Some(200);
+    value.support_issues = Some(Vec::new());
+    publish(Path::new(&root), &value, || Ok(())).unwrap();
+}

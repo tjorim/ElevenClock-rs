@@ -365,7 +365,7 @@ Central reports are **drop-box files**. Every account may use the app, so nothin
 provisioned per user: the launcher writes one file straight into `report_directory`.
 
 ```text
-\fileserver\apps\ElevenClock-reports\S-1-5-21-123-456-789-1001.12345678-1234-4234-8234-123456789abc.json
+\\fileserver\apps\ElevenClock-reports\S-1-5-21-123-456-789-1001.12345678-1234-4234-8234-123456789abc.json
 ```
 
 The name is `<SID>.<installation-ID>.json`, so a person with several PCs has one file
@@ -384,10 +384,10 @@ the local snapshot.
 Example NTFS recipe, to be checked with two ordinary accounts before enabling it:
 
 ```text
-icacls "\fileserver\apps\ElevenClock-reports" /inheritance:r
-icacls "\fileserver\apps\ElevenClock-reports" /grant "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F"
-icacls "\fileserver\apps\ElevenClock-reports" /grant "*S-1-5-11:(WD)"
-icacls "\fileserver\apps\ElevenClock-reports" /grant "*S-1-3-0:(OI)(IO)(WD,AD,WA,WEA,RC,S)"
+icacls "\\fileserver\apps\ElevenClock-reports" /inheritance:r
+icacls "\\fileserver\apps\ElevenClock-reports" /grant "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F"
+icacls "\\fileserver\apps\ElevenClock-reports" /grant "*S-1-5-11:(WD)"
+icacls "\\fileserver\apps\ElevenClock-reports" /grant "*S-1-3-0:(OI)(IO)(WD,AD,WA,WEA,RA,RC,S)"
 ```
 
 This gives Administrators and SYSTEM full control, Authenticated Users the right to
@@ -396,7 +396,10 @@ to rewrite its own file, but no list, read, delete or take-ownership rights for 
 else. The share must also allow Change: NTFS cannot override a read-only share. Keep
 this folder separate from the read-only deployed executables and configuration, and do
 not create it below a folder that grants users read access. This needs no new share,
-local device administration or automatic ACL changes. Test create, rewrite, enumerate,
+local device administration or automatic ACL changes. The recipe was checked with one account on local NTFS and over loopback SMB (the real
+publisher creates and rewrites its file;
+list, read, delete, rename and subfolder creation are denied). Cross-user isolation, a
+domain share and the owner check on remote files were not. Test create, rewrite, enumerate,
 read, delete and cross-user access with ordinary accounts before enabling publication.
 
 Users can rewrite, but not read, the file they created, and file owners can usually
