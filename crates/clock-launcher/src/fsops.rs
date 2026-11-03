@@ -10,9 +10,11 @@ use std::{
 
 /// Larger than any build of the app; stops a wrong file from filling memory.
 pub const MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
-/// Antivirus scanners often hold a freshly written executable for a moment.
-const REPLACE_ATTEMPTS: u32 = 3;
-const REPLACE_PAUSE: Duration = Duration::from_millis(200);
+/// Antivirus scanners often hold a freshly written executable for a moment, and
+/// writers racing for the same target make Windows answer "access denied" until
+/// the winner is done; many short retries ride both out within about a second.
+const REPLACE_ATTEMPTS: u32 = 20;
+const REPLACE_PAUSE: Duration = Duration::from_millis(50);
 
 /// Reads a whole file, refusing one larger than [`MAX_FILE_BYTES`].
 pub fn read_limited(path: &Path) -> io::Result<Vec<u8>> {
