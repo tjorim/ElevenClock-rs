@@ -13,7 +13,15 @@ test('links reject unsupported data, extra fields, duplicate fields and malforme
   const valid = templateLinks({format:'%H',font:9,theme:'dark'}).app;
   assert.deepEqual(parseTemplateLink(valid.replace('template?', 'template/?')), parseTemplateLink(valid));
   for (const link of [valid.replace('v=1','v=2'),valid+'&startup=true',valid+'&font=10',
-    valid.replace('%25H','%FF'),valid.replace('%25H','%00'),valid.replace('%25H','%2'),
+    valid.replaceAll('%25H','%FF'),valid.replaceAll('%25H','%00'),valid.replaceAll('%25H','%2'),
     valid.replace('font=9','font=25'),valid+'#extra']) assert.throws(() => parseTemplateLink(link));
   for (const format of ['', '%Q', '%', '%H\n\n%M', '%H\n%M\n%S', '%B'.repeat(128), 'x'.repeat(257), '%H\t%M']) assert.throws(() => validateTemplate({format,font:9,theme:'system'}));
+});
+test('malformed UTF-8 rejects repeated and mixed encodings without recursive decoding', () => {
+  const link = format => `elevenclock://template?v=1&format=${format}&font=9&theme=dark`;
+  for (const format of ['%FF%FF', '%25H%00%25M', '%25H%ff%25M', '%C0%80', '%ED%A0%80', '%GG']) {
+    assert.throws(() => parseTemplateLink(link(format)));
+  }
+  assert.deepEqual(parseTemplateLink(link('%25%25FF%20%2B%20%26%20%3D')),
+    { format: '%%FF + & =', font: 9, theme: 'dark' });
 });
