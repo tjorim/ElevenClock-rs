@@ -94,6 +94,7 @@ mod tests {
     #[test]
     fn recoverable_update_failure_is_a_warning_but_no_copy_and_start_failure_are_errors() {
         let observation = Observation {
+            local_launcher_current: false,
             exit: Exit::Done,
             refresh: RefreshOutcome::SourceUnreachable,
             launch: LaunchOutcome::ProcessCreated,
@@ -123,5 +124,13 @@ mod tests {
             ..observation
         });
         assert!(started.is_empty()); // process creation is not health telemetry
+        let failed = for_observation(Observation {
+            launch: LaunchOutcome::StartFailed,
+            ..observation
+        });
+        assert!(failed.contains(&Issue {
+            code: Code::StartFailed,
+            severity: Severity::Error
+        }));
     }
 }

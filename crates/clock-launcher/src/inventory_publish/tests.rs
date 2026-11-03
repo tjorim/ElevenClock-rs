@@ -3,6 +3,7 @@ use crate::launch::{Exit, LaunchOutcome, Observation, RefreshOutcome};
 
 fn snapshot() -> Snapshot {
     let mut value = Snapshot::from_observation(Observation {
+        local_launcher_current: false,
         exit: Exit::Done,
         refresh: RefreshOutcome::Updated,
         launch: LaunchOutcome::ProcessCreated,

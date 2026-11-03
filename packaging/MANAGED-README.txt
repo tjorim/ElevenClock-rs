@@ -78,3 +78,10 @@ failures, fallback, fact/preference lookup problems and publication status. No r
 log lines or exception text are exported. A central publication failure can only be
 recorded locally while the central report remains stale; inspect last-seen times.
 This reports the latest launcher observation, not live clock health or error history.
+
+Inventory runs only when that launch established that the local launcher matches
+its refresh source. Failed/skipped refreshes (including an already-running app) or
+a missing source launcher skip the helper and retain previous reports. Use local
+launcher logs and last-seen timestamps for failures that cannot report. Matching
+files do not negotiate helper protocol support; deploy compatible app/launcher files
+together from the managed release.

@@ -217,17 +217,16 @@ pub fn record_local(
         // Do not silently replace malformed or future-schema data.
         Err(error) => return Err(error),
     };
-    snapshot.installation_id = previous
+    let same_identity = previous
         .as_ref()
-        .filter(|old| old.sid == snapshot.sid || snapshot.sid.is_none())
+        .filter(|old| old.sid == snapshot.sid || snapshot.sid.is_none());
+    snapshot.installation_id = same_identity
         .and_then(|old| old.installation_id.clone())
         .or_else(new_id);
-    // A failed/rolled-back clock must not overwrite a later observation. No time
-    // means unavailable; retain the old snapshot instead of claiming freshness.
-    if previous
-        .as_ref()
-        .is_some_and(|old| old.observed_utc > snapshot.observed_utc)
-    {
+    // A failed/rolled-back clock for the same identity must not overwrite a later
+    // observation. A different known SID must rotate even if its clock is earlier.
+    // No time means unavailable; retain the old identity's snapshot on lookup failure.
+    if same_identity.is_some_and(|old| old.observed_utc > snapshot.observed_utc) {
         return Ok(None);
     }
     write_latest(&path, &snapshot, || Ok(()))?;

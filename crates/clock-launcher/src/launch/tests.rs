@@ -955,6 +955,10 @@ fn structured_outcomes_cover_refresh_launch_and_fallback_independently() {
         assert_eq!(
             observe_launch(&mut host, &ctx, &interactive()),
             Observation {
+                local_launcher_current: matches!(
+                    scenario,
+                    "updated" | "unchanged" | "start_failed"
+                ),
                 exit,
                 refresh: expected,
                 launch: started,
@@ -969,6 +973,7 @@ fn structured_outcomes_cover_refresh_launch_and_fallback_independently() {
 fn reporting_failure_or_panic_preserves_launch_exit_and_refusal_collects_nothing() {
     for exit in [Exit::Done, Exit::NoCopy, Exit::StartFailed] {
         let observation = Observation {
+            local_launcher_current: true,
             exit,
             refresh: RefreshOutcome::SourceUnreachable,
             launch: LaunchOutcome::NotAttempted,
@@ -984,6 +989,7 @@ fn reporting_failure_or_panic_preserves_launch_exit_and_refusal_collects_nothing
         );
     }
     let observation = Observation {
+        local_launcher_current: true,
         exit: Exit::Refused,
         refresh: RefreshOutcome::NotAttempted,
         launch: LaunchOutcome::NotAttempted,
@@ -1010,4 +1016,60 @@ fn ancillary_launcher_failures_have_structured_codes_without_affecting_start() {
     assert!(host.support_codes.contains(&Code::LauncherRefreshFailed));
     assert!(host.support_codes.contains(&Code::SourceNotRecorded));
     assert_eq!(host.started.len(), 1);
+}
+
+#[test]
+fn reporting_is_skipped_without_a_verified_local_launcher() {
+    let observation = Observation {
+        exit: Exit::Done,
+        local_launcher_current: false,
+        refresh: RefreshOutcome::SkippedRunning,
+        launch: LaunchOutcome::ProcessCreated,
+        fallback: false,
+    };
+    let mut reported = false;
+    assert_eq!(
+        report_after(observation, |_| {
+            reported = true;
+            Ok(())
+        }),
+        Exit::Done
+    );
+    assert!(!reported);
+}
+
+#[test]
+fn helper_gate_tracks_launcher_refresh_results_without_changing_app_start() {
+    let world = World::with_app(NEW);
+    let ctx = world.launched_from_share();
+    let mut host = FakeHost::new();
+    assert!(observe_launch(&mut host, &ctx, &login()).local_launcher_current);
+    // Matching hash is also positive evidence, with no replacement required.
+    host.interrupted = vec![source::LAUNCHER_EXE];
+    assert!(observe_launch(&mut host, &ctx, &login()).local_launcher_current);
+    // Changed central launcher, interrupted replacement: old local file survives
+    // but must not be invoked with a marker that it might pass on to the app.
+    world.publish_launcher("different");
+    let failed = observe_launch(&mut host, &ctx, &login());
+    assert_eq!(failed.exit, Exit::Done);
+    assert!(!failed.local_launcher_current);
+    fs::write(world.share.join(source::LAUNCHER_EXE), b"invalid").unwrap();
+    assert!(!observe_launch(&mut host, &ctx, &login()).local_launcher_current);
+    // Missing central launcher on a local start cannot establish freshness either.
+    fs::remove_file(world.share.join(source::LAUNCHER_EXE)).unwrap();
+    assert!(!observe_launch(&mut host, &world.launched_locally(), &login()).local_launcher_current);
+}
+
+#[test]
+fn refresh_source_that_is_the_local_launcher_needs_no_replacement() {
+    let world = World::with_app(NEW);
+    let ctx = world.launched_from_share();
+    let mut host = FakeHost::new();
+    launch(&mut host, &ctx, &login());
+    assert!(refresh_launcher(
+        &mut host,
+        &world.launched_locally(),
+        &world.layout(),
+        &world.destination
+    ));
 }

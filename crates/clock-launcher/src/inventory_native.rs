@@ -37,7 +37,7 @@ pub fn report(
     observation: Observation,
     extra_issues: &[Code],
 ) -> io::Result<()> {
-    if observation.exit == Exit::Refused {
+    if observation.exit == Exit::Refused || !observation.local_launcher_current {
         return Ok(());
     }
     let mut snapshot = Snapshot::from_observation(observation);
@@ -206,6 +206,30 @@ pub fn collect() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unverified_local_launcher_is_not_invoked_as_an_inventory_helper() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(LAUNCHER_EXE),
+            b"old launcher without inventory support",
+        )
+        .unwrap();
+        let ctx = Context {
+            destination: dir.path().to_path_buf(),
+            own_exe: dir.path().join(LAUNCHER_EXE),
+            probe_timeout: Duration::from_secs(1),
+        };
+        let observation = Observation {
+            exit: Exit::Done,
+            local_launcher_current: false,
+            refresh: crate::launch::RefreshOutcome::SkippedRunning,
+            launch: crate::launch::LaunchOutcome::ProcessCreated,
+            fallback: false,
+        };
+        // Without the gate this would try to execute the old file and fail.
+        assert!(report(&ctx, &Launch::default(), observation, &[]).is_ok());
+    }
+
     #[test]
     fn supervised_exit_and_deadline_do_not_leave_a_helper_running() {
         let root = std::env::var_os("SystemRoot").unwrap();

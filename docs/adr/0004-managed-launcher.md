@@ -200,3 +200,12 @@ as pending; centrally visible reports omit pending, while observed publication
 failures can be retained locally. A deadlined helper may leave pending status.
 Support aggregation counts affected users/installations, not event frequency. No
 app runtime monitoring, crash collection, event history or new worker is introduced.
+
+The inventory helper is invoked only when the current launch established that the
+local launcher matches its refresh source (matching hash, local-file source, or
+successful replacement). Failed/skipped refreshes and a missing source launcher
+suppress helper invocation, preserving the app start result and previous snapshot.
+This freshness evidence does not negotiate helper-protocol support or define a
+minimum compatible release. Keep compatible managed app/launcher artifacts together.
+The same gate prevents reporting some update/fallback failures; local launcher logs
+and stale last-seen timestamps remain the fallback for support in those cases.

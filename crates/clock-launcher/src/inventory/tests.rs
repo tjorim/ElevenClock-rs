@@ -3,6 +3,7 @@ use crate::launch::Exit;
 
 fn sample() -> Snapshot {
     let mut snapshot = Snapshot::from_observation(Observation {
+        local_launcher_current: false,
         exit: Exit::Done,
         refresh: RefreshOutcome::Unchanged,
         launch: LaunchOutcome::ProcessCreated,
@@ -40,6 +41,7 @@ fn compatibility_and_bounds() {
 #[test]
 fn unavailable_facts_are_explicit_and_not_grouped() {
     let snapshot = Snapshot::from_observation(Observation {
+        local_launcher_current: false,
         exit: Exit::NoCopy,
         refresh: RefreshOutcome::SourceUnreachable,
         launch: LaunchOutcome::NotAttempted,
@@ -371,5 +373,37 @@ fn retained_support_fixture_preserves_known_codes_and_levels() {
     assert_eq!(
         Snapshot::decode(&snapshot.encode().unwrap()).unwrap(),
         snapshot
+    );
+}
+
+#[test]
+fn earlier_observation_from_a_different_sid_rotates_copied_profile_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let original = sample();
+    record_local(dir.path(), original.clone(), || {
+        original.installation_id.clone()
+    })
+    .unwrap();
+    let mut copied = original.clone();
+    copied.sid = Some("S-1-5-21-456".into());
+    copied.observed_utc = Some(50); // Earlier than the copied profile's timestamp.
+    let new_id = "aaaaaaaa-1234-4234-8234-123456789abc".to_string();
+    let rotated = record_local(dir.path(), copied.clone(), || Some(new_id.clone()))
+        .unwrap()
+        .expect("different SID must not be rejected by the old account's clock");
+    assert_eq!(rotated.sid, copied.sid);
+    assert_eq!(rotated.observed_utc, Some(50));
+    assert_eq!(rotated.installation_id, Some(new_id));
+    assert_ne!(rotated.installation_id, original.installation_id);
+    let mut older = rotated.clone();
+    older.observed_utc = Some(25);
+    assert!(
+        record_local(dir.path(), older, || panic!("same SID retains ID"))
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        read_latest(&dir.path().join("latest.json")).unwrap(),
+        rotated
     );
 }

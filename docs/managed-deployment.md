@@ -278,8 +278,9 @@ path. See [Diagnostics](design/diagnostics.md).
 
 ## Local inventory (administrator opt-in)
 
-Managed launchers can record one latest local inventory snapshot after each app start
-attempt. This applies only to the launcher shipped in the managed release ZIP. The
+Managed launchers can record one latest local inventory snapshot after an eligible
+app start attempt, once that launch has established that the local launcher matches
+its refresh source. This applies only to the launcher shipped in the managed release ZIP. The
 installer and portable ZIP do not include that launcher, and the app itself never
 collects inventory, even when the central configuration enables it.
 
@@ -304,8 +305,9 @@ be valid UTF-8 JSON no larger than 4 KiB with an explicit boolean setting.
 
 The helper resolves the source using the same priority as app deployment: `--source`,
 the folder a central/staging launcher was started from, then the source remembered by
-the local launcher. It reads the configuration directly from that source, even when
-app refresh was skipped because the clock is already running. Configuration in the
+the local launcher. It reads the configuration directly from that source only on
+launches eligible for the inventory helper. Skipped app refreshes (running/check
+failed) do not establish launcher freshness and therefore do not start the helper. Configuration in the
 local executable folder (including aliases) is rejected. The launcher does not copy
 or cache the configuration or an enabled flag on clients.
 
@@ -475,6 +477,13 @@ without an extra configuration setting. Each entry is a fixed `code` and `severi
 | Info | `publication_pending`: local snapshot committed before central publication; completion has not yet been observed locally |
 | Warning | `publication_failed`: the helper observed a central publication failure and could update local status |
 
+Codes are the structured support vocabulary, not a guarantee that every failure
+can submit a report. In particular, failed/skipped refreshes that leave local launcher
+freshness unestablished suppress the helper itself. `launcher_refresh_failed` and
+refresh/fallback failure codes therefore may remain only in the local launcher's
+logs rather than reaching a new inventory snapshot. Inspect those logs and central
+last-seen time when inventory cannot run.
+
 Support fields contain no exception messages, raw log lines, profile/source/report
 paths, window titles, user-supplied text or serialized preference documents. Existing
 human log messages are not parsed to construct codes. At most 20 unique entries are
@@ -551,8 +560,15 @@ new helper version for the launcher that made the observation.
 Collection starts only after the app start attempt. A one-shot copy of the fixed local
 launcher runs as a private helper; share/staging launchers cannot collect directly.
 The parent assigns the helper to a kill-on-close, single-process job before sending
-the handshake that allows configuration reads and collection. One helper can run on
-each managed launch, including when the configuration is missing or disabled; it
+the handshake that allows configuration reads and collection. A helper runs only if
+that launch verified a matching local-launcher hash, successfully installed it, or
+used that local file as its refresh source. Failed/skipped refreshes and a missing
+central launcher do not establish freshness, so those launches skip inventory rather
+than invoking an older executable with a marker it might pass through to the app.
+The freshness flag does not prove that the central file supports the helper marker;
+it is not a negotiated protocol/version boundary. Deployment administrators must keep
+the app and launcher from a compatible managed release together. On eligible launches
+the helper can still run when configuration is missing or disabled; it
 performs no identity lookup unless the central configuration explicitly enables it. The helper has a three-second deadline; on
 timeout the job is closed and the parent observes exit for up to one more second.
 Parent loss also closes the job. Blocking share configuration reads, account resolution, local snapshot I/O and
@@ -571,8 +587,10 @@ A nonblocking exclusive file lock serializes simultaneous sessions. A contending
 skips recording with an error; no wait or retry service is introduced. The next
 successful observation reuses the persisted ID. A temporary sibling is flushed,
 verified and atomically replaced; failed writes preserve the previous valid snapshot.
-Unknown or corrupt existing data is preserved and returns an error. Older or missing
-timestamps do not replace a later observation. Equal timestamps may replace; this is
+Unknown or corrupt existing data is preserved and returns an error. For the same
+identity (including unavailable current SID), older or missing timestamps do not
+replace a later observation. A different known SID bypasses that comparison and
+rotates the installation ID even if its observation time is earlier. Equal timestamps may replace; this is
 observation precision, not a cross-machine ordering guarantee.
 
 Executable refreshes retain the ID. Removing the inventory directory resets it;
