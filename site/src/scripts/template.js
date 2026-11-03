@@ -7,6 +7,7 @@ export const TOKENS = {
   V: 'ISO week', u: 'Weekday number', m: 'Month number', d: 'Day',
   a: 'Short weekday', A: 'Weekday', b: 'Short month', B: 'Month', '%': 'Percent sign',
 };
+export const MAX_FORMAT_CHARS = 256;
 export function splitFormat(format) {
   return format.match(/%[\s\S]?|\n|[^%\n]+/g) || [];
 }
@@ -14,7 +15,7 @@ export function validateTemplate(value) {
   const format = value.format.replace(/\r\n/g, '\n');
   if (!format || format.split('\n').some(line => !line)) throw Error('Each line needs some content.');
   if (format.split('\n').length > 2) throw Error('Use at most two lines.');
-  if ([...format].length > 256) throw Error('Use at most 256 characters.');
+  if ([...format].length > MAX_FORMAT_CHARS) throw Error(`Use at most ${MAX_FORMAT_CHARS} characters.`);
   if (/[\u0000-\u0009\u000B-\u001F\u007F-\u009F]/u.test(format)) throw Error('Control characters are not supported.');
   let maximum = 0;
   for (const piece of splitFormat(format)) {

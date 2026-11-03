@@ -1,4 +1,4 @@
-import { TOKENS, WEB_PREFIX, splitFormat, validateTemplate, templateLinks, createTemplateLoader } from './template.js';
+import { TOKENS, WEB_PREFIX, MAX_FORMAT_CHARS, splitFormat, validateTemplate, templateLinks, createTemplateLoader } from './template.js';
 
 export function setupEditor(updatePreview) {
   const input = document.getElementById('format');
@@ -9,7 +9,9 @@ export function setupEditor(updatePreview) {
   const status = document.getElementById('template-status');
   const shared = document.getElementById('template-share');
   const open = document.getElementById('template-open');
-  let pieces = splitFormat(input.value), selected = -1;
+  // Oversized input is left to validateTemplate to reject; it is never split into chips.
+  const piecesOf = text => [...text].length > MAX_FORMAT_CHARS ? [] : splitFormat(text);
+  let pieces = piecesOf(input.value), selected = -1;
   let links;
   const describe = piece => piece === '\n' ? 'New line' : piece.startsWith('%') ? `${TOKENS[piece.slice(1)] ?? 'Token'} ${piece}` : `Text: ${piece}`;
   function draw() {
@@ -30,7 +32,7 @@ export function setupEditor(updatePreview) {
     document.getElementById('piece-right').disabled ||= selected === pieces.length - 1;
   }
   function refresh(fromInput = false) {
-    if (fromInput) { pieces = splitFormat(input.value); selected = -1; }
+    if (fromInput) { pieces = piecesOf(input.value); selected = -1; }
     else input.value = pieces.join('');
     draw(); error.textContent = ''; links = undefined;
     try {

@@ -18,9 +18,13 @@ function browserPath() {
   return candidates.find(candidate => existsSync(candidate));
 }
 
-test('editor loads initial template hashes and handles real hashchange events without discarding dirty edits', { timeout: 40_000 }, () => {
+test('editor loads initial template hashes and handles real hashchange events without discarding dirty edits', { timeout: 40_000 }, (t) => {
   const browser = browserPath();
-  assert.ok(browser, 'Install Chromium, Chrome or Edge, or set CLOCK_TEST_BROWSER to its executable.');
+  if (!browser) {
+    assert.ok(!process.env.CI, 'Install Chromium, Chrome or Edge, or set CLOCK_TEST_BROWSER to its executable.');
+    t.skip('No Chromium, Chrome or Edge found; set CLOCK_TEST_BROWSER to run this test.');
+    return;
+  }
   const directory = mkdtempSync(join(tmpdir(), 'elevenclock-editor-'));
   try {
     const first = { format: '%H:%M', font: 12, theme: 'dark' };

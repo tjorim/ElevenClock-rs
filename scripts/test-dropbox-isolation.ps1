@@ -2,7 +2,8 @@
 # loopback SMB. Run from an ELEVATED PowerShell on a disposable machine. It creates and then
 # removes: two local users, C:\ecdrop-test and an SMB share. Results: C:\ecdrop-test-results.txt
 param(
-    [string]$TestExecutable = 'target/debug/deps/clock_launcher-626b25cc8b03ea10.exe',
+    # The clock-launcher test binary, e.g. from `cargo test -p clock-launcher --no-run`.
+    [Parameter(Mandatory)][string]$TestExecutable,
     [string]$Launcher = 'target/debug/elevenclock-rs-launcher.exe',
     [switch]$DisposableMachine
 )
