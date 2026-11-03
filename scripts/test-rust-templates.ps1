@@ -56,10 +56,16 @@ try {
     Assert ($window -ne [IntPtr]::Zero) 'template first launch opens Settings'
     foreach ($id in 1601..1610) { Assert ((Control 115 $id) -ne [IntPtr]::Zero) "Templates control $id exists" }
     Assert (![SettingsNative]::IsWindowEnabled((Control 115 1603))) 'unreadable template library disables Save'
+    $offered = $false
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        Start-Sleep -Milliseconds 100
+        $offered = (Text 115 1607) -eq 'https://tjorim.github.io/ElevenClock-rs/#template=1&format=%25H%3A%25M&font=9&theme=dark'
+    } while (!$offered -and [DateTime]::UtcNow -lt $deadline)
+    Assert ($offered) 'first-launch link is offered for review before any resend'
     [IO.File]::WriteAllText($library, '{"version":1,"presets":[]}')
     Launch-Link $first
     Assert ([SettingsNative]::IsWindowEnabled((Control 115 1603))) 'reopening Templates retries the repaired library without an app restart'
-    Assert ((Text 115 1607) -like 'https://tjorim.github.io/ElevenClock-rs/#template=1*theme=dark') 'first-launch link is offered for review'
     $tab = Control 0 1100
     foreach ($id in @(1602,1604,1605,1601,1603,1606,1609,1610,1607,1608)) {
         $tab = [SettingsNative]::GetNextDlgTabItem($window, $tab, $false)

@@ -30,8 +30,13 @@ npm run check:site
 npm run preview
 ```
 
-Preview serves the same URL and repository prefix. `npm test` runs the routing and
-link-rewriting tests and works right after `npm ci`. After `npm run build`,
+Preview serves the same URL and repository prefix. `npm test` runs the routing,
+link-rewriting and template tests, including a headless browser check of initial
+template hashes, hash navigation and draft confirmation. Install Chromium, Chrome
+or Edge first. The test detects Edge/Chrome on Windows or a browser on `PATH` on
+Linux; `CLOCK_TEST_BROWSER` can specify its executable. It uses a disposable browser
+profile and local fixture without adding a JavaScript DOM dependency.
+After `npm run build`,
 `npm run check:site` validates every output page: internal links, fragments, local
 assets and redirect targets must resolve under `/ElevenClock-rs/`.
 
