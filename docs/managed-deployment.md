@@ -329,7 +329,7 @@ saving. A write already in progress can complete during revocation. Replace the
 configuration atomically when editing it so clients do not see a partial file.
 
 Enabling this setting collects the account SID, resolved account name when available,
-installation ID, observation time, local app and launcher versions, and launch/update
+installation ID, first and latest observation time, local app and launcher versions, and launch/update
 outcomes described below. Administrators must disclose this collection under their
 organization's policy before enabling it. Files stay in the user's application data;
 no vendor endpoint is used. Unless `report_directory` is specified, snapshots remain
@@ -630,6 +630,12 @@ launcher observation, not active use or time spent in the app. An offline PC or 
 whose user never relaunches can remain stale indefinitely; there is no periodic app
 reporting. Reports from user-controlled clients are operational inventory, not an
 authenticated audit.
+
+`first_observed_utc` is the first time the launcher recorded that installation with
+inventory enabled, kept across refreshes. It is not the install date. Reports written
+before the field existed start from their own last observation, and a new account or reset
+starts a new installation. `new_installations` counts installations whose first
+observation is inside the recent-activity window.
 
 ### Generate an inventory summary
 

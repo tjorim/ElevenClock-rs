@@ -156,7 +156,10 @@ fn local_lock_contention_does_not_wait_or_change_snapshot() {
     assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
     assert_eq!(
         read_latest(&dir.path().join("latest.json")).unwrap(),
-        sample()
+        Snapshot {
+            first_observed_utc: Some(100),
+            ..sample()
+        }
     );
 }
 
@@ -406,4 +409,49 @@ fn earlier_observation_from_a_different_sid_rotates_copied_profile_identity() {
         read_latest(&dir.path().join("latest.json")).unwrap(),
         rotated
     );
+}
+
+#[test]
+fn first_seen_is_kept_across_updates_old_reports_and_rotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("latest.json");
+    let id = sample().installation_id;
+    record_local(dir.path(), sample(), || id.clone()).unwrap();
+    assert_eq!(read_latest(&path).unwrap().first_observed_utc, Some(100));
+    let mut later = sample();
+    later.observed_utc = Some(500);
+    record_local(dir.path(), later, || panic!("must retain ID")).unwrap();
+    let saved = read_latest(&path).unwrap();
+    assert_eq!(
+        (saved.first_observed_utc, saved.observed_utc),
+        (Some(100), Some(500))
+    );
+    // A report written before the field existed only knows its last time.
+    let mut legacy = saved.clone();
+    legacy.first_observed_utc = None;
+    write_latest(&path, &legacy, || Ok(())).unwrap();
+    let mut next = sample();
+    next.observed_utc = Some(900);
+    record_local(dir.path(), next, || panic!("must retain ID")).unwrap();
+    assert_eq!(read_latest(&path).unwrap().first_observed_utc, Some(500));
+    // A different account starts a new installation, so first seen restarts.
+    let mut other = sample();
+    other.sid = Some("S-1-5-21-456".into());
+    other.observed_utc = Some(1000);
+    record_local(dir.path(), other, || {
+        Some("aaaaaaaa-1234-4234-8234-123456789abc".into())
+    })
+    .unwrap();
+    assert_eq!(read_latest(&path).unwrap().first_observed_utc, Some(1000));
+}
+
+#[test]
+fn first_seen_must_be_a_valid_time_not_after_the_last_observation() {
+    let mut value = sample();
+    value.first_observed_utc = Some(100);
+    value.encode().unwrap();
+    value.first_observed_utc = Some(101);
+    assert!(value.encode().is_err());
+    value.first_observed_utc = Some(253_402_300_800);
+    assert!(value.encode().is_err());
 }

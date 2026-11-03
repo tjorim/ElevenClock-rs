@@ -26,6 +26,9 @@ pub struct Snapshot {
     pub account_name: Option<String>,
     pub installation_id: Option<String>,
     pub observed_utc: Option<u64>,
+    /// Earliest observation the launcher recorded for this installation, carried forward
+    /// across refreshes. Absent in reports written before it existed.
+    pub first_observed_utc: Option<u64>,
     pub app_version: Option<String>,
     pub launcher_version: Option<String>,
     /// Saved format source only; never a rendered date/time or editable draft.
@@ -48,6 +51,7 @@ impl Snapshot {
             account_name: None,
             installation_id: None,
             observed_utc: None,
+            first_observed_utc: None,
             app_version: None,
             launcher_version: None,
             clock_format: None,
@@ -149,6 +153,11 @@ impl Snapshot {
             })
             || (self.account_name.is_some() && self.sid.is_none())
             || self.observed_utc.is_some_and(|t| t > 253_402_300_799)
+            || self.first_observed_utc.is_some_and(|t| t > 253_402_300_799)
+            || self
+                .first_observed_utc
+                .zip(self.observed_utc)
+                .is_some_and(|(first, last)| first > last)
             || (self.fallback
                 && !matches!(
                     self.refresh,
@@ -235,6 +244,11 @@ pub fn record_local(
             return Ok(None);
         }
     }
+    // First seen survives refreshes and old reports (which only know their last time).
+    snapshot.first_observed_utc = same_identity
+        .and_then(|old| old.first_observed_utc.or(old.observed_utc))
+        .or(snapshot.observed_utc)
+        .map(|first| snapshot.observed_utc.map_or(first, |now| first.min(now)));
     write_latest(&path, &snapshot, || Ok(()))?;
     Ok(Some(snapshot))
 }

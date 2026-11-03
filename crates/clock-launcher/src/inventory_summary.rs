@@ -125,8 +125,18 @@ fn write_before_read(
                 .is_some_and(|time| now - time <= recent_seconds)
         })
         .count();
+    let new_installations = summary
+        .latest
+        .values()
+        .filter(|snapshot| {
+            snapshot
+                .first_observed_utc
+                .is_some_and(|time| now - time <= recent_seconds)
+        })
+        .count();
     let value = json!({
         "schema_version": 1, "generated_utc": now, "recent_seconds": recent_seconds,
+        "new_installations": new_installations,
         "counts": counts(summary.latest.len(), summary.users.len(), recent_installations, summary.recent_users.len()),
         "excluded_reports": summary.excluded,
         "format_unavailable_installations": summary.format_unavailable_installations,
@@ -177,6 +187,34 @@ mod tests {
         assert!(!value["support_issues"].as_array().unwrap().is_empty());
         assert_eq!(fs::read(sid.join("one.json")).unwrap(), record);
         assert!(write(&root, &sid.join("summary.json"), 1_800_000_000, 10).is_err());
+    }
+
+    #[test]
+    fn new_installations_use_first_seen_inside_the_window() {
+        let temp = tempfile::tempdir().unwrap();
+        let sid = temp.path().join("reports").join("S-1-5-21-123");
+        fs::create_dir_all(&sid).unwrap();
+        let mut record: Value = serde_json::from_slice(include_bytes!(
+            "../tests/fixtures/inventory-v1-support.json"
+        ))
+        .unwrap();
+        let observed = record["observed_utc"].as_u64().unwrap();
+        record["first_observed_utc"] = json!(observed - 50);
+        fs::write(sid.join("one.json"), serde_json::to_vec(&record).unwrap()).unwrap();
+        for (window, expected) in [(1_000, 1), (10, 0)] {
+            let output = temp.path().join("summary.json");
+            write(
+                &temp.path().join("reports"),
+                &output,
+                observed + 100,
+                window,
+            )
+            .unwrap();
+            let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+            assert_eq!(value["new_installations"], expected);
+            assert_eq!(value["latest"][0]["first_observed_utc"], observed - 50);
+            fs::remove_file(&output).unwrap();
+        }
     }
 
     #[test]
