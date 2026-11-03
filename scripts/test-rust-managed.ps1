@@ -167,7 +167,7 @@ try {
     $inventory = Join-Path $env:LOCALAPPDATA 'ElevenClock-rs/inventory/latest.json'
     $reportRoot = Join-Path $work 'reports'
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    New-Item -ItemType Directory -Path (Join-Path $reportRoot $sid) -Force | Out-Null
+    New-Item -ItemType Directory -Path $reportRoot -Force | Out-Null
     $configPath = Join-Path $source 'elevenclock-rs-launcher.json'
     [IO.File]::WriteAllText($configPath, (@{
         schema_version = 1; local_inventory_enabled = $true
@@ -203,11 +203,16 @@ try {
         Assert ($failed.refresh -eq 'source_unreachable' -and $failed.fallback) 'Missing payload fallback was not reported'
         Exit-App $app
     } finally { Move-Item -LiteralPath ($sourceApp + '.offline') -Destination $sourceApp }
-    $published = Join-Path (Join-Path $reportRoot $sid) ($first.installation_id + '.json')
+    $published = Join-Path $reportRoot ($sid + '.' + $first.installation_id + '.json')
     Assert ((Get-Content -LiteralPath $published -Raw) -eq (Get-Content -LiteralPath $inventory -Raw)) 'Published report differs from local snapshot'
 
     $summaryPath = Join-Path $evidence 'inventory-summary.json'
+    # An elevated hosted account creates files owned by the Administrators group, so the
+    # report may be unverified; either way the owner check must account for the one report.
     Invoke-Launcher $sourceLauncher @('--inventory-summary', ('"' + $reportRoot + '"'), ('"' + $summaryPath + '"'))
+    $checked = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+    Assert (($checked.counts.installations + $checked.unverified_owner_reports) -eq 1) 'Owner check did not account for the drop-box report'
+    Invoke-Launcher $sourceLauncher @('--inventory-summary', ('"' + $reportRoot + '"'), ('"' + $summaryPath + '"'), '--skip-owner-check')
     $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
     Assert ($summary.counts.users -eq 1 -and $summary.counts.installations -eq 1) 'Summary did not deduplicate launcher observations'
     Assert ($summary.support_issues.code -contains 'source_unreachable') 'Summary lacks latest failure'

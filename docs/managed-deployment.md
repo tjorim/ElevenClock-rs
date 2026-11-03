@@ -458,6 +458,9 @@ written inside it**. It excludes the report and counts it in `unverified_owner_r
 otherwise, for example a copy made by an administrator or a file created by another
 account. Owner checks need Windows, so run the summary there. Reports from
 user-controlled clients remain operational inventory, not an authenticated audit.
+Files created from an elevated administrator session are usually owned by the
+Administrators group instead of the account, so reports from users who run the launcher
+elevated land in `unverified_owner_reports`. Ordinary users are unaffected.
 
 The configuration is reread before publication and before the write; a changed
 setting or destination aborts export of the observation collected under the old
