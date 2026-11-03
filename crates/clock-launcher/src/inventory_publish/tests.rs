@@ -132,3 +132,31 @@ fn drop_box_folder_accepts_create_and_rewrite() {
     value.support_issues = Some(Vec::new());
     publish(Path::new(&root), &value, || Ok(())).unwrap();
 }
+
+#[test]
+fn a_busy_publication_lock_or_a_newer_local_snapshot_writes_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let local = tempfile::tempdir().unwrap();
+    let saved =
+        crate::inventory::record_local(local.path(), snapshot(), || snapshot().installation_id)
+            .unwrap()
+            .unwrap();
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(local.path().join("publication.lock"))
+        .unwrap();
+    lock.lock().unwrap();
+    let error = publish_saved(root.path(), saved.clone(), local.path(), || true).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+    drop(lock);
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+    // A newer observation recorded meanwhile supersedes this one.
+    let mut newer = snapshot();
+    newer.observed_utc = Some(500);
+    crate::inventory::record_local(local.path(), newer, || None).unwrap();
+    publish_saved(root.path(), saved, local.path(), || true).unwrap();
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+}

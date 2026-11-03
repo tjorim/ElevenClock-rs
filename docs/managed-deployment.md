@@ -374,12 +374,17 @@ local snapshot is committed first; the helper then writes the whole report in pl
 preserving each installation's version, first and last-seen time. SID, installation
 and time lookup failures prevent publication: no unnamed "user" report or
 filename-derived identity is substituted. The launcher creates no folders, reads
-nothing back and uses no lock, staging or rename step, because users in a blind folder
-cannot list, read, delete or rename. It opens the file for writing (without truncating
-on open), writes the report and sets the length. A crash mid-write can leave a short
-or mixed file. The summary excludes malformed files and the next launch rewrites the
-report. Missing permissions make publication fail without changing launch results or
-the local snapshot.
+nothing back from the folder and writes no staging or renamed file, because users in a blind folder
+cannot list, read, delete or rename. A per-user local `publication.lock` serializes
+overlapping launchers for the same user, and a launcher whose observation has been
+superseded by a newer local one writes nothing, so a slow older launcher cannot leave an
+older report. A contending launcher gives up without waiting. The launcher opens the
+file for writing (without truncating on open), writes the report and sets the length.
+A crash mid-write can leave a short or mixed file, and nothing in the file proves it
+complete; the summary excludes files that no longer parse and the next launch rewrites
+the report. Missing permissions make publication fail without changing launch results.
+The local `latest.json` then gains a publication-failure issue and loses its
+`publication_pending` issue; its observation fields stay unchanged.
 
 #### Set up the drop-box folder
 
@@ -461,6 +466,14 @@ user-controlled clients remain operational inventory, not an authenticated audit
 Files created from an elevated administrator session are usually owned by the
 Administrators group instead of the account, so reports from users who run the launcher
 elevated land in `unverified_owner_reports`. Ordinary users are unaffected.
+
+Any account that can create files here can also create many of them. The summary ignores
+names that are not `<SID>.<installation-ID>.json` (it counts them as `unrecognized_files`
+and does not open them), but a flood of well-formed names can still exceed the summary's
+100,000-report limit and make it fail until an administrator deletes the extra files.
+The launcher cannot prevent this. NTFS per-user disk quotas bound the bytes an account
+owns, but very small files may not count against them, so also watch the folder's file
+count on the file server and delete files whose owner does not match their name.
 
 The configuration is reread before publication and before the write; a changed
 setting or destination aborts export of the observation collected under the old

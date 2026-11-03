@@ -167,8 +167,10 @@ destination and startup rules stay as above. Optional `report_directory` selects
 box: one `<SID>.<installation-ID>.json` file per installation, written in place into a
 create-only folder, because every account may report and no folder can be provisioned
 per user. The app never creates directories on the share or changes permissions;
-executable/configuration access stays read-only. Nothing is read back, so the summary
-command trusts a report only if its file owner matches the SID inside it.
+executable/configuration access stays read-only. Nothing is read back. The summary
+command trusts a flat drop-box report only when its file owner matches the SID inside
+it, unless `--skip-owner-check` is given. Reports in subfolders (an older layout) are
+not owner-checked.
 The configuration is not copied or cached locally. Missing/invalid/unreachable
 configuration disables collection, including offline launches; administrators can
 revoke it by setting false or removing the central file. No HKLM policy or device
@@ -180,12 +182,12 @@ three-second deadline covers blocking configuration reads as well as account loo
 and local I/O, with bounded teardown and kill-on-parent-loss. The app owns no inventory
 timers or resources. Existing snapshots survive revocation/uninstall until explicitly
 removed. When `report_directory` is configured, the local snapshot is committed
-first and then published as `<root>/<SID>/<installation-ID>.json` inside the same
+first and then published as `<root>/<SID>.<installation-ID>.json` inside the same
 bounded helper. One file per installation bounds growth across timeouts. Revocation
 or a destination change aborts publication on the next configuration check; in-flight
 server operations are not guaranteed cancellable. See
 [local inventory](../managed-deployment.md#local-inventory-administrator-opt-in) for
-schema, disclosure, provisioning, offline behavior, replacement rights and retention.
+schema, disclosure, folder setup, offline behavior, rewrite rights and retention.
 Per-user report directories, append history and automatic permission management are not implemented.
 
 The optional `include_clock_format` boolean, default false, extends inventory with

@@ -50,6 +50,23 @@ pub fn publish_saved(
     if !configuration_unchanged() {
         return Err(io::Error::other("inventory configuration changed"));
     }
+    // One publication per user at a time, so overlapping helpers cannot interleave writes
+    // into the same report. A busy lock fails fast: startup never waits for reporting.
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(local_directory.join("publication.lock"))?;
+    lock.try_lock()
+        .map_err(|_| io::Error::new(io::ErrorKind::WouldBlock, "inventory publication busy"))?;
+    // Nothing can be read back from the drop box, so the local snapshot is the ordering
+    // authority: a newer local observation means this one was superseded while waiting.
+    if crate::inventory::read_latest(&local_directory.join("latest.json"))
+        .is_ok_and(|local| local.observed_utc > saved.observed_utc)
+    {
+        return Ok(());
+    }
     saved.remove_issue(Code::PublicationPending);
     let published = publish(root, &saved, || {
         if configuration_unchanged() {

@@ -60,12 +60,19 @@ fn write_with(
         .ok_or_else(|| io::Error::other("output name unavailable"))?;
     let mut paths = Vec::new();
     let mut visited = 0;
+    let mut unrecognized = 0usize;
     // Exactly the root and its immediate per-SID directories. Never follow links
     // or recursively walk arbitrary client-provided directory trees.
     for entry in root_directory.entries()? {
         let entry = entry?;
-        count_entry(&mut visited)?;
         let kind = entry.file_type()?;
+        // Anyone may create names in a drop box, so names that are not reports are
+        // skipped without counting toward the entry limit or being opened.
+        if kind.is_file() && !looks_like_report(&entry.file_name()) {
+            unrecognized += 1;
+            continue;
+        }
+        count_entry(&mut visited)?;
         if kind.is_dir() {
             let directory = root_directory.directory(&entry.file_name())?;
             for child in directory.entries()? {
@@ -171,6 +178,7 @@ fn write_with(
         "counts": counts(summary.latest.len(), summary.users.len(), recent_installations, summary.recent_users.len()),
         "excluded_reports": summary.excluded,
         "unverified_owner_reports": unverified.get(),
+        "unrecognized_files": unrecognized,
         "format_unavailable_installations": summary.format_unavailable_installations,
         "support_unavailable_installations": summary.support_unavailable_installations,
         "formats": formats, "support_issues": issues,
@@ -195,6 +203,15 @@ fn owner_matches(file: &std::fs::File, bytes: &[u8]) -> bool {
         return false;
     };
     owner == sid
+}
+
+/// `<SID>.<installation-ID>.json`, the only flat names the launcher writes.
+fn looks_like_report(name: &std::ffi::OsStr) -> bool {
+    let Some(stem) = name.to_str().and_then(|name| name.strip_suffix(".json")) else {
+        return false;
+    };
+    stem.rsplit_once('.')
+        .is_some_and(|(sid, id)| sid.starts_with("S-1-") && id.len() == 36)
 }
 
 fn count_entry(visited: &mut usize) -> io::Result<()> {
@@ -276,11 +293,15 @@ mod tests {
         ))
         .unwrap();
         record["sid"] = json!(mine);
-        fs::write(root.join("mine.json"), serde_json::to_vec(&record).unwrap()).unwrap();
+        fs::write(
+            root.join(format!("{mine}.12345678-1234-4234-8234-123456789abc.json")),
+            serde_json::to_vec(&record).unwrap(),
+        )
+        .unwrap();
         record["sid"] = json!("S-1-5-21-999");
         record["installation_id"] = json!("aaaaaaaa-1234-4234-8234-123456789abc");
         fs::write(
-            root.join("forged.json"),
+            root.join("S-1-5-21-999.aaaaaaaa-1234-4234-8234-123456789abc.json"),
             serde_json::to_vec(&record).unwrap(),
         )
         .unwrap();
@@ -288,16 +309,45 @@ mod tests {
         write(&root, &output, 1_900_000_000, 31_536_000).unwrap();
         let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
         // The forged report is owned by this account, not by the SID it claims.
-        let owner = fs::File::open(root.join("mine.json")).unwrap();
+        let owner =
+            fs::File::open(root.join(format!("{mine}.12345678-1234-4234-8234-123456789abc.json")))
+                .unwrap();
         if clock_windows::report_files::owner_sid(&owner).unwrap() == mine {
             assert_eq!(value["counts"]["installations"], 1);
             assert_eq!(value["unverified_owner_reports"], 1);
+        } else {
+            assert_eq!(value["counts"]["installations"], 0);
+            assert_eq!(value["unverified_owner_reports"], 2);
         }
         // Copied-in local snapshots are owned by whoever copied them.
         write_checked(&root, &output, 1_900_000_000, 31_536_000, false).unwrap();
         let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
         assert_eq!(value["counts"]["installations"], 2);
         assert_eq!(value["unverified_owner_reports"], 0);
+    }
+
+    #[test]
+    fn names_that_are_not_reports_are_skipped_without_being_opened_or_counted() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("reports");
+        fs::create_dir(&root).unwrap();
+        for name in [
+            "notes.txt",
+            "x.json",
+            "S-1-5-21-1.json",
+            "S-1-5-21-1.short.json",
+        ] {
+            fs::write(root.join(name), b"not a report").unwrap();
+        }
+        let output = temp.path().join("summary.json");
+        write(&root, &output, 1_900_000_000, 31_536_000).unwrap();
+        let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+        assert_eq!(value["unrecognized_files"], 4);
+        assert_eq!(value["excluded_reports"], 0);
+        assert_eq!(value["counts"]["installations"], 0);
+        assert!(looks_like_report(std::ffi::OsStr::new(
+            "S-1-5-21-1.12345678-1234-4234-8234-123456789abc.json"
+        )));
     }
 
     #[test]
@@ -310,12 +360,12 @@ mod tests {
         let root = temp.path().join("reports");
         fs::create_dir(&root).unwrap();
         fs::write(
-            root.join("future.json"),
+            root.join("S-1-5-21-123.12345678-1234-4234-8234-123456789abc.json"),
             include_bytes!("../tests/fixtures/inventory-v1.json"),
         )
         .unwrap();
         fs::write(
-            root.join("oversized.json"),
+            root.join("S-1-5-21-124.bbbbbbbb-1234-4234-8234-123456789abc.json"),
             vec![b' '; MAX_SNAPSHOT_BYTES + 1],
         )
         .unwrap();
