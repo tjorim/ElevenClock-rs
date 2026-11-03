@@ -23,7 +23,9 @@ and Explorer-recovery checks on their own hardware.
 | Recovery | Explorer restart ×3 with the same process and flat handles; a forced kill of the app reveals the native clock; quiet `--startup` launch |
 | Startup and install | Per-user install, Start menu launch, startup on/off/repair without UAC on a standard account; update, uninstall and rollback between two development builds |
 | Managed ZIP | On the hosted Windows runner (disposable account): the real launcher deploys from a temporary source folder; the app reports `Managed: yes`; Startup registers the local launcher; a changed source replaces the local copy on the next launch; setup refuses while the managed copy is present; `--uninstall` removes it |
+| Managed inventory | Local Windows x64 validation: supervised local launcher reporting with an already-running app and invalid/missing central app payload; stable installation ID; configuration revocation; configuration reads and report replacement over loopback SMB (`\\localhost\C$`); administrator summary command and failure-preserves-output behavior. Native launch-to-report validation used a process-local scratch HKCU view to isolate the existing installer registration |
 | Support | Status, Refresh and Copy diagnostics; the report contains no user name or path |
+| Templates | Local Windows x64: first/second-instance imports, draft preservation, Apply/Cancel, local preset save/load/delete, clipboard sharing, native dialog tab order and accessible button names; per-user `elevenclock:` enable/disable and real Shell dispatch including Unicode, ampersands and percent literals. The foreground keyboard-injection harness could not activate the dialog on this local desktop; direct native control/dispatch checks ran separately |
 | Accessibility | UIA name, role and Invoke on the clock; keyboard access to Settings and the tray menu; Settings layout at 100/125/150/200% and in high contrast (CI) |
 
 ## Resource use
@@ -54,7 +56,9 @@ The script cannot see timer-wake or discovery rates.
   listened to it.
 - **Managed ZIP.** The launcher flow (deploy, managed mode, launcher startup entry,
   update on the next launch, installer refusal, uninstall) runs on the hosted Windows
-  runner only. Not tried: a real file share, the Local intranet zone setup, a VPN or
+  runner only. Inventory configuration/publication and summary reads were checked over
+  loopback SMB; this does not verify another server or per-user share/NTFS isolation.
+  Not tried: a remote file share, domain-account resolution, the Local intranet zone setup, a VPN or
   offline start, AppLocker or Software Restriction Policies, or Group Policy or Intune
   deployment. The [managed deployment guide](managed-deployment.md) says where it relies
   on this.

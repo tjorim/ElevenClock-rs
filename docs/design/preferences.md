@@ -50,8 +50,10 @@ close before `MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)`. This documented
 Windows operation handles first creation and existing-target replacement on the
 same volume without a truncate-in-place window. Failures remove the temporary
 file best-effort. A process kill may leave an ignored temporary file; it cannot
-be mistaken for committed preferences. There is no watcher, reload operation,
-per-monitor override or file export. The runtime's single-instance coordinator
+be mistaken for committed preferences. There is no watcher, reload operation or
+per-monitor override. Presentation-only sharing and the separate named-preset library
+are described in [templates](templates.md); they do not export this internal preference file.
+The runtime's single-instance coordinator
 serializes app access; this store does not claim multi-writer transactions.
 
 The public safe storage trait supports in-memory tests; filesystem path injection

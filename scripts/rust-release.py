@@ -15,7 +15,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = "x86_64-pc-windows-msvc"
 PORTABLE_FOLDER = "ElevenClock-rs"
-# Each artifact type gets its own readme, shipped as README.txt.
+# Each artifact type gets its own user readme, shipped as README.txt.
 README_SOURCES = {
     "installer": "packaging/INSTALLER-README.txt",
     "portable": "packaging/PORTABLE-README.txt",
@@ -25,19 +25,21 @@ APP_EXE = "elevenclock-rs.exe"
 # The managed launcher (ADR 0004) ships only in the managed ZIP.
 LAUNCHER_EXE = "elevenclock-rs-launcher.exe"
 RAW_LAUNCHER = f"launcher/{LAUNCHER_EXE}"
+MANAGED_MANAGER_README = "README-MANAGER.txt"
+MANAGED_MANAGER_SOURCE = "packaging/MANAGED-MANAGER-README.txt"
 PORTABLE_FILES = {
     f"{PORTABLE_FOLDER}/{file}" for file in (
         APP_EXE, "README.txt", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "RUST-COPYRIGHT.html",
     )
 }
-# The managed ZIP is the portable ZIP plus the launcher, with the same app bytes stored
+# The managed ZIP adds the launcher and manager guide, with the same app bytes stored
 # as .data: users who open the central folder cannot start the app from the share by
 # accident, and the launcher accepts that name.
 MANAGED_APP = "elevenclock-rs.data"
 # SHA256SUMS.txt lists the app, so the launcher refuses a truncated or swapped copy.
 MANAGED_SUMS = "SHA256SUMS.txt"
 MANAGED_FILES = (PORTABLE_FILES - {f"{PORTABLE_FOLDER}/{APP_EXE}"}) | {
-    f"{PORTABLE_FOLDER}/{name}" for name in (MANAGED_APP, LAUNCHER_EXE, MANAGED_SUMS)
+    f"{PORTABLE_FOLDER}/{name}" for name in (MANAGED_APP, LAUNCHER_EXE, MANAGED_SUMS, MANAGED_MANAGER_README)
 }
 # The launcher only copies files: it must never be able to reach a network.
 NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsock32.dll"}
@@ -194,6 +196,7 @@ def prepare(out, mode):
         (directory / "THIRD-PARTY-NOTICES.txt").write_text(notices.getvalue(), encoding="utf-8")
         shutil.copy2(rust_docs / "COPYRIGHT.html", directory / "RUST-COPYRIGHT.html")
     (managed / APP_EXE).rename(managed / MANAGED_APP)
+    shutil.copy2(ROOT / MANAGED_MANAGER_SOURCE, managed / MANAGED_MANAGER_README)
     write_managed_sums(managed)
     shutil.copy2(launcher, managed / LAUNCHER_EXE)
     (out / "launcher").mkdir()

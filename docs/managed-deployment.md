@@ -1,8 +1,12 @@
 # Managed deployment guide
 
-For administrators who deploy ElevenClock-rs to many users from one central location. It
+For deployment managers who provide ElevenClock-rs to many users from one central location. It
 covers the `…-managed.zip` release asset; the reasoning behind its design is in
 [ADR 0004](adr/0004-managed-launcher.md).
+
+This is an organizational role, not a requirement to use a Windows administrator
+account. The launcher, inventory summary tool and per-user app run without elevation.
+Provisioning a central share and its permissions may require help from its owner.
 
 ## When to use it
 
@@ -38,7 +42,8 @@ An `ElevenClock-rs/` folder with:
 | `elevenclock-rs.data` | The app, byte-identical to the `elevenclock-rs.exe` in the installer and the portable ZIP, stored under a `.data` name so nobody starts it from the share by accident |
 | `elevenclock-rs-launcher.exe` | The launcher |
 | `SHA256SUMS.txt` | One line with the hash of `elevenclock-rs.data`; the launcher refuses an app that does not match it |
-| `README.txt` | A short readme for administrators ([`MANAGED-README.txt`](../packaging/MANAGED-README.txt)) |
+| `README.txt` | User guide: launching, Settings, startup, updates, support and optional organization reporting ([source](../packaging/MANAGED-README.txt)) |
+| `README-MANAGER.txt` | Deployment-manager guide: central deployment, inventory configuration and summary tool; this role does not require a Windows administrator account ([source](../packaging/MANAGED-MANAGER-README.txt)) |
 | `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt`, `RUST-COPYRIGHT.html` | Licenses and notices |
 
 No configuration file is required for deployment. Administrators can optionally add
@@ -478,11 +483,11 @@ without an extra configuration setting. Each entry is a fixed `code` and `severi
 | Warning | `publication_failed`: the helper observed a central publication failure and could update local status |
 
 Codes are the structured support vocabulary, not a guarantee that every failure
-can submit a report. In particular, failed/skipped refreshes that leave local launcher
-freshness unestablished suppress the helper itself. `launcher_refresh_failed` and
-refresh/fallback failure codes therefore may remain only in the local launcher's
-logs rather than reaching a new inventory snapshot. Inspect those logs and central
-last-seen time when inventory cannot run.
+can submit a report. A launch through the local launcher can report skipped refreshes
+and refresh/fallback failures, provided the central configuration remains readable.
+A share/staging launch without a verified local launcher still skips inventory.
+An offline configuration disables collection even when the local app starts normally.
+Inspect local launcher logs and central last-seen time when inventory cannot run.
 
 Support fields contain no exception messages, raw log lines, profile/source/report
 paths, window titles, user-supplied text or serialized preference documents. Existing
@@ -560,11 +565,13 @@ new helper version for the launcher that made the observation.
 Collection starts only after the app start attempt. A one-shot copy of the fixed local
 launcher runs as a private helper; share/staging launchers cannot collect directly.
 The parent assigns the helper to a kill-on-close, single-process job before sending
-the handshake that allows configuration reads and collection. A helper runs only if
-that launch verified a matching local-launcher hash, successfully installed it, or
-used that local file as its refresh source. Failed/skipped refreshes and a missing
-central launcher do not establish freshness, so those launches skip inventory rather
-than invoking an older executable with a marker it might pass through to the app.
+the handshake that allows configuration reads and collection. When already running
+from the fixed local launcher path, the launcher invokes itself: its own implementation
+supports the helper role even if refresh was skipped or failed. This permits reporting
+an already-running app, an invalid central app, a copy failure, or an unavailable app
+payload while configuration remains readable. Share/staging launches require a matching
+local-launcher hash, successful replacement, or the local file as the refresh source;
+otherwise they skip inventory rather than invoke an unknown older local executable.
 The freshness flag does not prove that the central file supports the helper marker;
 it is not a negotiated protocol/version boundary. Deployment administrators must keep
 the app and launcher from a compatible managed release together. On eligible launches
@@ -619,8 +626,47 @@ window (inclusive); stale installations remain in `latest`. Last seen means last
 launcher observation, not active use or time spent in the app. An offline PC or one
 whose user never relaunches can remain stale indefinitely; there is no periodic app
 reporting. Reports from user-controlled clients are operational inventory, not an
-authenticated audit. No central aggregation command ships yet; administrators can
-use the portable aggregation library or their existing collection tools.
+authenticated audit.
+
+### Generate an inventory summary
+
+The managed launcher includes an explicit administrator command. Run it from a
+downloaded/extracted managed release; it does not start the app, deploy files, collect
+new facts, or change startup. It reads existing reports using the current account's
+permissions and writes a JSON file:
+
+```powershell
+$job = Start-Process .\elevenclock-rs-launcher.exe -ArgumentList @(
+    '--inventory-summary',
+    '"\\fileserver\apps\ElevenClock-reports"',
+    '"C:\Admin Reports\clock-summary.json"',
+    '30'
+) -Wait -PassThru -WindowStyle Hidden
+if ($job.ExitCode -ne 0) { throw "Inventory summary failed: $($job.ExitCode)" }
+$summary = Get-Content 'C:\Admin Reports\clock-summary.json' -Raw | ConvertFrom-Json
+$summary.counts
+$summary.formats | Format-Table format, preset, users, recent_users
+$summary.support_issues | Format-Table code, severity, installations, recent_users
+```
+
+The optional last argument is the recent window in days (1–36,500, default 30).
+The input is the reporting root containing SID directories, or a directory containing
+local snapshots. Only `.json` files at the root and in its immediate child directories
+are read; links and deeper directories are skipped. The same library rules above
+deduplicate records, exclude malformed/future records, and count unavailable values.
+The output contains overall counts, formats sorted by recent distinct-user adoption,
+support counts, excluded-report counts, and the latest snapshot for each installation.
+It therefore contains the same identity/format data as the input; restrict access and
+retention accordingly.
+
+The output's parent directory must exist and be outside the report tree. Successful
+generation atomically replaces the output. Missing/unreadable inputs, enumeration
+failures, or exceeded limits fail without replacing an existing summary. Up to
+100,000 report files and 400,000 directory entries (including locks/staging files)
+are accepted. Exit codes are 0 for success, 1 for I/O/limit failures, and 2 for invalid
+arguments; the GUI launcher emits no console output or message boxes in this mode.
+Run it on demand or from your own scheduled administrative job; no scheduler or
+dashboard is installed.
 
 ## Related
 

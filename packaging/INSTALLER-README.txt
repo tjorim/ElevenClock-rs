@@ -13,6 +13,12 @@ Use Exit ElevenClock-rs in Settings or the tray menu to quit and reveal the
 Windows clock. Startup is off by default; enable it in Settings > Startup.
 Use Settings > Support > Copy diagnostics when reporting a problem.
 
+Settings > Templates lets you share format, font size and theme, review links,
+and save named local presets. The installer registers elevenclock:// template
+links for your account unless another copy/program already owns them. Imported
+templates are drafts until you select Apply; startup and organization settings
+are never imported. Sharing includes any personal text in your format.
+
 Exit the app before updating, uninstalling or restoring an older installer.
 Uninstall through Windows Settings > Apps > Installed apps. Private preferences
 and logs in %LOCALAPPDATA%\ElevenClock-rs are preserved. The legacy ElevenClock

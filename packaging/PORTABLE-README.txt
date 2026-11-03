@@ -21,9 +21,17 @@ Startup
   Settings first, then delete the folder.
 
 Updating
-  ElevenClock-rs does not check for updates. To update, exit the app, then
-  replace elevenclock-rs.exe with the one from the new portable ZIP. Your
-  preferences are kept.
+  Updates are never installed automatically. Use Check now in Settings, or opt in
+  to automatic update checks. To update, exit the app, then replace
+  elevenclock-rs.exe with the one from the new portable ZIP. Your preferences
+  are kept.
+
+Templates
+  Settings > Templates can share format and appearance links and save named local
+  presets. Select Enable template links there to open elevenclock:// links with
+  this copy, without administrator rights. Disable them before moving/deleting
+  the executable. Review an imported template, then Apply to change the clock.
+  Sharing includes format literals, font size and theme; startup stays local.
 
 Where your data lives
   Preferences and logs are in %LOCALAPPDATA%\ElevenClock-rs, not in the

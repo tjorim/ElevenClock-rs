@@ -28,6 +28,21 @@ pub const HELPER_MARKER: &str = "--elevenclock-rs-inventory-v1";
 const DEADLINE: Duration = Duration::from_secs(3);
 const TEARDOWN: Duration = Duration::from_secs(1);
 
+fn helper_program(ctx: &Context, observation: Observation) -> Option<std::path::PathBuf> {
+    if observation.exit == Exit::Refused {
+        return None;
+    }
+    let local = ctx.destination.join(LAUNCHER_EXE);
+    // The executing local launcher implements this protocol itself, independently
+    // of whether the central app/launcher could be refreshed. Never infer protocol
+    // support from the mere presence of an arbitrary older local executable.
+    if source::same_folder(&ctx.own_exe, &local) {
+        Some(ctx.own_exe.clone())
+    } else {
+        observation.local_launcher_current.then_some(local)
+    }
+}
+
 /// Start only the fixed local launcher, never an executable on the central share.
 /// The handshake gates all collection until the child is inside its kill-on-close
 /// job. Dropping the job on parent exit or deadline removes a stuck child.
@@ -37,9 +52,9 @@ pub fn report(
     observation: Observation,
     extra_issues: &[Code],
 ) -> io::Result<()> {
-    if observation.exit == Exit::Refused || !observation.local_launcher_current {
+    let Some(program) = helper_program(ctx, observation) else {
         return Ok(());
-    }
+    };
     let mut snapshot = Snapshot::from_observation(observation);
     for code in extra_issues {
         snapshot.add_issue(*code);
@@ -55,7 +70,6 @@ pub fn report(
     );
     let payload = serde_json::to_vec(&Request { snapshot, source })
         .map_err(|_| io::Error::other("inventory request unavailable"))?;
-    let program = ctx.destination.join(LAUNCHER_EXE);
     supervise(
         &program,
         &[HELPER_MARKER],
@@ -216,7 +230,7 @@ mod tests {
         .unwrap();
         let ctx = Context {
             destination: dir.path().to_path_buf(),
-            own_exe: dir.path().join(LAUNCHER_EXE),
+            own_exe: dir.path().join("staging").join(LAUNCHER_EXE),
             probe_timeout: Duration::from_secs(1),
         };
         let observation = Observation {
@@ -228,6 +242,42 @@ mod tests {
         };
         // Without the gate this would try to execute the old file and fail.
         assert!(report(&ctx, &Launch::default(), observation, &[]).is_ok());
+    }
+
+    #[test]
+    fn executing_local_launcher_can_report_skipped_and_failed_refreshes() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Context {
+            destination: dir.path().to_path_buf(),
+            own_exe: dir.path().join(LAUNCHER_EXE),
+            probe_timeout: Duration::from_secs(1),
+        };
+        for refresh in [
+            crate::launch::RefreshOutcome::SkippedRunning,
+            crate::launch::RefreshOutcome::SkippedCheckFailed,
+            crate::launch::RefreshOutcome::SourceUnreachable,
+            crate::launch::RefreshOutcome::SourceInvalid,
+            crate::launch::RefreshOutcome::CopyFailed,
+        ] {
+            let observation = Observation {
+                exit: Exit::Done,
+                local_launcher_current: false,
+                refresh,
+                launch: crate::launch::LaunchOutcome::ProcessCreated,
+                fallback: false,
+            };
+            assert_eq!(helper_program(&ctx, observation), Some(ctx.own_exe.clone()));
+            assert_eq!(
+                helper_program(
+                    &ctx,
+                    Observation {
+                        exit: Exit::Refused,
+                        ..observation
+                    }
+                ),
+                None
+            );
+        }
     }
 
     #[test]

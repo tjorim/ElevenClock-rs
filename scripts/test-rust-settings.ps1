@@ -52,12 +52,14 @@ public static class SettingsNative {
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr dialog, int id);
+    [DllImport("user32.dll")] public static extern IntPtr GetNextDlgTabItem(IntPtr dialog, IntPtr control, bool previous);
     [DllImport("user32.dll")] public static extern int GetDlgCtrlID(IntPtr control);
     [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint thread, ref GuiInfo info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageW(IntPtr window, uint message, int wparam, StringBuilder text);
+    public static void SetText(IntPtr window, string text) { SendMessageW(window, 0x000C, 0, new StringBuilder(text)); }
 
     // Key presses go through the real input queue and the dialog manager.
     public static void KeyStroke(ushort key, ushort modifier) {
@@ -118,7 +120,7 @@ public static class SettingsNative {
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
 # --- control lookup: pages are children of the dialog, controls children of pages ---
-$PAGE = @{ Date = 111; Appearance = 112; Startup = 113; Support = 114 }
+$PAGE = @{ Date = 111; Appearance = 112; Startup = 113; Support = 114; Templates = 115 }
 function Control([IntPtr]$Window, [int]$Page, [int]$Id) {
     if ($Page -eq 0) { return [SettingsNative]::GetDlgItem($Window, $Id) }
     return [SettingsNative]::GetDlgItem([SettingsNative]::GetDlgItem($Window, $Page), $Id)
@@ -164,6 +166,9 @@ function Capture-Window([IntPtr]$Window, [string]$Name) {
 $preferences = Join-Path $env:LOCALAPPDATA 'ElevenClock-rs\preferences.dat'
 $backup = $null
 if (Test-Path $preferences) { $backup = [IO.File]::ReadAllBytes($preferences); Remove-Item $preferences -Force }
+$templatesFile = Join-Path $env:LOCALAPPDATA 'ElevenClock-rs\templates.json'
+$templatesBackup = if (Test-Path -LiteralPath $templatesFile) { [IO.File]::ReadAllBytes($templatesFile) } else { $null }
+if (Test-Path -LiteralPath $templatesFile) { Remove-Item -LiteralPath $templatesFile }
 
 # Processes of this executable that exist before the run (other tests, helpers).
 $baseline = @(Get-Process -Name elevenclock-rs -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
@@ -225,6 +230,7 @@ try {
     foreach ($id in 1301, 1302, 1303, 1304, 1305, 1306) { Assert ((Control $window $PAGE.Appearance $id) -ne [IntPtr]::Zero) "Missing Appearance control $id" }
     Assert ((Control $window $PAGE.Startup 1401) -ne [IntPtr]::Zero) 'Missing Startup page'
     Assert ((Control $window $PAGE.Support 1501) -ne [IntPtr]::Zero) 'Missing Support page'
+    foreach ($id in 1601..1610) { Assert ((Control $window $PAGE.Templates $id) -ne [IntPtr]::Zero) "Missing Templates control $id" }
     Assert ([SettingsNative]::Text((Control $window $PAGE.Support 1501)) -like '*version*') 'Support page must show the version'
     Assert (-not [SettingsNative]::IsWindowEnabled((Control $window 0 1105))) 'Apply must be disabled while nothing changed'
     $fileVersion = $app.MainModule.FileVersionInfo.ProductVersion
@@ -560,6 +566,47 @@ try {
     Press 0x22 0x11                # Ctrl+PageDown: back to Date and time
     $steps.support = 'Support status, previewed report (no user name or paths), bounded Refresh status, exact clipboard copy and bounded log verified'
 
+    # Template import is delivered to this same window and preserves an open draft.
+    $draftBefore = [SettingsNative]::Text((Control $window $PAGE.Date 1202))
+    $preferencesBefore = [IO.File]::ReadAllText($preferences)
+    $link = 'elevenclock://template?v=1&format=%25H%3A%25M&font=11&theme=dark'
+    $sender = Start-Process $Executable -ArgumentList '--template', ('"' + $link + '"') -PassThru
+    Assert ($sender.WaitForExit(10000) -and $sender.ExitCode -eq 0) 'Template second launch did not finish successfully'
+    Pump 500
+    Assert ([SettingsNative]::Settings($app.Id) -eq $window) 'Template must reuse the existing Settings window'
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq $draftBefore) 'Receiving a template replaced unsaved edits'
+    $received = [SettingsNative]::Text((Control $window $PAGE.Templates 1607))
+    Assert ($received -like 'https://tjorim.github.io/ElevenClock-rs/#template=1*font=11*theme=dark') 'Template payload did not reach Settings'
+    Assert ((Focused-Id $window) -eq 1608) 'Template arrival must focus its Review action'
+    Capture-Window $window 'templates-received.png'
+    Click (Control $window $PAGE.Templates 1608)
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq '%H:%M') 'Review did not stage the format'
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Appearance 1303)) -eq '11') 'Review did not stage the font size'
+    Assert ([SettingsNative]::SendMessageW((Control $window $PAGE.Appearance 1306), 0x0147, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]2) 'Review did not stage the dark theme'
+    Assert ([IO.File]::ReadAllText($preferences) -eq $preferencesBefore) 'Review saved before Apply'
+    Press 0x21 0x11 # Date and time -> Templates (wrap backwards)
+    $templateOrder = @(1602,1604,1605,1601,1603,1606,1609,1610,1607,1608)
+    [SettingsNative]::SendMessageW($window, 0x0028, (Control $window 0 1100), [IntPtr]1) | Out-Null
+    foreach ($id in $templateOrder) { Press 9; Assert ((Focused-Id $window) -eq $id) "Templates Tab must reach $id" }
+    $presetName = 'HarnessTemplate' + [guid]::NewGuid().ToString('N').Substring(0,16)
+    [SettingsNative]::SetText((Control $window $PAGE.Templates 1601), $presetName)
+    Click (Control $window $PAGE.Templates 1603)
+    $library = Get-Content -LiteralPath $templatesFile -Raw | ConvertFrom-Json
+    Assert ($library.presets.Count -eq 1 -and $library.presets[0].name -eq $presetName) 'Named preset was not saved'
+    $templateClipboard = Get-Clipboard -Raw
+    try {
+        Click (Control $window $PAGE.Templates 1606)
+        Assert ((Get-Clipboard -Raw).Trim() -eq $library.presets[0].link) 'Shared template must match the saved presentation'
+    } finally { if ($null -eq $templateClipboard) { Set-Clipboard -Value '' } else { Set-Clipboard -Value $templateClipboard } }
+    Click (Control $window 0 1104)
+    Click (Control $window $PAGE.Templates 1604)
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq '%H:%M') 'Saved preset did not load into the draft'
+    Press 0x21 0x11
+    Click (Control $window $PAGE.Templates 1605)
+    Assert (@((Get-Content -LiteralPath $templatesFile -Raw | ConvertFrom-Json).presets).Count -eq 0) 'Delete did not remove the named preset'
+    Assert ([IO.File]::ReadAllText($preferences) -eq $preferencesBefore) 'Template library actions wrote active preferences'
+    $steps.templates = 'Second-instance link delivery, draft preservation, review, font/theme, keyboard order, save/load/delete and share clipboard passed'
+
     # 9. Reset stages defaults; nothing is saved until Apply.
     Click (Control $window 0 1104)
     Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq '%H:%M' + "`n" + '%g%V.%u') 'Reset must stage the default format'
@@ -637,7 +684,12 @@ try {
     $app.Refresh()
     if (!$app.HasExited) { $app.Kill() }
     $app.Dispose()
-    if ($isolated) { Remove-Item -LiteralPath $isolated -Recurse -Force -ErrorAction SilentlyContinue }
+    if ($isolated) {
+        $resolvedIsolated = [IO.Path]::GetFullPath($isolated)
+        $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+        if (!$resolvedIsolated.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -or (Split-Path $resolvedIsolated -Leaf) -notlike 'settings-smoke-*') { throw 'Unexpected isolated test directory' }
+        Remove-Item -LiteralPath $resolvedIsolated -Recurse -Force -ErrorAction SilentlyContinue
+    }
     Remove-ItemProperty -Path $runKey -Name $neighbour -ErrorAction SilentlyContinue
     Clear-Startup
     if ($null -ne $startupBackup.Run) { Set-ItemProperty -Path $runKey -Name $startupName -Value $startupBackup.Run }
@@ -649,4 +701,6 @@ try {
         New-Item -ItemType Directory -Path (Split-Path $preferences) -Force | Out-Null
         [IO.File]::WriteAllBytes($preferences, $backup)
     } elseif (Test-Path $preferences) { Remove-Item $preferences -Force }
+    if ($null -ne $templatesBackup) { [IO.File]::WriteAllBytes($templatesFile, $templatesBackup) }
+    elseif (Test-Path -LiteralPath $templatesFile) { Remove-Item -LiteralPath $templatesFile }
 }

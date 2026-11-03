@@ -99,6 +99,17 @@ uses the existing serde_json dependency. The launcher still forbids network DLLs
 
 ## Optional features
 
+### Presentation templates
+
+The [template workflow](design/templates.md) adds no packages or service. The core
+uses bounded value parsing; the existing Serde/JSON dependencies store named local
+presets. The website uses plain JavaScript and URL fragments, with no upload or
+fetch. Sharing copies a link only on request. Opening the editor explicitly uses
+the default browser. Per-user protocol registration and the bounded single-instance
+handoff use generated Shell/registry/window APIs; no background worker, network
+client, polling timer or vendor endpoint is added. Only presentation fields cross
+the template boundary; Apply retains its existing validation and persistence rules.
+
 A heavyweight or network-dependent capability requires an explicit design decision
 covering product need, dependency size/maintenance/license impact, data collected
 and transmitted (destination, consent, retention and diagnostic redaction), and

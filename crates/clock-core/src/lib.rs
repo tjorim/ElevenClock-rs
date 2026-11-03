@@ -9,6 +9,7 @@ pub use error::GeometryError;
 pub use model::*;
 
 pub mod preferences;
+pub mod template;
 pub use preferences::{Monitors, Preferences, PreferencesError, Theme, ValidatedPreferences};
 
 pub mod schedule;

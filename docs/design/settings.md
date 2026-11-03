@@ -2,7 +2,7 @@
 
 ## What the user gets
 
-One window, four pages (a tab strip; `Ctrl+Tab`, `Ctrl+Shift+Tab` and
+One window, five pages (a tab strip; `Ctrl+Tab`, `Ctrl+Shift+Tab` and
 `Ctrl+PageUp/PageDown` also switch pages):
 
 | Page | Contents |
@@ -11,6 +11,7 @@ One window, four pages (a tab strip; `Ctrl+Tab`, `Ctrl+Shift+Tab` and
 | Appearance | Primary display only / All displays, font size 6–24 pt with spin buttons, clock theme System / Light / Dark |
 | Startup | The opt-in login-startup checkbox ([details](startup.md)). It is the Windows registration itself, not a stored preference, so nothing can drift from the OS-owned state |
 | Support | Status, Refresh status and Copy diagnostics ([details](diagnostics.md)) |
+| Templates | Review a shared link, share the current presentation, save/load/delete named local presets, open the website editor and enable/disable per-user template links ([details](templates.md)) |
 
 Below every page, Settings shows the running app version, taken from the same
 Cargo workspace version as the executable's file properties. **GitHub Releases** opens

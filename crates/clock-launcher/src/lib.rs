@@ -8,6 +8,7 @@ pub mod fsops;
 pub mod inventory;
 pub mod inventory_config;
 pub mod inventory_publish;
+pub mod inventory_summary;
 pub mod inventory_support;
 pub mod launch;
 pub mod pe;

@@ -82,7 +82,8 @@ cargo build -p clock-app --release --target x86_64-pc-windows-msvc --locked
 ```
 
 Double-click the resulting `elevenclock-rs.exe` for the native
-runtime and Settings shell. It has no command suite. Closing Settings keeps the
+runtime and Settings shell. Its `--template <link>` action opens a presentation
+template for review, as described in [templates](design/templates.md). Closing Settings keeps the
 clock running in the background; **Exit ElevenClock-rs** quits (see
 [lifecycle](design/lifecycle.md)). Exit any legacy ElevenClock first: two overlay
 apps cannot share a taskbar. What has been tested is in

@@ -135,6 +135,9 @@ pub trait Host {
     }
     /// The Run value and its Windows flag.
     fn run_key(&mut self) -> &mut dyn RunKey;
+    fn remove_template_handler(&mut self, _app: &Path) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// The facts about this run that do not depend on the arguments.
@@ -208,13 +211,12 @@ pub fn launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> Exit {
 
 /// Execute best-effort reporting only after launch decisions have completed.
 /// Neither an adapter error nor panic can change the launcher's exit code.
-/// Without a current local launcher, do not invoke an adapter that might start an
-/// older executable with an unrecognized helper marker.
+/// The native adapter chooses a known-compatible local helper before spawning it.
 pub fn report_after(
     observation: Observation,
     report: impl FnOnce(Observation) -> io::Result<()>,
 ) -> Exit {
-    if observation.exit != Exit::Refused && observation.local_launcher_current {
+    if observation.exit != Exit::Refused {
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| report(observation)));
     }
     observation.exit

@@ -30,6 +30,7 @@ renders them, with relative links rewritten to the published pages, and
 | Runtime, monitors, Explorer recovery, shutdown | [`lifecycle.md`](design/lifecycle.md) |
 | Clock actions, tray, keyboard and accessibility | [`interaction.md`](design/interaction.md) |
 | Settings window and the preference flow | [`settings.md`](design/settings.md) |
+| Visual format editor, shared templates and local presets | [`templates.md`](design/templates.md) |
 | Support status, Copy diagnostics, local logs | [`diagnostics.md`](design/diagnostics.md) |
 | Opt-in login startup and the uninstall contract | [`startup.md`](design/startup.md) |
 

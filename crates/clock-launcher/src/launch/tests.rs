@@ -1019,7 +1019,7 @@ fn ancillary_launcher_failures_have_structured_codes_without_affecting_start() {
 }
 
 #[test]
-fn reporting_is_skipped_without_a_verified_local_launcher() {
+fn reporting_adapter_can_select_the_executing_local_launcher_without_refresh() {
     let observation = Observation {
         exit: Exit::Done,
         local_launcher_current: false,
@@ -1035,7 +1035,7 @@ fn reporting_is_skipped_without_a_verified_local_launcher() {
         }),
         Exit::Done
     );
-    assert!(!reported);
+    assert!(reported);
 }
 
 #[test]

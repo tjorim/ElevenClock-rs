@@ -3,7 +3,8 @@
 //!
 //! There is no console, no public command suite and no usage text. Explorer
 //! launches the same executable for the Start menu, a double-click and login
-//! startup; the only inputs are two private markers owned by `instance::Role`.
+//! startup. Private markers select internal roles; --template accepts one bounded
+//! presentation link for review in Settings, never an automatic Apply.
 use crate::logging;
 use clock_windows::{
     PlatformError,
@@ -20,11 +21,19 @@ use std::{process::ExitCode, time::Duration};
 const SIGNAL_WAIT: Duration = Duration::from_secs(5);
 
 pub fn main() -> ExitCode {
-    match Role::from_args(std::env::args().skip(1)) {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match Role::from_args(args.clone()) {
         Role::DiscoveryHelper { generation } => {
             ExitCode::from(u8::try_from(helper::run(generation)).unwrap_or(1))
         }
-        Role::Application(launch) => match application(launch) {
+        Role::Application(launch) => match instance::template_from_args(&args)
+            .map_err(|_| {
+                PlatformError::message(
+                    "The template link is invalid or unsupported. Your settings have not changed.",
+                )
+            })
+            .and_then(|template| application(launch, template))
+        {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 logging::failed(&error);
@@ -35,9 +44,21 @@ pub fn main() -> ExitCode {
     }
 }
 
-fn application(launch: LaunchMode) -> Result<(), PlatformError> {
+fn application(
+    launch: LaunchMode,
+    template: Option<clock_core::template::ClockTemplate>,
+) -> Result<(), PlatformError> {
     match instance::acquire()? {
         Acquired::Existing(names) => {
+            if let Some(template) = template {
+                return if instance::signal_template(&names, &template, SIGNAL_WAIT) {
+                    Ok(())
+                } else {
+                    Err(PlatformError::message(
+                        "The running clock could not receive the template. Try again.",
+                    ))
+                };
+            }
             // A second launch never adds a clock. An interactive one asks the
             // running instance to show Settings; a quiet startup launch does nothing.
             if launch == LaunchMode::Interactive && !instance::signal_existing(&names, SIGNAL_WAIT)
@@ -49,6 +70,9 @@ fn application(launch: LaunchMode) -> Result<(), PlatformError> {
             Ok(())
         }
         Acquired::Primary(guard) => {
+            if let Some(template) = template {
+                clock_windows::templates::receive(template);
+            }
             // Only the primary instance logs, so two processes never share a file.
             logging::start();
             // An unresolvable data folder must not stop the clock: run with defaults.

@@ -269,6 +269,14 @@ Windows.Win32.RRF_RT_REG_SZ
 Windows.Win32.RegCloseKey
 Windows.Win32.RegCreateKeyExW
 Windows.Win32.RegDeleteTreeW
+Windows.Win32.COPYDATASTRUCT
+Windows.Win32.SHChangeNotify
+Windows.Win32.SHCNE_ASSOCCHANGED
+Windows.Win32.SHCNF_IDLIST
+Windows.Win32.CB_RESETCONTENT
+Windows.Win32.WM_COPYDATA
+Windows.Win32.SendMessageTimeoutW
+Windows.Win32.SMTO_ABORTIFHUNG
 Windows.Win32.RegDeleteValueW
 Windows.Win32.RegGetValueW
 Windows.Win32.RegOpenKeyExW

@@ -1040,6 +1040,23 @@ pub unsafe fn ReleaseCapture() -> windows_core::BOOL {
     unsafe { ReleaseCapture() }
 }
 #[inline]
+pub unsafe fn SHChangeNotify(
+    weventid: i32,
+    uflags: u32,
+    dwitem1: Option<*const core::ffi::c_void>,
+    dwitem2: Option<*const core::ffi::c_void>,
+) {
+    windows_core::link!("shell32.dll" "system" fn SHChangeNotify(weventid : i32, uflags : u32, dwitem1 : *const core::ffi::c_void, dwitem2 : *const core::ffi::c_void));
+    unsafe {
+        SHChangeNotify(
+            weventid,
+            uflags,
+            dwitem1.unwrap_or(core::mem::zeroed()) as _,
+            dwitem2.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
+}
+#[inline]
 pub unsafe fn SHGetKnownFolderPath(
     rfid: *const KNOWNFOLDERID,
     dwflags: u32,
@@ -1066,6 +1083,29 @@ pub unsafe fn ScreenToClient(hwnd: HWND, lppoint: *mut POINT) -> windows_core::B
 pub unsafe fn SendInput(pinputs: &[INPUT], cbsize: i32) -> u32 {
     windows_core::link!("user32.dll" "system" fn SendInput(cinputs : u32, pinputs : *const INPUT, cbsize : i32) -> u32);
     unsafe { SendInput(pinputs.len().try_into().unwrap(), pinputs.as_ptr(), cbsize) }
+}
+#[inline]
+pub unsafe fn SendMessageTimeoutW(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    fuflags: u32,
+    utimeout: u32,
+    lpdwresult: Option<*mut usize>,
+) -> LRESULT {
+    windows_core::link!("user32.dll" "system" fn SendMessageTimeoutW(hwnd : HWND, msg : u32, wparam : WPARAM, lparam : LPARAM, fuflags : u32, utimeout : u32, lpdwresult : *mut usize) -> LRESULT);
+    unsafe {
+        SendMessageTimeoutW(
+            hwnd,
+            msg,
+            wparam,
+            lparam,
+            fuflags,
+            utimeout,
+            lpdwresult.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
 }
 #[inline]
 pub unsafe fn SendMessageW(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -1591,6 +1631,7 @@ pub const BST_CHECKED: i32 = 1;
 pub const CBN_SELCHANGE: i32 = 1;
 pub const CB_ADDSTRING: i32 = 323;
 pub const CB_GETCURSEL: i32 = 327;
+pub const CB_RESETCONTENT: i32 = 331;
 pub const CB_SETCURSEL: i32 = 334;
 pub const CF_UNICODETEXT: i32 = 13;
 pub type CLSCTX = u32;
@@ -1602,6 +1643,13 @@ pub const COLOR_WINDOWTEXT: i32 = 8;
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct CONTROLTYPEID(pub i32);
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct COPYDATASTRUCT {
+    pub dwData: usize,
+    pub cbData: u32,
+    pub lpData: *mut core::ffi::c_void,
+}
 pub const CREATE_NO_WINDOW: i32 = 134217728;
 pub const CUIAutomation: windows_core::GUID =
     windows_core::GUID::from_u128(0xff48dba4_60ef_4201_aa87_54103eef594e);
@@ -3780,6 +3828,8 @@ pub struct SECURITY_ATTRIBUTES {
     pub lpSecurityDescriptor: *mut core::ffi::c_void,
     pub bInheritHandle: windows_core::BOOL,
 }
+pub const SHCNE_ASSOCCHANGED: i32 = 134217728;
+pub const SHCNF_IDLIST: i32 = 0;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct SID_AND_ATTRIBUTES {
@@ -3787,6 +3837,7 @@ pub struct SID_AND_ATTRIBUTES {
     pub Attributes: u32,
 }
 pub type SID_NAME_USE = i32;
+pub const SMTO_ABORTIFHUNG: i32 = 2;
 pub const SM_CXSMICON: i32 = 49;
 pub const SM_CYSMICON: i32 = 50;
 pub const SPI_GETHIGHCONTRAST: i32 = 66;
@@ -4129,6 +4180,7 @@ pub const WM_CAPTURECHANGED: i32 = 533;
 pub const WM_CLOSE: i32 = 16;
 pub const WM_COMMAND: i32 = 273;
 pub const WM_CONTEXTMENU: i32 = 123;
+pub const WM_COPYDATA: i32 = 74;
 pub const WM_DISPLAYCHANGE: i32 = 126;
 pub const WM_DPICHANGED: i32 = 736;
 pub const WM_DWMCOLORIZATIONCOLORCHANGED: i32 = 800;

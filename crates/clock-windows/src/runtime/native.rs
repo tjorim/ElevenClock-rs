@@ -519,6 +519,50 @@ fn set_timer(host: HWND, id: usize, delay: Duration) {
 
 fn guard(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match message {
+        m if m == WM_COPYDATA as u32 => {
+            // SAFETY: WM_COPYDATA is a synchronous system-marshalled message.
+            // Windows supplies the structure/payload during this callback only.
+            // Bound before copying; only an owned validated template is queued.
+            let accepted = unsafe {
+                if lparam.0 == 0 {
+                    false
+                } else {
+                    let data = &*(lparam.0 as *const COPYDATASTRUCT);
+                    if data.dwData != crate::instance::TEMPLATE_MESSAGE_TAG
+                        || data.lpData.is_null()
+                        || data.cbData as usize > clock_core::template::MAX_LINK_BYTES
+                        || data.cbData == 0
+                    {
+                        false
+                    } else {
+                        let bytes = std::slice::from_raw_parts(
+                            data.lpData.cast::<u8>(),
+                            data.cbData as usize,
+                        );
+                        std::str::from_utf8(bytes)
+                            .ok()
+                            .and_then(|link| {
+                                clock_core::template::ClockTemplate::from_link(link).ok()
+                            })
+                            .is_some_and(|template| {
+                                crate::templates::receive(template);
+                                SHOW_SETTINGS.set(true);
+                                // A synchronous sent message does not itself make
+                                // GetMessage return. Wake the ordinary pump even
+                                // if the earlier focus signal was already consumed.
+                                let _ = PostMessageW(
+                                    Some(hwnd),
+                                    WM_SHOW_SETTINGS,
+                                    WPARAM(0),
+                                    LPARAM(0),
+                                );
+                                true
+                            })
+                    }
+                }
+            };
+            LRESULT(isize::from(accepted))
+        }
         m if m == WM_TIMER as u32 => {
             // One-shot semantics on top of the periodic USER timer.
             // SAFETY: kills this window's own timer.
@@ -730,6 +774,9 @@ pub fn run<S: PreferencesStore>(
     if launch == LaunchMode::Interactive {
         settings.show_or_focus(&mut runtime)?;
     }
+    if let Some(template) = crate::templates::take_incoming() {
+        settings.receive_template(&mut runtime, &template)?;
+    }
 
     let mut message = MSG::default();
     let result = loop {
@@ -827,7 +874,11 @@ fn pump<S: PreferencesStore>(
     runtime.platform_mut().repaint_invalidated();
     runtime.sync_overlay_failures();
     if SHOW_SETTINGS.take() {
-        settings.show_or_focus(runtime)?;
+        if let Some(template) = crate::templates::take_incoming() {
+            settings.receive_template(runtime, &template)?;
+        } else {
+            settings.show_or_focus(runtime)?;
+        }
     }
     // Last, so the Support page shows what the work above just changed.
     settings.refresh_support(runtime);

@@ -153,6 +153,9 @@ impl Host for NativeHost {
     fn run_key(&mut self) -> &mut dyn RunKey {
         &mut self.run_key
     }
+    fn remove_template_handler(&mut self, app: &Path) -> io::Result<()> {
+        clock_windows::template_protocol::remove_if_owned(app).map(|_| ())
+    }
 }
 
 fn context() -> Option<Context> {
@@ -179,7 +182,7 @@ fn run() -> Exit {
     // Login starts and the uninstall helper must never wait on a message box.
     let silent = arguments
         .iter()
-        .any(|arg| arg == STARTUP || arg == UNINSTALL);
+        .any(|arg| arg == STARTUP || arg == UNINSTALL || arg == args::INVENTORY_SUMMARY);
     let command = match args::parse(arguments) {
         Ok(command) => command,
         Err(error) => {
@@ -190,6 +193,28 @@ fn run() -> Exit {
             return Exit::Usage;
         }
     };
+    if let Command::InventorySummary {
+        directory,
+        output,
+        recent_days,
+    } = &command
+    {
+        let result = clock_windows::inventory_facts::observed_utc()
+            .ok_or_else(|| io::Error::other("summary time unavailable"))
+            .and_then(|now| {
+                crate::inventory_summary::write(
+                    directory,
+                    output,
+                    now,
+                    u64::from(*recent_days) * 86400,
+                )
+            });
+        if result.is_err() {
+            host.log("inventory summary failed");
+            return Exit::Internal;
+        }
+        return Exit::Done;
+    }
     let Some(ctx) = context() else {
         host.log("folders unavailable");
         if !silent {
@@ -206,6 +231,7 @@ fn run() -> Exit {
             })
         }
         Command::Uninstall => uninstall(&mut host, &ctx),
+        Command::InventorySummary { .. } => unreachable!("summary handled before launch context"),
     }
 }
 

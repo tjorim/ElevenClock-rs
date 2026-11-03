@@ -295,12 +295,21 @@ pub fn aggregate<'a>(
     now: u64,
     recent_seconds: u64,
 ) -> io::Result<Summary> {
+    aggregate_records(records.into_iter().map(Ok), now, recent_seconds)
+}
+
+pub(crate) fn aggregate_records<B: AsRef<[u8]>>(
+    records: impl IntoIterator<Item = io::Result<B>>,
+    now: u64,
+    recent_seconds: u64,
+) -> io::Result<Summary> {
     let mut summary = Summary::default();
     for (index, bytes) in records.into_iter().enumerate() {
         if index >= MAX_AGGREGATION_RECORDS {
             return Err(invalid());
         }
-        let Ok(snapshot) = Snapshot::decode(bytes) else {
+        let bytes = bytes?;
+        let Ok(snapshot) = Snapshot::decode(bytes.as_ref()) else {
             summary.excluded += 1;
             continue;
         };

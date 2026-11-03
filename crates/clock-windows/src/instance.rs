@@ -11,6 +11,21 @@
 pub const HOST_CLASS: &str = "ElevenClock-rs.Runtime.Host";
 /// Posted to the host window: open or focus the Settings window.
 pub const WM_SHOW_SETTINGS: u32 = 0x8000 + 2;
+pub const TEMPLATE_MESSAGE_TAG: usize = 0xec01;
+pub const TEMPLATE_MARKER: &str = "--template";
+
+pub fn template_from_args(
+    args: &[String],
+) -> Result<Option<clock_core::template::ClockTemplate>, clock_core::template::TemplateError> {
+    if args.first().is_some_and(|arg| arg == TEMPLATE_MARKER) {
+        match args {
+            [_, link] => clock_core::template::ClockTemplate::from_link(link).map(Some),
+            _ => Err(clock_core::template::TemplateError),
+        }
+    } else {
+        Ok(None)
+    }
+}
 
 /// Object and window names derived from the account SID.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,7 +77,8 @@ pub const HELPER_MARKER: &str = "--elevenclock-rs-discovery-helper";
 
 impl Role {
     /// Unknown arguments are ignored and never printed: the executable has no
-    /// public command suite, so Explorer-supplied arguments cannot break launch.
+    /// general command suite. Template arguments are validated separately and
+    /// cannot select a private role.
     pub fn from_args<I: IntoIterator<Item = String>>(args: I) -> Self {
         let args: Vec<String> = args.into_iter().collect();
         match args.as_slice() {
@@ -82,7 +98,7 @@ mod native;
 #[cfg(windows)]
 pub(crate) use native::current_user_sid;
 #[cfg(windows)]
-pub use native::{Acquired, InstanceGuard, acquire, signal_existing};
+pub use native::{Acquired, InstanceGuard, acquire, signal_existing, signal_template};
 
 #[cfg(test)]
 mod tests {
@@ -126,6 +142,27 @@ mod tests {
             &["file.txt"],
         ] {
             assert_eq!(Role::from_args(args(other)), interactive, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn template_launch_requires_one_valid_argument_and_cannot_select_a_helper_role() {
+        let link = "elevenclock://template?v=1&format=%25H&font=9&theme=system";
+        assert!(
+            template_from_args(&args(&[TEMPLATE_MARKER, link]))
+                .unwrap()
+                .is_some()
+        );
+        for values in [
+            args(&[TEMPLATE_MARKER]),
+            args(&[TEMPLATE_MARKER, "invalid"]),
+            args(&[TEMPLATE_MARKER, link, HELPER_MARKER, "7"]),
+        ] {
+            assert!(template_from_args(&values).is_err());
+            assert_eq!(
+                Role::from_args(values),
+                Role::Application(LaunchMode::Interactive)
+            );
         }
     }
 }

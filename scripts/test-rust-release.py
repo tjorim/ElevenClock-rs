@@ -141,6 +141,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(release.MANAGED_FILES - release.PORTABLE_FILES, {
             "ElevenClock-rs/elevenclock-rs-launcher.exe", "ElevenClock-rs/elevenclock-rs.data",
             "ElevenClock-rs/SHA256SUMS.txt",
+            "ElevenClock-rs/README-MANAGER.txt",
         })
         self.assertEqual(release.PORTABLE_FILES - release.MANAGED_FILES, {"ElevenClock-rs/elevenclock-rs.exe"})
 
@@ -149,6 +150,8 @@ class Gates(unittest.TestCase):
         for label, managed in (
             ("extra", {**base, "ElevenClock-rs/source.txt": b"x"}),
             ("no launcher", {k: v for k, v in base.items() if "launcher" not in k}),
+            ("no user readme", {k: v for k, v in base.items() if k != "ElevenClock-rs/README.txt"}),
+            ("no manager readme", {k: v for k, v in base.items() if k != "ElevenClock-rs/README-MANAGER.txt"}),
         ):
             with self.subTest(label), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)

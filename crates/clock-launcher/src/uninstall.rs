@@ -61,6 +61,13 @@ pub fn uninstall(host: &mut dyn Host, ctx: &Context) -> Exit {
             complete = false;
         }
     }
+    if let Err(error) = host.remove_template_handler(&layout.app()) {
+        host.log(&format!(
+            "template link registration not removed: {}",
+            describe(&error)
+        ));
+        complete = false;
+    }
     if complete {
         host.log("uninstalled");
         Exit::Done

@@ -201,11 +201,19 @@ failures can be retained locally. A deadlined helper may leave pending status.
 Support aggregation counts affected users/installations, not event frequency. No
 app runtime monitoring, crash collection, event history or new worker is introduced.
 
-The inventory helper is invoked only when the current launch established that the
-local launcher matches its refresh source (matching hash, local-file source, or
-successful replacement). Failed/skipped refreshes and a missing source launcher
-suppress helper invocation, preserving the app start result and previous snapshot.
+The executing local launcher can invoke itself as the inventory helper even when
+refresh fails or is skipped: its own code implements that helper role. Share/staging
+launches require evidence that the local launcher matches the refresh source
+(matching hash, local-file source, or successful replacement), and otherwise skip
+helper invocation, preserving the app start result and previous snapshot.
 This freshness evidence does not negotiate helper-protocol support or define a
 minimum compatible release. Keep compatible managed app/launcher artifacts together.
-The same gate prevents reporting some update/fallback failures; local launcher logs
-and stale last-seen timestamps remain the fallback for support in those cases.
+Unreadable configuration still disables collection; local launcher logs and stale
+last-seen timestamps remain the fallback when reporting cannot run.
+
+An explicit `--inventory-summary <report-root> <output.json> [recent-days]` launcher
+mode aggregates existing reports using the portable library. It performs no deployment,
+app start, registry changes or new fact collection. It writes an atomic JSON summary
+outside the report tree, with distinct-user/installation counts, format adoption,
+support issues and latest snapshots. This uses the existing shipped managed launcher;
+no additional executable, runtime, service or scheduler is shipped.

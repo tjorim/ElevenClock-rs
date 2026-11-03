@@ -114,3 +114,44 @@ pub fn signal_existing(names: &InstanceNames, wait: Duration) -> bool {
         std::thread::sleep(Duration::from_millis(50));
     }
 }
+
+/// WM_COPYDATA marshals these bounded bytes while this synchronous call is live.
+/// The receiver copies validated values; no sender pointer is retained.
+pub fn signal_template(
+    names: &InstanceNames,
+    template: &clock_core::template::ClockTemplate,
+    wait: Duration,
+) -> bool {
+    if !signal_existing(names, wait) {
+        return false;
+    }
+    let link = template.app_link();
+    let data = crate::bindings::COPYDATASTRUCT {
+        dwData: super::TEMPLATE_MESSAGE_TAG,
+        cbData: link.len() as u32,
+        lpData: link.as_ptr().cast_mut().cast(),
+    };
+    let mut result = 0;
+    // SAFETY: system-marshalled WM_COPYDATA, live UTF-8 payload and structure for
+    // the entire bounded send, and a live output slot. No pointer is posted.
+    unsafe {
+        let host = FindWindowW(
+            &HSTRING::from(HOST_CLASS),
+            &HSTRING::from(names.window_title.as_str()),
+        );
+        if host.is_invalid() {
+            return false;
+        }
+        crate::bindings::SendMessageTimeoutW(
+            host,
+            crate::bindings::WM_COPYDATA as u32,
+            WPARAM(0),
+            LPARAM((&data as *const crate::bindings::COPYDATASTRUCT) as isize),
+            crate::bindings::SMTO_ABORTIFHUNG as u32,
+            1000,
+            Some(&mut result),
+        )
+        .0 != 0
+            && result == 1
+    }
+}

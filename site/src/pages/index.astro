@@ -62,7 +62,7 @@ import { repository, siteUrl } from '../../lib/paths.mjs';
         </article>
         <article>
           <h3>Private and accessible</h3>
-          <p>No internet access and no telemetry. Works with screen readers, the
+          <p>No developer telemetry; update checks are optional. Works with screen readers, the
             keyboard and high contrast. Light and dark themes follow Windows.</p>
         </article>
       </div>
@@ -70,13 +70,33 @@ import { repository, siteUrl } from '../../lib/paths.mjs';
 
     <section id="try" class="try">
       <h2>Try a format</h2>
-      <p>This is the same format language the app uses. Pick a preset or type your own.</p>
+      <p>Build your clock with pieces, drag them into order, or edit the format directly.
+        Copy the format or share a template with its font size and theme.</p>
       <div class="presets" role="group" aria-label="Presets">
         <button type="button" data-format="%g%V.%u">ISO week date</button>
         <button type="button" data-format="%y%V.%u">Calendar year + ISO week</button>
         <button type="button" data-format="%H:%M&#10;%g%V.%u">Time + ISO week date</button>
         <button type="button" data-format="%a %d %b %H:%M:%S">Weekday and seconds</button>
       </div>
+      <div class="template-workbench">
+      <div class="visual-editor">
+        <h3>Build it visually</h3>
+        <p id="builder-help">Click a piece to add it. Drag to reorder, or select a piece and use the move buttons.</p>
+        <div id="token-palette" class="token-palette" role="group" aria-label="Add clock pieces"></div>
+        <div class="literal-controls">
+          <label for="literal-text">Your text or separator</label>
+          <input id="literal-text" maxlength="256" placeholder="e.g. : or a space" />
+          <button id="add-literal" type="button">Add text</button>
+          <button id="add-line" type="button">Add new line</button>
+        </div>
+        <ol id="format-parts" class="format-parts" aria-label="Clock pieces in order" aria-describedby="builder-help"></ol>
+        <div class="editor-actions" role="group" aria-label="Selected clock piece">
+          <button id="piece-left" type="button">Move earlier</button>
+          <button id="piece-right" type="button">Move later</button>
+          <button id="piece-remove" type="button">Remove selected</button>
+        </div>
+      </div>
+      <div class="template-inspector">
       <div class="playground">
         <label for="format">Format <span class="hint">(Enter for a second line)</span></label>
         <textarea id="format" rows="2" spellcheck="false">%H:%M&#10;%g%V.%u</textarea>
@@ -85,6 +105,26 @@ import { repository, siteUrl } from '../../lib/paths.mjs';
             <div class="tray"><span class="clock" id="preview-clock" aria-live="off"></span></div>
           </div>
         </div>
+      </div>
+      <div class="template-controls">
+        <label for="template-font">Maximum font size (pt)</label>
+        <input id="template-font" type="number" min="6" max="24" step="1" value="9" />
+        <label for="template-theme">Clock theme</label>
+        <select id="template-theme"><option value="system">Follow Windows</option><option value="light">Light</option><option value="dark">Dark</option></select>
+      </div>
+      <p id="template-error" role="alert"></p>
+      <div class="editor-actions">
+        <button id="copy-format" type="button">Copy format</button>
+        <button id="copy-template" type="button">Copy share link</button>
+        <a id="template-open">Open in ElevenClock-rs</a>
+      </div>
+      <label class="share-label" for="template-share">Template link</label>
+      <input id="template-share" class="template-share" readonly aria-describedby="share-help" />
+      <p id="share-help">Sharing includes any personal text you put in the format. Templates stay in the link;
+        there is no upload. Opening in the app requires a compatible release with template links enabled.
+        Review and Apply there to change your clock; browser previews cannot check your taskbar’s available space.</p>
+      <p id="template-status" role="status" aria-live="polite"></p>
+      </div>
       </div>
       <details class="tokens">
         <summary>All tokens</summary>
@@ -123,8 +163,33 @@ import { repository, siteUrl } from '../../lib/paths.mjs';
         <li>Run it. It installs for your account only, without administrator rights.</li>
         <li>Open <strong>ElevenClock-rs</strong> from the Start menu and pick your format.</li>
       </ol>
-      <p>Prefer no installer? The release also has a <strong>portable ZIP</strong>: extract
-        it and double-click <code>elevenclock-rs.exe</code>.</p>
+      <h3>Choose your deployment</h3>
+      <div class="deployment-modes">
+        <article>
+          <h4>Installer</h4>
+          <p>For your own PC. Run the setup file for a per-user installation, Start
+            menu shortcut and Windows uninstaller. Template links are registered
+            for your account when available.</p>
+          <a href={siteUrl('docs/guide/#install')}>Installation guide</a>
+        </article>
+        <article>
+          <h4>Portable ZIP</h4>
+          <p>For a copy you manage yourself. Extract it to a writable folder and run
+            <code>elevenclock-rs.exe</code>. Exit and replace the executable to update;
+            enable template links in Settings if you want them.</p>
+          <a href={siteUrl('docs/guide/#install')}>Portable instructions</a>
+        </article>
+        <article>
+          <h4>Managed ZIP</h4>
+          <p>For organizations. A deployment manager maintains a central copy; the
+            launcher updates and starts each user’s local app. Includes separate
+            user and manager guides, plus optional organization inventory.</p>
+          <a href={siteUrl('docs/managed-deployment/')}>Managed deployment guide</a>
+        </article>
+      </div>
+      <p>All three run for your Windows account without elevation. A deployment manager
+        is an organizational role, not a Windows administrator account. Use one mode
+        per account; the installer and managed copy share a folder and cannot coexist.</p>
       <p class="note">Releases are not code-signed yet, so Windows may say <em>“Windows
         protected your PC”</em>. Choose <strong>More info</strong>, then
         <strong>Run anyway</strong>. Each release lists SHA-256 checksums.</p>
@@ -165,9 +230,12 @@ import { repository, siteUrl } from '../../lib/paths.mjs';
       </details>
       <details>
         <summary>How do I uninstall it?</summary>
-        <p>Choose <strong>Exit ElevenClock-rs</strong> in Settings or the tray menu, then
-          uninstall from <strong>Windows Settings &gt; Apps &gt; Installed apps</strong>.
-          It also removes its own startup entry.</p>
+        <p>For the installer, exit the app and uninstall from
+          <strong>Windows Settings &gt; Apps &gt; Installed apps</strong>.
+          For a portable copy, disable startup and template links in Settings, exit,
+          then delete its folder. For a managed copy, ask your deployment manager;
+          the <a href={siteUrl('docs/managed-deployment/')}>managed guide</a> explains removal.
+          Saved preferences and local presets are retained.</p>
       </details>
       <details>
         <summary>Something is wrong. Where do I get help?</summary>

@@ -1,3 +1,4 @@
+import { setupEditor } from './editor.js';
 // A small JavaScript copy of the app's format language (crates/clock-core/FORMAT.md),
 // used only to preview formats on this page.
 (function () {
@@ -68,15 +69,11 @@
   function updatePreview(now) {
     const lines = input.value.split("\n").slice(0, 2);
     preview.textContent = render(lines.join("\n"), now || new Date());
+    preview.style.fontSize = `${document.getElementById('template-font').value || 9}pt`;
+    const theme = document.getElementById('template-theme').value;
+    preview.closest('.taskbar').dataset.theme = theme;
   }
-  input.addEventListener("input", () => updatePreview());
-  document.querySelectorAll(".presets button").forEach((button) => {
-    button.addEventListener("click", () => {
-      input.value = button.dataset.format;
-      updatePreview();
-      input.focus();
-    });
-  });
+  setupEditor(updatePreview);
 
   tick();
   setInterval(tick, 1000);
