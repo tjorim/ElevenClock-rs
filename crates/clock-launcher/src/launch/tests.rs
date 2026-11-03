@@ -57,6 +57,9 @@ struct FakeHost {
     support_codes: Vec<Code>,
     template_removal_fails: bool,
     template_removal_saw_app: bool,
+    template_owned: bool,
+    template_restored: bool,
+    template_restore_fails: bool,
 }
 impl FakeHost {
     fn new() -> Self {
@@ -72,6 +75,9 @@ impl FakeHost {
             support_codes: Vec::new(),
             template_removal_fails: false,
             template_removal_saw_app: false,
+            template_owned: false,
+            template_restored: false,
+            template_restore_fails: false,
         }
     }
     fn logged(&self, line: &str) -> bool {
@@ -85,13 +91,22 @@ impl Host for FakeHost {
     fn installer_entry_present(&mut self) -> bool {
         self.installer
     }
-    fn remove_template_handler(&mut self, app: &Path) -> io::Result<()> {
+    fn remove_template_handler(&mut self, app: &Path) -> io::Result<bool> {
         self.template_removal_saw_app = app.is_file();
         if self.template_removal_fails {
             Err(io::Error::other("registry unavailable"))
         } else {
-            Ok(())
+            Ok(std::mem::take(&mut self.template_owned))
         }
+    }
+    fn restore_template_handler(&mut self, app: &Path) -> io::Result<()> {
+        assert!(app.exists());
+        if self.template_restore_fails {
+            return Err(io::Error::other("foreign registration"));
+        }
+        self.template_restored = true;
+        self.template_owned = true;
+        Ok(())
     }
     fn claim_instance(&mut self) -> Claim {
         match self.instance {
@@ -884,6 +899,33 @@ fn uninstall_reports_a_file_it_could_not_remove() {
     );
     // The rest was still done.
     assert!(world.local_app().is_none() && host.key.removed);
+}
+
+#[cfg(windows)]
+#[test]
+fn incomplete_uninstall_restores_only_the_handler_it_removed_when_the_app_remains() {
+    use std::os::windows::fs::OpenOptionsExt;
+    for (owned, conflict) in [(true, false), (false, false), (true, true)] {
+        let world = deployed();
+        let app = world.layout().app();
+        let _held = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&app)
+            .unwrap();
+        let mut host = FakeHost::new();
+        host.template_owned = owned;
+        host.template_restore_fails = conflict;
+        assert_eq!(
+            uninstall(&mut host, &world.launched_from_share()),
+            Exit::UninstallIncomplete
+        );
+        assert!(app.is_file());
+        assert_eq!(host.template_restored, owned && !conflict);
+        if owned && conflict {
+            assert!(host.logged_starting("template link registration not restored:"));
+        }
+    }
 }
 
 #[test]

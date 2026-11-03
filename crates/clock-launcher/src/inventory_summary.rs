@@ -31,6 +31,10 @@ fn write_before_read(
     if parent.starts_with(&root) {
         return Err(io::Error::other("summary must be outside report folder"));
     }
+    let output_parent = clock_windows::summary_output::Parent::open(&parent)?;
+    let output_name = output
+        .file_name()
+        .ok_or_else(|| io::Error::other("output name unavailable"))?;
     let mut paths = Vec::new();
     let mut visited = 0;
     // Exactly the root and its immediate per-SID directories. Never follow links
@@ -131,7 +135,10 @@ fn write_before_read(
         "latest": summary.latest.values().collect::<Vec<_>>()
     });
     let bytes = serde_json::to_vec_pretty(&value).map_err(io::Error::other)?;
-    fsops::install(&output, &bytes, || Ok(()))
+    if bytes.len() as u64 > fsops::MAX_FILE_BYTES {
+        return Err(io::Error::other("summary is too large"));
+    }
+    output_parent.install(output_name, &bytes, || Ok(()))
 }
 
 fn count_entry(visited: &mut usize) -> io::Result<()> {
@@ -276,5 +283,27 @@ mod tests {
         .unwrap();
         let value: Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
         assert_eq!(value["counts"]["installations"], 1);
+    }
+
+    #[test]
+    fn replacing_the_output_alias_cannot_redirect_the_summary_into_reports() {
+        let temp = tempfile::tempdir().unwrap();
+        let reports = temp.path().join("reports");
+        let outside = temp.path().join("outside");
+        let alias = temp.path().join("output-alias");
+        fs::create_dir(&reports).unwrap();
+        fs::create_dir(&outside).unwrap();
+        directory_link(&outside, &alias);
+        let output = alias.join("summary.json");
+        write_before_read(&reports, &output, 0, 10, || {
+            #[cfg(windows)]
+            fs::remove_dir(&alias).unwrap();
+            #[cfg(unix)]
+            fs::remove_file(&alias).unwrap();
+            directory_link(&reports, &alias);
+        })
+        .unwrap();
+        assert!(outside.join("summary.json").is_file());
+        assert!(!reports.join("summary.json").exists());
     }
 }

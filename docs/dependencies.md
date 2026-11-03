@@ -9,6 +9,11 @@ prevents report and parent-directory link swaps during portable summary tests.
 It uses the maintained rust-lang bindings with default features and their
 MIT/Apache-2.0 license choice; it adds no dependency to shipped Windows binaries.
 
+Windows uses the in-box `shlwapi.dll` function `SHDeleteEmptyKeyW` to prune only
+empty protocol registry keys, preserving unrelated values and subkeys. Summary
+publication uses `ntdll.dll` handle-relative file operations so an output-path
+substitution cannot redirect the write. Neither DLL is bundled with the app.
+
 Commit Cargo.lock and use --locked for all checks/builds. New dependencies must
 explain product need, maintenance, feature selection and license impact.
 Update in a dedicated PR against the default branch. Run the Linux and Windows

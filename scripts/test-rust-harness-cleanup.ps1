@@ -1,5 +1,7 @@
 # Failure injection for the native harnesses. Uses disposable LOCALAPPDATA;
 # failures occur before any app launch. Each case runs in a fresh PowerShell.
+# Clipboard cases clear every format and restore only text. Images and file
+# lists are lost; run these checks with a disposable clipboard or CI account.
 param(
     [string]$Executable = 'target/x86_64-pc-windows-msvc/release/elevenclock-rs.exe',
     [ValidateSet('', 'SettingsPath', 'SettingsRemoval', 'TemplatesRemoval', 'TemplatesClipboard', 'EmptyClipboard')]

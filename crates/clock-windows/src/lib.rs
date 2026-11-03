@@ -23,6 +23,7 @@ pub mod preferences_store;
 pub mod report_files;
 pub mod settings_model;
 pub mod startup;
+pub mod summary_output;
 pub mod support;
 pub mod template_protocol;
 pub mod templates;

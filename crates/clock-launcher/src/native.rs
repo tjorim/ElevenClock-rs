@@ -153,8 +153,11 @@ impl Host for NativeHost {
     fn run_key(&mut self) -> &mut dyn RunKey {
         &mut self.run_key
     }
-    fn remove_template_handler(&mut self, app: &Path) -> io::Result<()> {
-        clock_windows::template_protocol::remove_if_owned(app).map(|_| ())
+    fn remove_template_handler(&mut self, app: &Path) -> io::Result<bool> {
+        clock_windows::template_protocol::remove_if_owned(app)
+    }
+    fn restore_template_handler(&mut self, app: &Path) -> io::Result<()> {
+        clock_windows::template_protocol::set_enabled(app, true)
     }
 }
 

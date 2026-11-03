@@ -255,6 +255,31 @@ pub unsafe fn DestroyWindow(hwnd: HWND) -> windows_core::BOOL {
     unsafe { DestroyWindow(hwnd) }
 }
 #[inline]
+pub unsafe fn DeviceIoControl(
+    hdevice: HANDLE,
+    dwiocontrolcode: u32,
+    lpinbuffer: Option<*const core::ffi::c_void>,
+    ninbuffersize: u32,
+    lpoutbuffer: Option<*mut core::ffi::c_void>,
+    noutbuffersize: u32,
+    lpbytesreturned: Option<*mut u32>,
+    lpoverlapped: Option<*mut OVERLAPPED>,
+) -> windows_core::BOOL {
+    windows_core::link!("kernel32.dll" "system" fn DeviceIoControl(hdevice : HANDLE, dwiocontrolcode : u32, lpinbuffer : *const core::ffi::c_void, ninbuffersize : u32, lpoutbuffer : *mut core::ffi::c_void, noutbuffersize : u32, lpbytesreturned : *mut u32, lpoverlapped : *mut OVERLAPPED) -> windows_core::BOOL);
+    unsafe {
+        DeviceIoControl(
+            hdevice,
+            dwiocontrolcode,
+            lpinbuffer.unwrap_or(core::mem::zeroed()) as _,
+            ninbuffersize,
+            lpoutbuffer.unwrap_or(core::mem::zeroed()) as _,
+            noutbuffersize,
+            lpbytesreturned.unwrap_or(core::mem::zeroed()) as _,
+            lpoverlapped.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
+}
+#[inline]
 pub unsafe fn DispatchMessageW(lpmsg: *const MSG) -> LRESULT {
     windows_core::link!("user32.dll" "system" fn DispatchMessageW(lpmsg : *const MSG) -> LRESULT);
     unsafe { DispatchMessageW(lpmsg) }
@@ -828,6 +853,56 @@ pub unsafe fn NotifyWinEvent(event: u32, hwnd: HWND, idobject: i32, idchild: i32
     unsafe { NotifyWinEvent(event, hwnd, idobject, idchild) }
 }
 #[inline]
+pub unsafe fn NtCreateFile(
+    filehandle: *mut HANDLE,
+    desiredaccess: ACCESS_MASK,
+    objectattributes: *const OBJECT_ATTRIBUTES,
+    iostatusblock: *mut IO_STATUS_BLOCK,
+    allocationsize: Option<*const i64>,
+    fileattributes: u32,
+    shareaccess: u32,
+    createdisposition: u32,
+    createoptions: u32,
+    eabuffer: Option<*const core::ffi::c_void>,
+    ealength: u32,
+) -> windows_core::NTSTATUS {
+    windows_core::link!("ntdll.dll" "system" fn NtCreateFile(filehandle : *mut HANDLE, desiredaccess : ACCESS_MASK, objectattributes : *const OBJECT_ATTRIBUTES, iostatusblock : *mut IO_STATUS_BLOCK, allocationsize : *const i64, fileattributes : u32, shareaccess : u32, createdisposition : u32, createoptions : u32, eabuffer : *const core::ffi::c_void, ealength : u32) -> windows_core::NTSTATUS);
+    unsafe {
+        NtCreateFile(
+            filehandle as _,
+            desiredaccess,
+            objectattributes,
+            iostatusblock as _,
+            allocationsize.unwrap_or(core::mem::zeroed()) as _,
+            fileattributes,
+            shareaccess,
+            createdisposition,
+            createoptions,
+            eabuffer.unwrap_or(core::mem::zeroed()) as _,
+            ealength,
+        )
+    }
+}
+#[inline]
+pub unsafe fn NtSetInformationFile(
+    filehandle: HANDLE,
+    iostatusblock: *mut IO_STATUS_BLOCK,
+    fileinformation: *const core::ffi::c_void,
+    length: u32,
+    fileinformationclass: FILE_INFORMATION_CLASS,
+) -> windows_core::NTSTATUS {
+    windows_core::link!("ntdll.dll" "system" fn NtSetInformationFile(filehandle : HANDLE, iostatusblock : *mut IO_STATUS_BLOCK, fileinformation : *const core::ffi::c_void, length : u32, fileinformationclass : FILE_INFORMATION_CLASS) -> windows_core::NTSTATUS);
+    unsafe {
+        NtSetInformationFile(
+            filehandle,
+            iostatusblock as _,
+            fileinformation,
+            length,
+            fileinformationclass,
+        )
+    }
+}
+#[inline]
 pub unsafe fn OpenClipboard(hwndnewowner: Option<HWND>) -> windows_core::BOOL {
     windows_core::link!("user32.dll" "system" fn OpenClipboard(hwndnewowner : HWND) -> windows_core::BOOL);
     unsafe { OpenClipboard(hwndnewowner.unwrap_or(core::mem::zeroed()) as _) }
@@ -1040,6 +1115,11 @@ pub unsafe fn ReleaseCapture() -> windows_core::BOOL {
     unsafe { ReleaseCapture() }
 }
 #[inline]
+pub unsafe fn RtlNtStatusToDosError(status: windows_core::NTSTATUS) -> u32 {
+    windows_core::link!("ntdll.dll" "system" fn RtlNtStatusToDosError(status : windows_core::NTSTATUS) -> u32);
+    unsafe { RtlNtStatusToDosError(status) }
+}
+#[inline]
 pub unsafe fn SHChangeNotify(
     weventid: i32,
     uflags: u32,
@@ -1055,6 +1135,14 @@ pub unsafe fn SHChangeNotify(
             dwitem2.unwrap_or(core::mem::zeroed()) as _,
         )
     }
+}
+#[inline]
+pub unsafe fn SHDeleteEmptyKeyW<P1>(hkey: HKEY, pszsubkey: P1) -> LSTATUS
+where
+    P1: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("shlwapi.dll" "system" fn SHDeleteEmptyKeyW(hkey : HKEY, pszsubkey : windows_core::PCWSTR) -> LSTATUS);
+    unsafe { SHDeleteEmptyKeyW(hkey, pszsubkey.param().abi()) }
 }
 #[inline]
 pub unsafe fn SHGetKnownFolderPath(
@@ -1787,6 +1875,7 @@ pub struct DECIMAL_1_0 {
     pub Lo32: u32,
     pub Mid32: u32,
 }
+pub const DELETE: i32 = 65536;
 pub type DLGPROC = Option<
     unsafe extern "system" fn(param0: HWND, param1: u32, param2: WPARAM, param3: LPARAM) -> isize,
 >;
@@ -1849,11 +1938,56 @@ pub struct FILETIME {
     pub dwHighDateTime: u32,
 }
 pub const FILE_ATTRIBUTE_REPARSE_POINT: i32 = 1024;
+pub const FILE_CREATE: i32 = 2;
+pub const FILE_DIRECTORY_FILE: i32 = 1;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FILE_DISPOSITION_INFORMATION {
+    pub DeleteFile: bool,
+}
 pub const FILE_FLAG_BACKUP_SEMANTICS: i32 = 33554432;
 pub const FILE_FLAG_OPEN_REPARSE_POINT: i32 = 2097152;
+pub type FILE_INFORMATION_CLASS = i32;
+pub const FILE_NON_DIRECTORY_FILE: i32 = 64;
+pub const FILE_OPEN: i32 = 1;
+pub const FILE_OPEN_REPARSE_POINT: i32 = 2097152;
+pub const FILE_READ_ATTRIBUTES: i32 = 128;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FILE_RENAME_INFORMATION {
+    pub Anonymous: FILE_RENAME_INFORMATION_0,
+    pub RootDirectory: HANDLE,
+    pub FileNameLength: u32,
+    pub FileName: [u16; 1],
+}
+impl Default for FILE_RENAME_INFORMATION {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union FILE_RENAME_INFORMATION_0 {
+    pub ReplaceIfExists: bool,
+    pub Flags: u32,
+}
+impl Default for FILE_RENAME_INFORMATION_0 {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
 pub const FILE_SHARE_DELETE: i32 = 4;
 pub const FILE_SHARE_READ: i32 = 1;
 pub const FILE_SHARE_WRITE: i32 = 2;
+pub const FILE_SYNCHRONOUS_IO_NONALERT: i32 = 32;
+pub const FILE_TRAVERSE: i32 = 32;
+pub const FSCTL_DELETE_REPARSE_POINT: i32 = 589996;
+pub const FSCTL_GET_REPARSE_POINT: i32 = 589992;
+pub const FSCTL_SET_REPARSE_POINT: i32 = 589988;
+pub const FileDispositionInformation: FILE_INFORMATION_CLASS = 13;
+pub const FileRenameInformation: FILE_INFORMATION_CLASS = 10;
+pub const GENERIC_READ: u32 = 2147483648;
+pub const GENERIC_WRITE: i32 = 1073741824;
 pub const GMEM_MOVEABLE: i32 = 2;
 pub const GR_GDIOBJECTS: i32 = 0;
 pub const GR_USEROBJECTS: i32 = 1;
@@ -2672,6 +2806,28 @@ pub struct IO_COUNTERS {
     pub ReadTransferCount: u64,
     pub WriteTransferCount: u64,
     pub OtherTransferCount: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IO_STATUS_BLOCK {
+    pub Anonymous: IO_STATUS_BLOCK_0,
+    pub Information: usize,
+}
+impl Default for IO_STATUS_BLOCK {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union IO_STATUS_BLOCK_0 {
+    pub Status: windows_core::NTSTATUS,
+    pub Pointer: *mut core::ffi::c_void,
+}
+impl Default for IO_STATUS_BLOCK_0 {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
 }
 windows_core::imp::define_interface!(
     IRawElementProviderSimple,
@@ -3744,8 +3900,49 @@ impl Default for NOTIFYICONDATAW_0 {
 }
 pub const NOTIFYICON_VERSION_4: i32 = 4;
 pub const NOTIFY_FOR_THIS_SESSION: i32 = 0;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct OBJECT_ATTRIBUTES {
+    pub Length: u32,
+    pub RootDirectory: HANDLE,
+    pub ObjectName: PUNICODE_STRING,
+    pub Attributes: u32,
+    pub SecurityDescriptor: *mut core::ffi::c_void,
+    pub SecurityQualityOfService: *mut core::ffi::c_void,
+}
 pub const OBJID_CLIENT: i32 = -4;
 pub const OBJID_WINDOW: i32 = 0;
+pub const OBJ_CASE_INSENSITIVE: i32 = 64;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OVERLAPPED {
+    pub Internal: usize,
+    pub InternalHigh: usize,
+    pub Anonymous: OVERLAPPED_0,
+    pub hEvent: HANDLE,
+}
+impl Default for OVERLAPPED {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union OVERLAPPED_0 {
+    pub Anonymous: OVERLAPPED_0_0,
+    pub Pointer: *mut core::ffi::c_void,
+}
+impl Default for OVERLAPPED_0 {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct OVERLAPPED_0_0 {
+    pub Offset: u32,
+    pub OffsetHigh: u32,
+}
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct PATTERNID(pub i32);
@@ -3785,6 +3982,7 @@ pub struct PROPERTYID(pub i32);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct PSID(pub *mut core::ffi::c_void);
+pub type PUNICODE_STRING = *mut UNICODE_STRING;
 pub type ProviderOptions = u32;
 pub const ProviderOptions_ServerSideProvider: ProviderOptions = 2;
 #[repr(C)]
@@ -3861,6 +4059,7 @@ pub const SW_SHOW: i32 = 5;
 pub const SW_SHOWMINNOACTIVE: i32 = 7;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
 pub const SW_SHOWNORMAL: i32 = 1;
+pub const SYNCHRONIZE: i32 = 1048576;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct SYSTEMTIME {
@@ -3980,6 +4179,13 @@ pub const UDM_SETRANGE32: i32 = 1135;
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct UIA_HWND(pub *mut core::ffi::c_void);
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct UNICODE_STRING {
+    pub Length: u16,
+    pub MaximumLength: u16,
+    pub Buffer: windows_core::PWSTR,
+}
 pub type VARENUM = i32;
 #[repr(C)]
 pub struct VARIANT {

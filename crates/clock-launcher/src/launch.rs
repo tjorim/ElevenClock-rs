@@ -135,7 +135,10 @@ pub trait Host {
     }
     /// The Run value and its Windows flag.
     fn run_key(&mut self) -> &mut dyn RunKey;
-    fn remove_template_handler(&mut self, _app: &Path) -> io::Result<()> {
+    fn remove_template_handler(&mut self, _app: &Path) -> io::Result<bool> {
+        Ok(false)
+    }
+    fn restore_template_handler(&mut self, _app: &Path) -> io::Result<()> {
         Ok(())
     }
 }

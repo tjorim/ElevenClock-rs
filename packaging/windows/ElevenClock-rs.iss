@@ -148,8 +148,15 @@ var
 begin
   if CurUninstallStep = usUninstall then begin
     if RegQueryStringValue(HKCU, TemplateKey + '\shell\open\command', '', Command) then
-      if (Command = TemplateCommand()) and CanRegisterTemplateLinks() then
-        RegDeleteKeyIncludingSubkeys(HKCU, TemplateKey);
+      if (Command = TemplateCommand()) and CanRegisterTemplateLinks() then begin
+        RegDeleteValue(HKCU, TemplateKey + '\shell\open\command', '');
+        RegDeleteValue(HKCU, TemplateKey, 'URL Protocol');
+        RegDeleteValue(HKCU, TemplateKey, '');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey + '\shell\open\command');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey + '\shell\open');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey + '\shell');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey);
+      end;
     OwnedCommand := '"' + ExpandConstant('{app}\elevenclock-rs.exe') + '" --startup';
     if RegQueryStringValue(HKCU, RunKey, StartupValue, Command) then
       if CompareText(Trim(Command), OwnedCommand) = 0 then begin

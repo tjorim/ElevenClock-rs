@@ -47,7 +47,7 @@ NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsoc
 # this to what is actually imported: a new entry is a reviewed native dependency.
 SYSTEM_DLLS = {
     "advapi32.dll", "bcryptprimitives.dll", "comctl32.dll", "d2d1.dll", "dwmapi.dll", "dwrite.dll",
-    "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll",
+    "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll", "shlwapi.dll",
     "uiautomationcore.dll", "user32.dll", "version.dll", "winhttp.dll", "wtsapi32.dll",
 }
 

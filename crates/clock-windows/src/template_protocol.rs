@@ -106,19 +106,59 @@ mod native {
             write(root, "URL Protocol", "")?;
             write(&format!(r"{root}\shell\open\command"), "", &expected)
         } else if existing.is_some() {
-            // SAFETY: only the exact command owned by this executable is removed.
-            let status = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, &HSTRING::from(root)) };
-            if status.0 == 0 {
-                Ok(())
-            } else {
-                Err(io::Error::from_raw_os_error(status.0))
+            delete_value(&format!(r"{root}\shell\open\command"), "")?;
+            delete_value(root, "URL Protocol")?;
+            delete_value(root, "")?;
+            // Empty-key deletion preserves unrelated values, verbs and subkeys.
+            for suffix in [r"\shell\open\command", r"\shell\open", r"\shell", ""] {
+                // SAFETY: pruning is optional and only an empty key is removed.
+                unsafe {
+                    let _ = SHDeleteEmptyKeyW(
+                        HKEY_CURRENT_USER,
+                        &HSTRING::from(format!("{root}{suffix}")),
+                    );
+                }
             }
+            Ok(())
         } else {
             Ok(())
         }
     }
     pub fn enabled(exe: &Path) -> io::Result<bool> {
-        Ok(read(ROOT)?.as_deref() == Some(command(exe)?.as_str()))
+        enabled_at(ROOT, exe)
+    }
+    fn enabled_at(root: &str, exe: &Path) -> io::Result<bool> {
+        Ok(read(root)?.as_deref() == Some(command(exe)?.as_str())
+            && read_value(root, "")?.is_none_or(|value| value == DESCRIPTION)
+            && read_value(root, "URL Protocol")?.is_some_and(|value| value.is_empty()))
+    }
+    fn delete_value(root: &str, name: &str) -> io::Result<()> {
+        let mut key = HKEY::default();
+        // SAFETY: fixed-owned/scratch registry paths; handle closed on all paths.
+        let status = unsafe {
+            RegOpenKeyExW(
+                HKEY_CURRENT_USER,
+                &HSTRING::from(root),
+                None,
+                ACCESS_MASK(KEY_SET_VALUE as u32),
+                &mut key,
+            )
+        };
+        if status.0 == ERROR_FILE_NOT_FOUND || status.0 == ERROR_PATH_NOT_FOUND {
+            return Ok(());
+        }
+        if status.0 != 0 {
+            return Err(io::Error::from_raw_os_error(status.0));
+        }
+        let status = unsafe { RegDeleteValueW(key, &HSTRING::from(name)) };
+        unsafe {
+            let _ = RegCloseKey(key);
+        }
+        if status.0 == 0 || status.0 == ERROR_FILE_NOT_FOUND {
+            Ok(())
+        } else {
+            Err(io::Error::from_raw_os_error(status.0))
+        }
     }
     pub fn set_enabled(exe: &Path, enabled: bool) -> io::Result<()> {
         set(ROOT, exe, enabled)?;
@@ -182,6 +222,43 @@ mod native {
                     0
                 );
             }
+            set(&root, exe, true).unwrap();
+            assert!(enabled_at(&root, exe).unwrap());
+            delete_value(&root, "").unwrap();
+            assert!(enabled_at(&root, exe).unwrap()); // description is optional
+            delete_value(&root, "URL Protocol").unwrap();
+            assert!(!enabled_at(&root, exe).unwrap());
+            write(&root, "URL Protocol", "foreign").unwrap();
+            assert!(!enabled_at(&root, exe).unwrap());
+            write(&root, "URL Protocol", "").unwrap();
+            write(&root, "", "foreign").unwrap();
+            assert!(!enabled_at(&root, exe).unwrap());
+            write(&root, "", DESCRIPTION).unwrap();
+            write(&root, "Other value", "keep").unwrap();
+            let command_key = format!(r"{root}\shell\open\command");
+            write(&command_key, "Other value", "keep command metadata").unwrap();
+            let sibling = format!(r"{root}\shell\other\command");
+            write(&sibling, "", "keep other verb").unwrap();
+            assert!(remove_owned(&root, exe).unwrap());
+            assert!(!enabled_at(&root, exe).unwrap());
+            assert_eq!(read(&root).unwrap(), None);
+            assert_eq!(
+                read_value(&root, "Other value").unwrap().as_deref(),
+                Some("keep")
+            );
+            assert_eq!(
+                read_value(&command_key, "Other value").unwrap().as_deref(),
+                Some("keep command metadata")
+            );
+            assert_eq!(
+                read_value(&sibling, "").unwrap().as_deref(),
+                Some("keep other verb")
+            );
+            // SAFETY: remove only this test's isolated scratch tree.
+            assert_eq!(
+                unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, &HSTRING::from(&root)) }.0,
+                0
+            );
         }
     }
 }
