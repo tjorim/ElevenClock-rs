@@ -224,8 +224,11 @@ dependencies = [
 name = "clock-launcher"
 version = "0.2.2"
 dependencies = [
+ "clock-core",
  "clock-windows",
  "embed-resource",
+ "serde",
+ "serde_json",
  "tempfile",
  "windows-core",
 ]

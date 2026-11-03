@@ -32,7 +32,7 @@ pub enum Acquired {
     Existing(InstanceNames),
 }
 
-fn current_user_sid() -> Result<String> {
+pub(crate) fn current_user_sid() -> Result<String> {
     // SAFETY: standard two-call token query. The token handle is closed on every
     // path, the buffer is sized by the first call, and the converted SID string
     // is LocalFree'd after copying.

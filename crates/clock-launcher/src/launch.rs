@@ -12,6 +12,7 @@
 use crate::{
     args::Launch,
     fsops::{self, install, install_running},
+    inventory_support::Code,
     pe, sha256,
     source::{
         self, APP_EXE, LAUNCHER_EXE, LAUNCHER_OLD, Listed, Probe, STATE_FILE, SUMS, check_sums,
@@ -70,6 +71,38 @@ impl Exit {
     }
 }
 
+/// App refresh result, independent of diagnostic wording and launcher self-update.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RefreshOutcome {
+    NotAttempted,
+    Updated,
+    Unchanged,
+    SkippedRunning,
+    SkippedCheckFailed,
+    SourceUnreachable,
+    SourceInvalid,
+    CopyFailed,
+}
+
+/// Process creation does not establish that the clock is healthy or remains running.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchOutcome {
+    NotAttempted,
+    ProcessCreated,
+    StartFailed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Observation {
+    pub exit: Exit,
+    pub refresh: RefreshOutcome,
+    pub launch: LaunchOutcome,
+    /// A refresh failed and an existing local executable was used instead.
+    pub fallback: bool,
+}
+
 /// Whether the app is running for this user and session.
 pub enum Claim {
     /// Not running. The value keeps the per-user instance claimed, so the app cannot
@@ -90,6 +123,8 @@ pub trait Host {
     fn show_error(&mut self, message: &str);
     /// One decision per line, no paths or user names.
     fn log(&mut self, line: &str);
+    /// Fixed support codes, independent of human log messages.
+    fn support_issue(&mut self, _code: Code) {}
     /// Called just before `target` is swapped for a verified copy. Tests fail it to
     /// simulate an interrupted copy.
     fn before_replace(&mut self, _target: &Path) -> io::Result<()> {
@@ -147,6 +182,14 @@ enum Problem {
     NotCopied,
 }
 impl Problem {
+    fn outcome(&self) -> RefreshOutcome {
+        match self {
+            Self::Unreachable => RefreshOutcome::SourceUnreachable,
+            Self::Invalid => RefreshOutcome::SourceInvalid,
+            Self::NotCopied => RefreshOutcome::CopyFailed,
+        }
+    }
+
     fn message(&self) -> &'static str {
         match self {
             Self::Unreachable => NO_SOURCE,
@@ -157,6 +200,24 @@ impl Problem {
 }
 
 pub fn launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> Exit {
+    observe_launch(host, ctx, request).exit
+}
+
+/// Execute best-effort reporting only after launch decisions have completed.
+/// Neither an adapter error nor panic can change the launcher's exit code.
+pub fn report_after(
+    observation: Observation,
+    report: impl FnOnce(Observation) -> io::Result<()>,
+) -> Exit {
+    if observation.exit != Exit::Refused {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| report(observation)));
+    }
+    observation.exit
+}
+
+/// Returns structured decisions without collecting identity, writing inventory or
+/// invoking a reporting callback. The shipping entry point uses only the exit code.
+pub fn observe_launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> Observation {
     let layout = Layout::new(&ctx.destination);
     if host.installer_entry_present() {
         host.log("refused: installed copy");
@@ -164,7 +225,12 @@ pub fn launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> Exit {
         if !request.quiet {
             host.show_error(INSTALLED_COPY);
         }
-        return Exit::Refused;
+        return Observation {
+            exit: Exit::Refused,
+            refresh: RefreshOutcome::NotAttempted,
+            launch: LaunchOutcome::NotAttempted,
+            fallback: false,
+        };
     }
     // Checked before the central copy is touched: a running app means no update, so
     // there is no reason to wait for a share that may be down.
@@ -175,23 +241,56 @@ pub fn launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> Exit {
             Claim::Running => "skipped: running",
             _ => "skipped: running check failed",
         });
+        let refresh = if matches!(claim, Claim::Running) {
+            RefreshOutcome::SkippedRunning
+        } else {
+            RefreshOutcome::SkippedCheckFailed
+        };
         drop(claim);
-        return start(host, request, &layout);
+        return started(host, request, &layout, refresh, false);
     }
-    match refresh(host, ctx, request, &layout) {
-        Ok(()) => {}
-        Err(_) if local_copy => host.log("using the local copy"),
+    let (refresh, fallback) = match refresh(host, ctx, request, &layout) {
+        Ok(outcome) => (outcome, false),
+        Err(problem) if local_copy => {
+            host.log("using the local copy");
+            (problem.outcome(), true)
+        }
         Err(problem) => {
             drop(claim);
             host.log("no copy to start");
             if !request.quiet {
                 host.show_error(problem.message());
             }
-            return Exit::NoCopy;
+            return Observation {
+                exit: Exit::NoCopy,
+                refresh: problem.outcome(),
+                launch: LaunchOutcome::NotAttempted,
+                fallback: false,
+            };
         }
-    }
+    };
     drop(claim);
-    start(host, request, &layout)
+    started(host, request, &layout, refresh, fallback)
+}
+
+fn started(
+    host: &mut dyn Host,
+    request: &Launch,
+    layout: &Layout,
+    refresh: RefreshOutcome,
+    fallback: bool,
+) -> Observation {
+    let exit = start(host, request, layout);
+    Observation {
+        exit,
+        refresh,
+        fallback,
+        launch: if exit == Exit::Done {
+            LaunchOutcome::ProcessCreated
+        } else {
+            LaunchOutcome::StartFailed
+        },
+    }
 }
 
 fn start(host: &mut dyn Host, request: &Launch, layout: &Layout) -> Exit {
@@ -217,7 +316,7 @@ fn refresh(
     ctx: &Context,
     request: &Launch,
     layout: &Layout,
-) -> Result<(), Problem> {
+) -> Result<RefreshOutcome, Problem> {
     let own_folder = ctx.own_exe.parent().unwrap_or(Path::new(""));
     let state = fsops::read_limited(&layout.state())
         .ok()
@@ -270,22 +369,26 @@ fn refresh(
     }
 
     let app = layout.app();
-    if fsops::hash_of(&app) == Some(digest) {
+    let outcome = if fsops::hash_of(&app) == Some(digest) {
         host.log("unchanged");
+        RefreshOutcome::Unchanged
     } else {
         match install(&app, &bytes, || host.before_replace(&app)) {
-            Ok(()) => host.log("updated"),
+            Ok(()) => {
+                host.log("updated");
+                RefreshOutcome::Updated
+            }
             Err(error) => {
                 host.log(&format!("update failed: {}", describe(&error)));
                 return Err(Problem::NotCopied);
             }
         }
-    }
+    };
     refresh_launcher(host, ctx, layout, &folder);
     if !remember_source(host, layout, &folder) && !request.quiet {
         host.show_error(NOT_RECORDED);
     }
-    Ok(())
+    Ok(outcome)
 }
 
 /// Best effort: a launcher that cannot be refreshed never keeps the app from starting.
@@ -314,11 +417,13 @@ fn refresh_launcher(host: &mut dyn Host, ctx: &Context, layout: &Layout, folder:
     let bytes = match read {
         Ok(bytes) => bytes,
         Err(error) => {
+            host.support_issue(Code::LauncherRefreshFailed);
             host.log(&format!("launcher refresh skipped: {}", describe(&error)));
             return;
         }
     };
     if let Err(rejection) = pe::validate(&bytes, LAUNCHER_EXE) {
+        host.support_issue(Code::LauncherRefreshFailed);
         host.log(&format!(
             "launcher refresh skipped: {}",
             rejection.describe()
@@ -333,7 +438,10 @@ fn refresh_launcher(host: &mut dyn Host, ctx: &Context, layout: &Layout, folder:
     });
     match result {
         Ok(()) => host.log("launcher updated"),
-        Err(error) => host.log(&format!("launcher refresh failed: {}", describe(&error))),
+        Err(error) => {
+            host.support_issue(Code::LauncherRefreshFailed);
+            host.log(&format!("launcher refresh failed: {}", describe(&error)));
+        }
     }
 }
 
@@ -341,6 +449,7 @@ fn refresh_launcher(host: &mut dyn Host, ctx: &Context, layout: &Layout, folder:
 /// Whether the record is in place afterwards.
 fn remember_source(host: &mut dyn Host, layout: &Layout, folder: &Path) -> bool {
     let Some(text) = source::state_text(folder) else {
+        host.support_issue(Code::SourceNotRecorded);
         host.log("source not recorded: not storable as text");
         return false;
     };
@@ -354,6 +463,7 @@ fn remember_source(host: &mut dyn Host, layout: &Layout, folder: &Path) -> bool 
             true
         }
         Err(error) => {
+            host.support_issue(Code::SourceNotRecorded);
             host.log(&format!("source not recorded: {}", describe(&error)));
             false
         }

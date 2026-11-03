@@ -109,3 +109,20 @@ accounts unless a deliberate reviewed product-policy change says otherwise. An
 optional feature must not silently add startup traffic or background polling.
 Use the contributor extension checklist and the existing dependency checks; this
 policy introduces no plugin system or optional-feature framework.
+
+### Managed local inventory
+
+`clock-launcher` reuses the existing serde 1.0 (derive) and serde_json 1.0 versions
+and features for bounded inventory JSON; there are no new packages or license terms.
+Both are maintained upstream and already used for preference persistence. The lockfile
+only adds these existing packages to the launcher's dependency edges. Windows fact
+helpers use generated in-box Advapi32/Ole32/Version APIs, without a new Rust dependency.
+Version.dll is allowed for fixed local executable version lookup. Account lookup
+uses Advapi32 and GUID generation uses Ole32. These helpers run only after explicit
+administrator opt-in, inside the bounded inventory process. No network client is
+added. Optional central own-report replacement uses normal file I/O inside the same
+bounded helper; it adds no HTTP/network client dependency or persistent service.
+
+The launcher's direct `clock-core` dependency reuses the workspace's existing format
+validator and preset catalog for optional managed format inventory and aggregation;
+it adds no packages, versions or license terms.

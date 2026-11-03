@@ -1,0 +1,251 @@
+//! Opted-in managed inventory. Blocking fact acquisition and file writes run
+//! in a one-shot, job-owned helper after the app start attempt. No retries/timers.
+use crate::{
+    args::Launch,
+    inventory::{self, Snapshot},
+    inventory_config,
+    inventory_support::Code,
+    launch::{Context, Exit, Layout, Observation},
+    source,
+    source::LAUNCHER_EXE,
+};
+use clock_windows::{
+    inventory_facts as facts, preferences_store::app_data_dir, taskbar::worker::HelperJob,
+};
+use std::{
+    io::{self, Read, Write},
+    process::{Command, Stdio},
+    time::{Duration, Instant},
+};
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Request {
+    snapshot: Snapshot,
+    source: Option<std::path::PathBuf>,
+}
+
+pub const HELPER_MARKER: &str = "--elevenclock-rs-inventory-v1";
+const DEADLINE: Duration = Duration::from_secs(3);
+const TEARDOWN: Duration = Duration::from_secs(1);
+
+/// Start only the fixed local launcher, never an executable on the central share.
+/// The handshake gates all collection until the child is inside its kill-on-close
+/// job. Dropping the job on parent exit or deadline removes a stuck child.
+pub fn report(
+    ctx: &Context,
+    launch: &Launch,
+    observation: Observation,
+    extra_issues: &[Code],
+) -> io::Result<()> {
+    if observation.exit == Exit::Refused {
+        return Ok(());
+    }
+    let mut snapshot = Snapshot::from_observation(observation);
+    for code in extra_issues {
+        snapshot.add_issue(*code);
+    }
+    snapshot.launcher_version = Some(env!("CARGO_PKG_VERSION").to_owned());
+    // Pass only the explicit/resolved source hint. The local helper reads saved
+    // source state itself when this launch used the local executable.
+    let source = source::resolve(
+        launch.source.as_deref(),
+        ctx.own_exe.parent().unwrap_or(&ctx.destination),
+        &ctx.destination,
+        None,
+    );
+    let payload = serde_json::to_vec(&Request { snapshot, source })
+        .map_err(|_| io::Error::other("inventory request unavailable"))?;
+    let program = ctx.destination.join(LAUNCHER_EXE);
+    supervise(
+        &program,
+        &[HELPER_MARKER],
+        &ctx.destination,
+        &payload,
+        DEADLINE,
+    )
+}
+
+fn supervise(
+    program: &std::path::Path,
+    args: &[&str],
+    directory: &std::path::Path,
+    payload: &[u8],
+    deadline: Duration,
+) -> io::Result<()> {
+    if payload.len() > 3072 {
+        return Err(io::Error::other("inventory handshake too large"));
+    }
+    let mut child = Command::new(program)
+        .args(args)
+        .current_dir(directory)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let job = match HelperJob::attach(&child) {
+        Ok(job) => job,
+        Err(_) => {
+            terminate(&mut child);
+            return Err(io::Error::other("inventory job unavailable"));
+        }
+    };
+    // Payload contains a source hint and fixed outcomes/null facts (< 3 KiB), so it fits in the
+    // anonymous pipe without waiting for the child to consume it.
+    let sent = child
+        .stdin
+        .take()
+        .ok_or_else(|| io::Error::other("inventory pipe unavailable"))
+        .and_then(|mut stdin| stdin.write_all(payload));
+    let start = Instant::now();
+    if sent.is_ok() {
+        while start.elapsed() < deadline {
+            if let Ok(Some(status)) = child.try_wait() {
+                return if status.success() {
+                    Ok(())
+                } else {
+                    Err(io::Error::other("inventory failed"))
+                };
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+    drop(job);
+    terminate(&mut child);
+    Err(io::Error::other("inventory deadline"))
+}
+
+fn terminate(child: &mut std::process::Child) {
+    let _ = child.kill();
+    let teardown = Instant::now();
+    while teardown.elapsed() < TEARDOWN {
+        if matches!(child.try_wait(), Ok(Some(_))) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// Private helper role: it never launches the app, touches startup or shows UI.
+pub fn collect() -> io::Result<()> {
+    let mut payload = Vec::new();
+    io::stdin().take(3073).read_to_end(&mut payload)?;
+    if payload.len() > 3072 {
+        return Err(io::Error::other("inventory disabled"));
+    }
+    let Request {
+        mut snapshot,
+        source: hint,
+    } = serde_json::from_slice::<Request>(&payload)
+        .map_err(|_| io::Error::other("inventory request unavailable"))?;
+    snapshot.validate()?;
+    let directory = app_data_dir().map_err(|_| io::Error::other("inventory folder unavailable"))?;
+    let local_app = clock_windows::preferences_store::local_app_data()
+        .map_err(|_| io::Error::other("inventory folder unavailable"))?
+        .join("Programs")
+        .join("ElevenClock-rs");
+    // A helper launched from a share/staging location is not allowed to collect.
+    let own = std::env::current_exe()?;
+    if !crate::source::same_folder(&own, &local_app.join(LAUNCHER_EXE)) {
+        return Err(io::Error::other("inventory requires local launcher"));
+    }
+    let state = inventory::read_source_state(&local_app.join(source::STATE_FILE));
+    let Some(source) = source::resolve(hint.as_deref(), &local_app, &local_app, state.as_deref())
+    else {
+        return Ok(());
+    };
+    let Some(config) =
+        inventory_config::read(&source, &local_app).filter(|config| config.local_inventory_enabled)
+    else {
+        return Ok(());
+    };
+    snapshot.observed_utc = facts::observed_utc();
+    (snapshot.sid, snapshot.account_name) = facts::account();
+    snapshot.app_version = facts::file_version(&Layout::new(&local_app).app());
+    let mut preference_issue = None;
+    snapshot.clock_format = inventory::collect_clock_format(config.include_clock_format, || {
+        use clock_windows::preferences_store::{LocalPreferencesStore, StoreError};
+        match LocalPreferencesStore::new().and_then(|store| store.saved_clock_format()) {
+            Ok(format) => Some(format),
+            Err(error) => {
+                preference_issue = Some(match error {
+                    StoreError::UnsupportedVersion(_) => Code::PreferencesUnsupported,
+                    StoreError::DamagedData | StoreError::InvalidPreferences(_) => {
+                        Code::PreferencesInvalid
+                    }
+                    _ => Code::PreferencesReadFailed,
+                });
+                None
+            }
+        }
+    });
+    if let Some(code) = preference_issue {
+        snapshot.add_issue(code);
+    }
+    snapshot.add_fact_issues();
+    // The parent is the same deployed launcher in normal operation. Its package
+    // version is sent by the parent, not inferred from a potentially refreshed file.
+    if inventory_config::read(&source, &local_app).as_ref() != Some(&config) {
+        return Err(io::Error::other("inventory configuration changed"));
+    }
+    if config.report_directory.is_some() {
+        snapshot.add_issue(Code::PublicationPending);
+    }
+    let saved = inventory::record_local(
+        &directory.join("inventory"),
+        snapshot,
+        facts::new_installation_id,
+    )?;
+    if let (Some(root), Some(saved)) = (&config.report_directory, saved) {
+        crate::inventory_publish::publish_saved(root, saved, &directory.join("inventory"), || {
+            inventory_config::read(&source, &local_app).as_ref() == Some(&config)
+        })?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn supervised_exit_and_deadline_do_not_leave_a_helper_running() {
+        let root = std::env::var_os("SystemRoot").unwrap();
+        let powershell = std::path::Path::new(&root)
+            .join("System32")
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe");
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            supervise(
+                &powershell,
+                &[
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "Start-Sleep -Milliseconds 100; exit 0"
+                ],
+                dir.path(),
+                b"{}",
+                Duration::from_secs(10)
+            )
+            .is_ok()
+        );
+        let start = Instant::now();
+        assert!(
+            supervise(
+                &powershell,
+                &[
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "Start-Sleep -Seconds 30"
+                ],
+                dir.path(),
+                b"{}",
+                Duration::from_millis(100)
+            )
+            .is_err()
+        );
+        assert!(start.elapsed() < Duration::from_secs(5));
+    }
+}

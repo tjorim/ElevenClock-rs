@@ -13,6 +13,8 @@ pub use settings::{PlatformError, SettingsWindow};
 
 pub mod overlay;
 
+#[cfg(windows)]
+pub mod inventory_facts;
 pub mod logging;
 pub mod managed;
 pub mod preferences_store;

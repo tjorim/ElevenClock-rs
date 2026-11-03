@@ -43,3 +43,38 @@ Licenses
   application artwork. THIRD-PARTY-NOTICES.txt and RUST-COPYRIGHT.html retain
   dependency/toolchain notices. The source is the tagged commit at
   https://github.com/tjorim/ElevenClock-rs.
+
+Optional local inventory (managed launcher only):
+Administrators can place elevenclock-rs-launcher.json beside the central app:
+  {"schema_version":1,"local_inventory_enabled":true}
+Keep it writable only by deployment administrators and readable by users. No local
+admin/device-management rights are needed. Missing, invalid or unreachable config
+means no collection; no enabled flag is cached for offline use. Set false or remove
+the file to stop future collection. The helper records identity/version/outcomes in
+%LOCALAPPDATA%\ElevenClock-rs\inventory\latest.json.
+Optional "report_directory" in the same JSON specifies an absolute UNC/drive path
+for central publication, e.g. "\\\\fileserver\\apps\\ElevenClock-reports".
+Provision that root and a directory for each account's SID beforehand, with rights
+to read/replace the account's own reports and staging/lock files. Users must retain
+read-only access to the executables/configuration. Publication needs suitable SMB
+and NTFS rights; the launcher creates no reporting directories and changes no ACLs.
+Reports use <report_directory>\<SID>\<installation-ID>.json. Local snapshots are
+saved first; central failure never prevents startup. A bounded helper owns all I/O.
+Omit report_directory for local-only inventory. Admins own central retention/cleanup.
+Existing snapshots remain after disabling inventory or uninstalling the managed app.
+See docs/managed-deployment.md, Local inventory, for disclosure and lifecycle details.
+
+Optional format popularity inventory:
+Add "include_clock_format":true to the same central configuration to report saved
+clock format source, including user-provided literal text. Default is false. This
+reads committed preferences only; it never exports other settings or writes them.
+Missing/unavailable format values appear as null. Reports stay in the configured
+local/central locations, with no vendor telemetry. Aggregation counts distinct users
+and installations per format (including recent counts), rather than launcher runs.
+
+Support reporting is included whenever managed inventory is enabled. Snapshots
+contain bounded support_issues with fixed error/warning/info codes for launcher
+failures, fallback, fact/preference lookup problems and publication status. No raw
+log lines or exception text are exported. A central publication failure can only be
+recorded locally while the central report remains stale; inspect last-seen times.
+This reports the latest launcher observation, not live clock health or error history.

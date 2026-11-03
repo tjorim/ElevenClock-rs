@@ -80,6 +80,8 @@ impl Role {
 #[cfg(windows)]
 mod native;
 #[cfg(windows)]
+pub(crate) use native::current_user_sid;
+#[cfg(windows)]
 pub use native::{Acquired, InstanceGuard, acquire, signal_existing};
 
 #[cfg(test)]

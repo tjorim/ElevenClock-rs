@@ -40,6 +40,14 @@ pub unsafe fn CloseHandle(hobject: HANDLE) -> windows_core::BOOL {
     unsafe { CloseHandle(hobject) }
 }
 #[inline]
+pub unsafe fn CoCreateGuid() -> windows_core::Result<windows_core::GUID> {
+    windows_core::link!("ole32.dll" "system" fn CoCreateGuid(pguid : *mut windows_core::GUID) -> windows_core::HRESULT);
+    unsafe {
+        let mut result__ = core::mem::zeroed();
+        CoCreateGuid(&mut result__).map(|| result__)
+    }
+}
+#[inline]
 pub unsafe fn CoCreateInstance<P1, T>(
     rclsid: *const windows_core::GUID,
     punkouter: P1,
@@ -87,6 +95,14 @@ pub unsafe fn ConvertSidToStringSidW(
 ) -> windows_core::BOOL {
     windows_core::link!("advapi32.dll" "system" fn ConvertSidToStringSidW(sid : PSID, stringsid : *mut windows_core::PWSTR) -> windows_core::BOOL);
     unsafe { ConvertSidToStringSidW(sid, stringsid as _) }
+}
+#[inline]
+pub unsafe fn ConvertStringSidToSidW<P0>(stringsid: P0, sid: *mut PSID) -> windows_core::BOOL
+where
+    P0: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("advapi32.dll" "system" fn ConvertStringSidToSidW(stringsid : windows_core::PCWSTR, sid : *mut PSID) -> windows_core::BOOL);
+    unsafe { ConvertStringSidToSidW(stringsid.param().abi(), sid as _) }
 }
 #[inline]
 pub unsafe fn CreateDialogParamW<P1>(
@@ -380,6 +396,39 @@ pub unsafe fn GetDpiForWindow(hwnd: HWND) -> u32 {
 pub unsafe fn GetExitCodeProcess(hprocess: HANDLE, lpexitcode: *mut u32) -> windows_core::BOOL {
     windows_core::link!("kernel32.dll" "system" fn GetExitCodeProcess(hprocess : HANDLE, lpexitcode : *mut u32) -> windows_core::BOOL);
     unsafe { GetExitCodeProcess(hprocess, lpexitcode as _) }
+}
+#[inline]
+pub unsafe fn GetFileVersionInfoSizeW<P0>(lptstrfilename: P0, lpdwhandle: Option<*mut u32>) -> u32
+where
+    P0: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("version.dll" "system" fn GetFileVersionInfoSizeW(lptstrfilename : windows_core::PCWSTR, lpdwhandle : *mut u32) -> u32);
+    unsafe {
+        GetFileVersionInfoSizeW(
+            lptstrfilename.param().abi(),
+            lpdwhandle.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
+}
+#[inline]
+pub unsafe fn GetFileVersionInfoW<P0>(
+    lptstrfilename: P0,
+    dwhandle: Option<u32>,
+    dwlen: u32,
+    lpdata: *mut core::ffi::c_void,
+) -> windows_core::BOOL
+where
+    P0: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("version.dll" "system" fn GetFileVersionInfoW(lptstrfilename : windows_core::PCWSTR, dwhandle : u32, dwlen : u32, lpdata : *mut core::ffi::c_void) -> windows_core::BOOL);
+    unsafe {
+        GetFileVersionInfoW(
+            lptstrfilename.param().abi(),
+            dwhandle.unwrap_or(core::mem::zeroed()) as _,
+            dwlen,
+            lpdata as _,
+        )
+    }
 }
 #[inline]
 pub unsafe fn GetFocus() -> HWND {
@@ -706,6 +755,32 @@ where
 pub unsafe fn LocalFree(hmem: HLOCAL) -> HLOCAL {
     windows_core::link!("kernel32.dll" "system" fn LocalFree(hmem : HLOCAL) -> HLOCAL);
     unsafe { LocalFree(hmem) }
+}
+#[inline]
+pub unsafe fn LookupAccountSidW<P0>(
+    lpsystemname: P0,
+    sid: PSID,
+    name: Option<windows_core::PWSTR>,
+    cchname: *mut u32,
+    referenceddomainname: Option<windows_core::PWSTR>,
+    cchreferenceddomainname: *mut u32,
+    peuse: *mut SID_NAME_USE,
+) -> windows_core::BOOL
+where
+    P0: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("advapi32.dll" "system" fn LookupAccountSidW(lpsystemname : windows_core::PCWSTR, sid : PSID, name : windows_core::PWSTR, cchname : *mut u32, referenceddomainname : windows_core::PWSTR, cchreferenceddomainname : *mut u32, peuse : *mut SID_NAME_USE) -> windows_core::BOOL);
+    unsafe {
+        LookupAccountSidW(
+            lpsystemname.param().abi(),
+            sid,
+            name.unwrap_or(core::mem::zeroed()) as _,
+            cchname as _,
+            referenceddomainname.unwrap_or(core::mem::zeroed()) as _,
+            cchreferenceddomainname as _,
+            peuse as _,
+        )
+    }
 }
 #[inline]
 pub unsafe fn MessageBoxW<P1, P2>(hwnd: Option<HWND>, lptext: P1, lpcaption: P2, utype: u32) -> i32
@@ -1269,6 +1344,26 @@ pub unsafe fn ValidateRect(hwnd: Option<HWND>, lprect: Option<*const RECT>) -> w
         ValidateRect(
             hwnd.unwrap_or(core::mem::zeroed()) as _,
             lprect.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
+}
+#[inline]
+pub unsafe fn VerQueryValueW<P1>(
+    pblock: *const core::ffi::c_void,
+    lpsubblock: P1,
+    lplpbuffer: *mut *mut core::ffi::c_void,
+    pulen: *mut u32,
+) -> windows_core::BOOL
+where
+    P1: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("version.dll" "system" fn VerQueryValueW(pblock : *const core::ffi::c_void, lpsubblock : windows_core::PCWSTR, lplpbuffer : *mut *mut core::ffi::c_void, pulen : *mut u32) -> windows_core::BOOL);
+    unsafe {
+        VerQueryValueW(
+            pblock,
+            lpsubblock.param().abi(),
+            lplpbuffer as _,
+            pulen as _,
         )
     }
 }
@@ -3691,6 +3786,7 @@ pub struct SID_AND_ATTRIBUTES {
     pub Sid: PSID,
     pub Attributes: u32,
 }
+pub type SID_NAME_USE = i32;
 pub const SM_CXSMICON: i32 = 49;
 pub const SM_CYSMICON: i32 = 50;
 pub const SPI_GETHIGHCONTRAST: i32 = 66;
@@ -3956,6 +4052,23 @@ pub const VK_PRIOR: i32 = 33;
 pub const VK_RWIN: i32 = 92;
 pub const VK_SHIFT: i32 = 16;
 pub const VK_TAB: i32 = 9;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct VS_FIXEDFILEINFO {
+    pub dwSignature: u32,
+    pub dwStrucVersion: u32,
+    pub dwFileVersionMS: u32,
+    pub dwFileVersionLS: u32,
+    pub dwProductVersionMS: u32,
+    pub dwProductVersionLS: u32,
+    pub dwFileFlagsMask: u32,
+    pub dwFileFlags: u32,
+    pub dwFileOS: u32,
+    pub dwFileType: u32,
+    pub dwFileSubtype: u32,
+    pub dwFileDateMS: u32,
+    pub dwFileDateLS: u32,
+}
 pub const VT_BOOL: VARENUM = 11;
 pub const VT_BSTR: VARENUM = 8;
 pub const VT_EMPTY: VARENUM = 0;

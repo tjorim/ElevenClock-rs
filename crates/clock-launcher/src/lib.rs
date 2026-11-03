@@ -5,6 +5,10 @@
 //! themselves) is tested on any host. `native` is the Windows-only `Host`.
 pub mod args;
 pub mod fsops;
+pub mod inventory;
+pub mod inventory_config;
+pub mod inventory_publish;
+pub mod inventory_support;
 pub mod launch;
 pub mod pe;
 pub mod sha256;
@@ -13,3 +17,6 @@ pub mod uninstall;
 
 #[cfg(windows)]
 pub mod native;
+
+#[cfg(windows)]
+mod inventory_native;

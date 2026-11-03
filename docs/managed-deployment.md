@@ -25,7 +25,9 @@ exits:
 4. Exits.
 
 The launcher has no window of its own, except one error message when it can neither
-update nor start anything. It imports no networking libraries: it only copies files.
+update nor start anything. It imports no networking libraries. If an administrator
+enables [local inventory](#local-inventory-administrator-opt-in), a bounded helper
+records a local snapshot after the app start attempt, before the launcher exits.
 
 ## What is in the managed ZIP
 
@@ -39,8 +41,10 @@ An `ElevenClock-rs/` folder with:
 | `README.txt` | A short readme for administrators ([`MANAGED-README.txt`](../packaging/MANAGED-README.txt)) |
 | `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt`, `RUST-COPYRIGHT.html` | Licenses and notices |
 
-There is no configuration file to edit. The release's `SHA256SUMS.txt` (a separate
-download) lists the ZIP's hash. The executables are not code-signed.
+No configuration file is required for deployment. Administrators can optionally add
+[`elevenclock-rs-launcher.json`](#local-inventory-administrator-opt-in) beside the central
+app to enable local inventory. The release's `SHA256SUMS.txt` (a separate download)
+lists the ZIP's hash. The executables are not code-signed.
 
 ## Set up the central location
 
@@ -271,6 +275,334 @@ launch.
 **Settings > Support > Copy diagnostics** shows `Managed: yes` and
 `Startup: launcher` (or `off` / `stale`) for a managed copy. The report never includes a
 path. See [Diagnostics](design/diagnostics.md).
+
+## Local inventory (administrator opt-in)
+
+Managed launchers can record one latest local inventory snapshot after each app start
+attempt. This applies only to the launcher shipped in the managed release ZIP. The
+installer and portable ZIP do not include that launcher, and the app itself never
+collects inventory, even when the central configuration enables it.
+
+Inventory is **off by default**. The administrator can create the optional file
+`elevenclock-rs-launcher.json` beside the central app and launcher:
+
+```json
+{
+  "schema_version": 1,
+  "local_inventory_enabled": true
+}
+```
+
+Keep this file administrator-writable and user-readable, with the same read-only
+permissions for users as the deployed binaries. No local administrator privileges,
+HKLM changes, device-management control or user approval prompts are required.
+The managed ZIP does not ship an enabled configuration. This file controls only
+inventory: it cannot override executable source/destination paths or startup.
+An optional `report_directory` enables central own-report replacement as described
+below. Unknown fields and schema versions are rejected; the file must
+be valid UTF-8 JSON no larger than 4 KiB with an explicit boolean setting.
+
+The helper resolves the source using the same priority as app deployment: `--source`,
+the folder a central/staging launcher was started from, then the source remembered by
+the local launcher. It reads the configuration directly from that source, even when
+app refresh was skipped because the clock is already running. Configuration in the
+local executable folder (including aliases) is rejected. The launcher does not copy
+or cache the configuration or an enabled flag on clients.
+
+Set `local_inventory_enabled` to `false` or remove the file to revoke collection.
+Missing, unreadable, malformed or unreachable configuration disables collection for
+that launch. **Offline starts do not collect inventory**: the existing local app still
+starts through normal fallback, and the previous snapshot remains unchanged. This
+allows the share administrator to control collection without cached enablement.
+The helper checks the configuration before looking up identity and again before
+saving. A write already in progress can complete during revocation. Replace the
+configuration atomically when editing it so clients do not see a partial file.
+
+Enabling this setting collects the account SID, resolved account name when available,
+installation ID, observation time, local app and launcher versions, and launch/update
+outcomes described below. Administrators must disclose this collection under their
+organization's policy before enabling it. Files stay in the user's application data;
+no vendor endpoint is used. Unless `report_directory` is specified, snapshots remain
+local and can be collected using existing administrative tools. User-controlled reports are
+not authenticated audit records; a user who controls their local executable/state
+can tamper with local inventory just as they can tamper with the managed app.
+
+The snapshot is `%LOCALAPPDATA%\ElevenClock-rs\inventory\latest.json`. It is replaced,
+not appended, on each successful observation. Revocation and managed uninstall retain
+existing inventory, just as they retain preferences/logs; administrators can remove
+the `inventory` directory after revocation to erase its identity data and reset the
+installation ID. There is no automatic retention cleanup or periodic reporting.
+Ordinary logs and app diagnostics remain free of names and paths.
+
+### Optional central report destination
+
+Add `report_directory` to send the same snapshot to another existing folder, for
+example a reporting subfolder on the existing share:
+
+```json
+{
+  "schema_version": 1,
+  "local_inventory_enabled": true,
+  "report_directory": "\\\\fileserver\\apps\\ElevenClock-reports"
+}
+```
+
+Omit `report_directory` (or set it to `null`) for local-only inventory. The directory
+must be an absolute UNC or drive path, at most 2048 UTF-8 bytes. Relative paths,
+parent traversal, environment-variable expansion and Windows device paths are not
+supported. `local_inventory_enabled: false` disables both collection and publication.
+
+The selected transport is **own-report replacement**, not create-only submissions.
+Administrators must provision the reporting root and a subdirectory named with each
+account's SID, for example:
+
+```text
+\\fileserver\apps\ElevenClock-reports\S-1-5-21-123-456-789-1001\
+    12345678-1234-4234-8234-123456789abc.json
+```
+
+The launcher writes only inside the submitting account's SID directory. Give that
+account the rights needed to read and replace its own reports and create/write/delete
+its staging and lock files there; retain administrator access. Other users should not
+be able to enumerate/read/write that directory. Both SMB and NTFS permissions must
+permit these operations: NTFS cannot override a read-only share. Keep the deployed
+executables and configuration read-only to users. This does not require a new share,
+local device administration, or automatic ACL changes. The launcher creates neither
+the reporting root nor SID directories. Test the actual create/read/replace/delete
+and cross-user restrictions with ordinary accounts before enabling publication.
+This model allows users to manage their own submitted files; it is not a blind drop
+or authenticated audit, and owners may be able to change their own file permissions.
+
+The local snapshot is committed first. The helper then publishes
+`<report_directory>\<SID>\<installation-ID>.json`, preserving each installation's
+version and last-seen time. SID/installation/time lookup failures prevent publication;
+no unnamed "user" report or filename-derived identity is substituted. A fixed lock
+serializes sessions for that report; a fixed `.pending` file is flushed and verified
+before same-directory atomic replacement. A failed replacement preserves the previous
+report. Unsupported locking/replacement or missing permissions cause publication to
+fail without changing launch results or the local snapshot. Older observations do
+not replace newer central reports. Malformed/unknown-schema existing reports are
+preserved for administrator review, not silently overwritten.
+
+The configuration is reread before publication and before replacement; a changed
+setting or destination aborts export of the observation collected under the old
+configuration. Publication, including blocked SMB I/O, shares the existing helper's
+three-second deadline; there is no extra worker, timer or retry service. On timeout,
+the helper is terminated. A fixed per-installation `.pending` file may remain and is
+reused on the next successful attempt; `.lock` files are also stable. This bounds
+per-installation file growth instead of leaving one orphan per attempt. An in-flight
+server operation can complete during revocation/termination; this is not a distributed
+transaction or remote cancellation guarantee.
+
+Removing/changing the destination does not delete existing reports. Administrators
+own central retention and cleanup, including old installation IDs after a reset.
+Collection remains disabled while the central configuration is unreachable, even if
+the report destination could otherwise be reached. There is no replay queue: a later
+successful launch publishes its new observation, not a backlog.
+
+### Optional clock-format popularity reporting
+
+Set `include_clock_format: true` in the administrator-owned configuration to include
+the user's committed clock format in both local and central snapshots:
+
+```json
+{
+  "schema_version": 1,
+  "local_inventory_enabled": true,
+  "include_clock_format": true,
+  "report_directory": "\\\\fileserver\\apps\\ElevenClock-reports"
+}
+```
+
+This setting defaults to false and has no effect unless inventory itself is enabled.
+The helper reads preferences only when explicitly enabled, within its existing
+process deadline. It reads the saved format, including literal text, not a rendered
+clock/date, an unsaved Settings draft, or other preferences. Account-format examples
+may contain identifying literal text supplied by the user, so administrators should
+include this field in their collection disclosure and protect reports accordingly.
+Normal diagnostics/logs remain format-free. Reading never changes, migrates, saves
+or recovers the preferences file. Missing preferences mean the app's built-in default;
+damaged, unreadable or unsupported preferences leave `clock_format` unavailable.
+
+`clock_format` is optional in schema v1: older reports lacking it remain readable,
+and older v1 inventory readers ignore this additive field. New writers emit null
+when collection is disabled or the value is unavailable. Changing the configuration
+to false removes the format from the next successfully saved/published snapshot; it
+does not immediately scrub existing files on offline clients or old central reports.
+Retention and deletion of those files remain administrator responsibilities.
+
+Aggregation exposes `format_usage`, keyed by normalized format source (CRLF becomes
+LF). Whitespace, literals and directives otherwise remain exact; visually similar
+but different formats are not guessed equivalent. Each entry counts installations,
+distinct SIDs, recent installations and recent SIDs from the latest attributable
+snapshot per installation. Repeated launches and duplicate report files add no votes.
+A user with several installations using the same format counts as one user for that
+format; users using different formats can appear in multiple groups. Recent counts
+use the same configurable recent-activity window as the main summary. This measures
+observed adoption, not clock viewing time, number of format selections or live use.
+
+A `preset` label identifies an exact match against the aggregator's current built-in
+presets; null means a custom format relative to that preset catalog. This avoids
+persisting preset indices that may change between releases. Unknown/disabled format
+observations are counted separately in `format_unavailable_installations`, never
+inferred as a custom format or default. Sort recent distinct-user counts to identify
+candidates for future built-in presets, then inspect installation counts and exact
+format text. Selection of new built-ins remains a product decision based on the
+collected results. No format telemetry is sent to the app's developers/vendor.
+
+### Support errors and warnings
+
+Managed inventory includes bounded `support_issues` whenever inventory is enabled,
+without an extra configuration setting. Each entry is a fixed `code` and `severity`
+(`info`, `warning` or `error`), for example:
+
+```json
+"support_issues": [
+  {"code": "source_unreachable", "severity": "warning"},
+  {"code": "using_fallback", "severity": "warning"},
+  {"code": "start_failed", "severity": "error"}
+]
+```
+
+| Severity | Codes / meaning |
+| --- | --- |
+| Error | `no_usable_copy`, `start_failed`: no app process could be started from a usable copy |
+| Warning | `source_unreachable`, `source_invalid`, `copy_failed`, `running_check_failed`: source refresh was unavailable, refused or skipped for safety |
+| Warning | `launcher_refresh_failed`, `source_not_recorded`: ancillary launcher self-update or source-state persistence failed even if the app started |
+| Warning | `using_fallback`: a refresh failed and an existing local app was attempted |
+| Warning | `account_sid_unavailable`, `account_name_unavailable`, `observation_time_unavailable`, `app_version_unavailable`: a fact could not be acquired; null values are retained explicitly |
+| Warning | `preferences_read_failed`, `preferences_invalid`, `preferences_unsupported`: the opted-in format read failed; only checked when `include_clock_format` is enabled |
+| Info | `publication_pending`: local snapshot committed before central publication; completion has not yet been observed locally |
+| Warning | `publication_failed`: the helper observed a central publication failure and could update local status |
+
+Support fields contain no exception messages, raw log lines, profile/source/report
+paths, window titles, user-supplied text or serialized preference documents. Existing
+human log messages are not parsed to construct codes. At most 20 unique entries are
+accepted; severity/code mismatches, duplicate codes and unknown codes are rejected.
+Older schema-v1 reports missing the optional field remain readable as unavailable.
+An empty array means no known issues were detected in this observation, not proof
+that the clock remains healthy. This is launcher support telemetry, not live app
+runtime monitoring, a crash dump, or an historical app log upload. Use the app's
+existing Support page/local logs for detailed runtime troubleshooting.
+
+A centrally visible report excludes `publication_pending`: it was atomically placed
+at its destination. The local snapshot stays pending until the helper observes
+success/failure and can update that status. Timeout/parent loss or a failed local
+status rewrite can leave it pending; this means incomplete/unknown, not necessarily
+failure. A failed transport cannot send its own failure over that same broken channel,
+so `publication_failed` is available locally while the central report stays stale.
+Check last-seen time when investigating missing central reports. Missing SID or time
+also prevents attributed central publication; corresponding warnings remain local.
+If the configuration is unavailable, collection remains disabled and the previous
+snapshot is retained, rather than generating an unauthorized offline support report.
+
+Only the latest observation is retained. A later successful launch replaces earlier
+errors; there is no historical event queue or per-tick reporting. Changing/revoking
+configuration follows the same checks and retention rules as other inventory fields.
+Support collection/publication cannot change launcher exit codes, show message boxes,
+prevent clock startup, or expand the helper's existing process deadline.
+
+Aggregation exposes `support_issue_usage`, keyed by fixed code with severity,
+installation and distinct-user counts, plus recent installation/user counts using
+the same activity window. It uses the latest attributable snapshots, so duplicate
+files/repeated launches do not inflate counts. These counts identify installations
+currently reporting a problem, not the number of error occurrences. Older reports
+without support data contribute to `support_unavailable_installations`, not to an
+assumed healthy population. Unattributable/undated reports remain excluded under the
+main aggregation contract.
+
+### Snapshot format and compatibility
+
+A UTF-8 JSON object, at most 16 KiB, has schema version `1`. Writers emit every field;
+unavailable facts are `null`. Readers accept additional fields within v1, but reject
+unknown schema versions, unknown outcomes/support codes, malformed JSON, duplicate known fields,
+invalid identifiers, control characters and oversized data. Optional fact fields may
+be absent when read and mean unavailable. Required decision fields must be present.
+An incompatible change requires a new schema version; readers never rewrite data they
+cannot understand.
+
+| Field | Meaning / bound |
+| --- | --- |
+| `schema_version` | Integer `1` |
+| `sid` | Token-derived Windows account SID, at most 184 bytes; user grouping key |
+| `account_name` | Optional resolved `DOMAIN\username` (or account name without a domain), at most 1024 UTF-8 bytes; label only, requires SID |
+| `installation_id` | Lowercase GUID in `8-4-4-4-12` form; per-copy key |
+| `observed_utc` | UTC Unix seconds, through year 9999; unavailable time is null |
+| `app_version` | Version of the actual local executable, at most 128 bytes; never inferred from the central source |
+| `launcher_version` | Version of the launcher executing this observation, at most 128 bytes |
+| `clock_format` | Optional administrator-enabled saved format source, validated by the clock formatter (256 Unicode scalars); null when unavailable/disabled |
+| `support_issues` | Optional array of up to 20 unique fixed code/severity entries; missing/null means unavailable, empty means no known issue detected |
+| `refresh` | `not_attempted`, `updated`, `unchanged`, `skipped_running`, `skipped_check_failed`, `source_unreachable`, `source_invalid`, `copy_failed` |
+| `launch` | `not_attempted`, `process_created`, `start_failed` |
+| `fallback` | True when refresh failed and the launcher attempted the existing local copy |
+
+`process_created` proves only successful process creation, not a healthy clock or live
+presence. Refresh describes the app executable, not launcher self-update or source
+recording. A skipped refresh makes no claim about the current central version.
+Mixed-install refusal records both operations as not attempted. Usage errors and
+uninstall do not create launch observations.
+
+Windows fact helpers live in `clock-windows`: token SID, optional account-name lookup,
+UTC observation, GUID generation and fixed executable file version. Failed lookups
+stay unavailable; no path-derived identity or guessed version is substituted. The
+parent launcher supplies its compiled version, so self-update cannot substitute the
+new helper version for the launcher that made the observation.
+
+Collection starts only after the app start attempt. A one-shot copy of the fixed local
+launcher runs as a private helper; share/staging launchers cannot collect directly.
+The parent assigns the helper to a kill-on-close, single-process job before sending
+the handshake that allows configuration reads and collection. One helper can run on
+each managed launch, including when the configuration is missing or disabled; it
+performs no identity lookup unless the central configuration explicitly enables it. The helper has a three-second deadline; on
+timeout the job is closed and the parent observes exit for up to one more second.
+Parent loss also closes the job. Blocking share configuration reads, account resolution, local snapshot I/O and
+optional central publication stay in the helper process under the same deadline. There is no timed-out thread left running, retry service, clock
+state-machine change or periodic app timer. Reporting errors never change the launch
+exit code, display a message box, or prevent the app start attempt. If the local
+launcher could not be deployed, inventory is skipped. Optional central publication uses the own-report replacement contract below.
+
+### Local persistence and identity lifecycle
+
+The `record_local` API uses `%LOCALAPPDATA%\ElevenClock-rs\inventory` after central configuration opt-in. It writes only
+`latest.json` and a stable `inventory.lock`, outside the executable folder and
+`source.txt`. It creates no history. Callers must not pass a share path.
+
+A nonblocking exclusive file lock serializes simultaneous sessions. A contending run
+skips recording with an error; no wait or retry service is introduced. The next
+successful observation reuses the persisted ID. A temporary sibling is flushed,
+verified and atomically replaced; failed writes preserve the previous valid snapshot.
+Unknown or corrupt existing data is preserved and returns an error. Older or missing
+timestamps do not replace a later observation. Equal timestamps may replace; this is
+observation precision, not a cross-machine ordering guarantee.
+
+Executable refreshes retain the ID. Removing the inventory directory resets it;
+reinstalling after managed uninstall retains the ID unless the administrator removes
+that directory. Copying a profile to a different known SID rotates the ID. Cloning a
+profile with the same SID and inventory data cannot be detected by this schema:
+provisioning must remove inventory data before cloning or deliberately reset its ID.
+Identity failure is recorded explicitly and is excluded from attributed aggregation.
+Managed uninstall retains inventory; disable central collection and remove the directory for an explicit reset.
+
+### Aggregation and metric meanings
+
+`aggregate` accepts at most 100,000 bounded snapshots and keeps the latest observation
+per **(SID, installation ID)** pair. Exact duplicates contribute once. Timestamp ties
+use canonical serialized JSON ordering, so input order cannot change the result; a
+conflicting same-time report is not evidence of authenticity. Malformed/unknown-schema
+records and records missing SID, installation ID or time are excluded and counted.
+Future timestamps are excluded rather than claiming recent activity despite clock
+skew. Collection software must handle larger datasets explicitly instead of truncating.
+
+`users` counts distinct SIDs; `latest.len()` counts distinct attributed installations,
+not report files. `latest` retains each installation's version and last observation,
+so one user can have several versions on several PCs. Missing versions remain unknown.
+`recent_users` counts SIDs with at least one observation within the caller's configurable
+window (inclusive); stale installations remain in `latest`. Last seen means last
+launcher observation, not active use or time spent in the app. An offline PC or one
+whose user never relaunches can remain stale indefinitely; there is no periodic app
+reporting. Reports from user-controlled clients are operational inventory, not an
+authenticated audit. No central aggregation command ships yet; administrators can
+use the portable aggregation library or their existing collection tools.
 
 ## Related
 

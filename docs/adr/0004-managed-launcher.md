@@ -128,8 +128,9 @@ The installer and the launcher use the same folder, so they must never both mana
   simpler, and in managed mode the update code is never used.
 * **Restarting the running app when a new central version appears:** it interrupts
   users. Launch and login are enough.
-* **An admin-authored `launcher.json`:** the source is implied by where the launcher
-  runs, and the destination is fixed.
+* **An admin-authored source/destination configuration:** the source is implied by
+  where the launcher runs, and the destination is fixed. The later local inventory
+  extension below adds an optional file for collection opt-in only.
 * **A separate `ElevenClock-rs-managed` folder:** not wanted in the name. The mutual
   refusal rule protects the shared folder instead.
 
@@ -155,3 +156,47 @@ describe the app as it is now. Each lands in the pull request that makes it true
 * **Admin guide (#99).**
 
 Part of #88. Implemented in #94 and #96.
+
+### Local inventory extension (2026-11-03)
+
+Administrator opt-in is an optional `elevenclock-rs-launcher.json` beside the central
+app and launcher, writable only by the deployment administrators and readable by
+users. Schema version 1 requires `local_inventory_enabled: true`. This intentionally
+extends the original "no admin config file" decision for inventory only: source,
+destination and startup rules stay as above. Optional `report_directory` selects
+own-report replacement in a separately provisioned reporting root, with existing
+per-SID directories and suitable SMB/NTFS access. The app never creates directories
+on the share or changes permissions; executable/configuration access stays read-only.
+The configuration is not copied or cached locally. Missing/invalid/unreachable
+configuration disables collection, including offline launches; administrators can
+revoke it by setting false or removing the central file. No HKLM policy or device
+administration rights are required.
+
+After the app start attempt, a job-owned local launcher helper checks the central
+configuration before collecting and again before saving one local snapshot. The
+three-second deadline covers blocking configuration reads as well as account lookup
+and local I/O, with bounded teardown and kill-on-parent-loss. The app owns no inventory
+timers or resources. Existing snapshots survive revocation/uninstall until explicitly
+removed. When `report_directory` is configured, the local snapshot is committed
+first and then published as `<root>/<SID>/<installation-ID>.json` inside the same
+bounded helper. Fixed locks/staging files bound growth across timeouts. Revocation
+or a destination change aborts publication on the next configuration check; in-flight
+server operations are not guaranteed cancellable. See
+[local inventory](../managed-deployment.md#local-inventory-administrator-opt-in) for
+schema, disclosure, provisioning, offline behavior, replacement rights and retention.
+Create-only submissions and automatic permission management are not implemented.
+
+The optional `include_clock_format` boolean, default false, extends inventory with
+committed format source only, including user-supplied literals. It shares the same
+explicit central configuration, helper lifetime and publication checks; it does not
+add app reporting, preference writes or vendor telemetry. Aggregation counts latest
+user/installation adoption per exact normalized format to inform future presets.
+
+Inventory also includes latest-observation support codes and fixed severity levels
+under the same activation gate, without raw log uploads or another setting. Launcher
+update/start failures, fallback, source-state failures and fact/preference lookup
+warnings are structured independently of human logs. Local publication status starts
+as pending; centrally visible reports omit pending, while observed publication
+failures can be retained locally. A deadlined helper may leave pending status.
+Support aggregation counts affected users/installations, not event frequency. No
+app runtime monitoring, crash collection, event history or new worker is introduced.

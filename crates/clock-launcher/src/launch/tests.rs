@@ -54,6 +54,7 @@ struct FakeHost {
     errors: Vec<String>,
     logs: Vec<String>,
     key: FakeKey,
+    support_codes: Vec<Code>,
 }
 impl FakeHost {
     fn new() -> Self {
@@ -66,6 +67,7 @@ impl FakeHost {
             errors: Vec::new(),
             logs: Vec::new(),
             key: FakeKey::default(),
+            support_codes: Vec::new(),
         }
     }
     fn logged(&self, line: &str) -> bool {
@@ -109,6 +111,9 @@ impl Host for FakeHost {
         } else {
             Ok(())
         }
+    }
+    fn support_issue(&mut self, code: Code) {
+        self.support_codes.push(code);
     }
     fn run_key(&mut self) -> &mut dyn RunKey {
         &mut self.key
@@ -849,4 +854,160 @@ fn uninstall_reports_a_file_it_could_not_remove() {
     );
     // The rest was still done.
     assert!(world.local_app().is_none() && host.key.removed);
+}
+
+#[test]
+fn structured_outcomes_cover_refresh_launch_and_fallback_independently() {
+    use RefreshOutcome::*;
+    for (scenario, expected, fallback, exit, started) in [
+        (
+            "updated",
+            Updated,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "unchanged",
+            Unchanged,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "running",
+            SkippedRunning,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "check_failed",
+            SkippedCheckFailed,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "offline",
+            SourceUnreachable,
+            true,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "invalid",
+            SourceInvalid,
+            true,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "copy_failed",
+            CopyFailed,
+            true,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "start_failed",
+            Updated,
+            false,
+            Exit::StartFailed,
+            LaunchOutcome::StartFailed,
+        ),
+        (
+            "no_copy",
+            SourceUnreachable,
+            false,
+            Exit::NoCopy,
+            LaunchOutcome::NotAttempted,
+        ),
+        (
+            "refused",
+            NotAttempted,
+            false,
+            Exit::Refused,
+            LaunchOutcome::NotAttempted,
+        ),
+    ] {
+        let world = World::with_app(NEW);
+        let ctx = world.launched_from_share();
+        let mut host = FakeHost::new();
+        if !matches!(scenario, "updated" | "start_failed" | "no_copy" | "refused") {
+            fs::create_dir_all(&world.destination).unwrap();
+            fs::write(
+                world.layout().app(),
+                app(if scenario == "unchanged" { NEW } else { OLD }),
+            )
+            .unwrap();
+        }
+        match scenario {
+            "running" => host.instance = Instance::Running,
+            "check_failed" => host.instance = Instance::Unknown,
+            "offline" | "no_copy" => world.remove_share(),
+            "invalid" => fs::write(world.share.join(source::APP_EXE), b"invalid").unwrap(),
+            "copy_failed" => host.interrupted.push(source::APP_EXE),
+            "start_failed" => host.start_fails = true,
+            "refused" => host.installer = true,
+            _ => {}
+        }
+        assert_eq!(
+            observe_launch(&mut host, &ctx, &interactive()),
+            Observation {
+                exit,
+                refresh: expected,
+                launch: started,
+                fallback,
+            },
+            "{scenario}"
+        );
+    }
+}
+
+#[test]
+fn reporting_failure_or_panic_preserves_launch_exit_and_refusal_collects_nothing() {
+    for exit in [Exit::Done, Exit::NoCopy, Exit::StartFailed] {
+        let observation = Observation {
+            exit,
+            refresh: RefreshOutcome::SourceUnreachable,
+            launch: LaunchOutcome::NotAttempted,
+            fallback: false,
+        };
+        assert_eq!(
+            report_after(observation, |_| Err(io::Error::other("report failed"))),
+            exit
+        );
+        assert_eq!(
+            report_after(observation, |_| panic!("report panicked")),
+            exit
+        );
+    }
+    let observation = Observation {
+        exit: Exit::Refused,
+        refresh: RefreshOutcome::NotAttempted,
+        launch: LaunchOutcome::NotAttempted,
+        fallback: false,
+    };
+    let mut collected = false;
+    assert_eq!(
+        report_after(observation, |_| {
+            collected = true;
+            Ok(())
+        }),
+        Exit::Refused
+    );
+    assert!(!collected);
+}
+
+#[test]
+fn ancillary_launcher_failures_have_structured_codes_without_affecting_start() {
+    let world = World::with_app(NEW);
+    let ctx = world.launched_from_share();
+    let mut host = FakeHost::new();
+    host.interrupted = vec![source::LAUNCHER_EXE, source::STATE_FILE];
+    assert_eq!(launch(&mut host, &ctx, &login()), Exit::Done);
+    assert!(host.support_codes.contains(&Code::LauncherRefreshFailed));
+    assert!(host.support_codes.contains(&Code::SourceNotRecorded));
+    assert_eq!(host.started.len(), 1);
 }

@@ -436,3 +436,10 @@ Windows.Win32.WinHttpSetTimeouts
 Windows.Win32.NIF_INFO
 Windows.Win32.NIIF_INFO
 Windows.Win32.SW_SHOWNORMAL
+Windows.Win32.LookupAccountSidW
+Windows.Win32.ConvertStringSidToSidW
+Windows.Win32.GetFileVersionInfoSizeW
+Windows.Win32.GetFileVersionInfoW
+Windows.Win32.VerQueryValueW
+Windows.Win32.CoCreateGuid
+Windows.Win32.VS_FIXEDFILEINFO

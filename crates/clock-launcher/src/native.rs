@@ -5,7 +5,7 @@
 //! atomic file replace, and cannot disagree about them.
 use crate::{
     args::{self, Command, STARTUP, UNINSTALL},
-    launch::{Claim, Context, Exit, Host, PROBE_TIMEOUT, launch},
+    launch::{Claim, Context, Exit, Host, PROBE_TIMEOUT, observe_launch, report_after},
     uninstall::uninstall,
 };
 use clock_windows::{
@@ -39,6 +39,7 @@ pub struct NativeHost {
     installer_entry: Vec<u16>,
     run_key: RegistryRunKey,
     log: Option<RotatingLog>,
+    support_codes: Vec<crate::inventory_support::Code>,
 }
 impl NativeHost {
     pub fn new() -> Self {
@@ -56,6 +57,7 @@ impl NativeHost {
             installer_entry: wide_nul(installer_entry),
             run_key,
             log,
+            support_codes: Vec::new(),
         }
     }
 }
@@ -142,6 +144,12 @@ impl Host for NativeHost {
         }
     }
 
+    fn support_issue(&mut self, code: crate::inventory_support::Code) {
+        if !self.support_codes.contains(&code) {
+            self.support_codes.push(code);
+        }
+    }
+
     fn run_key(&mut self) -> &mut dyn RunKey {
         &mut self.run_key
     }
@@ -161,6 +169,13 @@ fn context() -> Option<Context> {
 fn run() -> Exit {
     let mut host = NativeHost::new();
     let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if arguments == [OsString::from(crate::inventory_native::HELPER_MARKER)] {
+        return if crate::inventory_native::collect().is_ok() {
+            Exit::Done
+        } else {
+            Exit::Internal
+        };
+    }
     // Login starts and the uninstall helper must never wait on a message box.
     let silent = arguments
         .iter()
@@ -183,7 +198,13 @@ fn run() -> Exit {
         return Exit::Internal;
     };
     match command {
-        Command::Launch(request) => launch(&mut host, &ctx, &request),
+        Command::Launch(request) => {
+            let observation = observe_launch(&mut host, &ctx, &request);
+            // Reporting follows the app start attempt and cannot change its result.
+            report_after(observation, |observation| {
+                crate::inventory_native::report(&ctx, &request, observation, &host.support_codes)
+            })
+        }
         Command::Uninstall => uninstall(&mut host, &ctx),
     }
 }
@@ -192,6 +213,17 @@ fn run() -> Exit {
 /// called back from Windows, so there is no foreign frame for a panic to cross, and
 /// one that happens anyway is logged and turned into an exit code.
 pub fn main() -> ExitCode {
+    let helper = std::env::args_os()
+        .skip(1)
+        .eq([OsString::from(crate::inventory_native::HELPER_MARKER)]);
+    if helper {
+        std::panic::set_hook(Box::new(|_| {}));
+        return ExitCode::from(
+            std::panic::catch_unwind(run)
+                .unwrap_or(Exit::Internal)
+                .code(),
+        );
+    }
     std::panic::set_hook(Box::new(|info| {
         let message = info
             .payload()
