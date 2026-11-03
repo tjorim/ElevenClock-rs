@@ -154,6 +154,7 @@ function Type-Text([string]$Text) {
 function Click([IntPtr]$Button) { [SettingsNative]::SendMessageW($Button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null; Start-Sleep -Milliseconds 500 } # BM_CLICK
 function Focused-Id([IntPtr]$Window) { [SettingsNative]::GetDlgCtrlID([SettingsNative]::Focus($Window)) }
 function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
+. (Join-Path $PSScriptRoot 'confirm-prompt.ps1')
 Add-Type -AssemblyName System.Windows.Forms
 # Let queued out-of-process accessibility events reach this thread's callbacks.
 function Pump([int]$Milliseconds) {
@@ -619,7 +620,9 @@ try {
     Click (Control $window $PAGE.Templates 1604)
     Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq '%H:%M') 'Saved preset did not load into the draft'
     Press 0x21 0x11
-    Click (Control $window $PAGE.Templates 1605)
+    Click-Confirm (Control $window $PAGE.Templates 1605) $window $false
+    Assert (@((Get-Content -LiteralPath $templatesFile -Raw | ConvertFrom-Json).presets).Count -eq 1) 'Declining the delete confirmation must keep the preset'
+    Click-Confirm (Control $window $PAGE.Templates 1605) $window $true
     Assert (@((Get-Content -LiteralPath $templatesFile -Raw | ConvertFrom-Json).presets).Count -eq 0) 'Delete did not remove the named preset'
     Assert ([IO.File]::ReadAllText($preferences) -eq $preferencesBefore) 'Template library actions wrote active preferences'
     $steps.templates = 'Second-instance link delivery, draft preservation, review, font/theme, keyboard order, save/load/delete and share clipboard passed'

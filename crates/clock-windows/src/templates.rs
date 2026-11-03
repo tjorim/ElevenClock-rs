@@ -15,22 +15,13 @@ const MAX_BYTES: usize = 256 * 1024;
 static STAGING_ID: AtomicU64 = AtomicU64::new(0);
 thread_local! {
     static INCOMING: RefCell<Option<ClockTemplate>> = const { RefCell::new(None) };
-    static LAST_ACCEPTED: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
 }
-const MIN_DELIVERY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
-/// Accepts a template delivered by another process only when none is already waiting
-/// and the previous delivery was not just now, so a flood cannot replace a waiting
-/// template or repeatedly pull focus.
+/// Accepts a template delivered by another process only when none is already waiting,
+/// so a burst cannot replace a template the user has not seen yet.
 pub fn try_receive(template: ClockTemplate) -> bool {
-    let now = std::time::Instant::now();
-    let recent = LAST_ACCEPTED.with(|last| {
-        last.get()
-            .is_some_and(|at| now.duration_since(at) < MIN_DELIVERY_INTERVAL)
-    });
-    if recent || INCOMING.with(|slot| slot.borrow().is_some()) {
+    if INCOMING.with(|slot| slot.borrow().is_some()) {
         return false;
     }
-    LAST_ACCEPTED.with(|last| last.set(Some(now)));
     receive(template);
     true
 }
@@ -245,6 +236,16 @@ mod tests {
         reopened.remove("work").unwrap();
         assert!(Library::at(&path).unwrap().entries().is_empty());
         assert!(!dir.path().join("preferences.dat").exists());
+    }
+    #[test]
+    fn a_waiting_template_is_not_replaced_by_later_deliveries() {
+        let first = ClockTemplate::new("%H", 9, Theme::Dark).unwrap();
+        let second = ClockTemplate::new("%M", 10, Theme::Light).unwrap();
+        assert!(try_receive(first.clone()));
+        assert!(!try_receive(second.clone()));
+        assert_eq!(take_incoming(), Some(first));
+        assert!(try_receive(second.clone()));
+        assert_eq!(take_incoming(), Some(second));
     }
     #[test]
     fn newer_or_invalid_libraries_and_failed_saves_are_preserved() {

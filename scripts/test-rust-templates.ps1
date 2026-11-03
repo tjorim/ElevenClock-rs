@@ -28,6 +28,7 @@ $protocolWasPresent = Test-Path -LiteralPath $protocol
 $ownedCommand = '"' + $exe + '" --template "%1"'
 $app = $null
 function Assert($value, [string]$message) { if (!$value) { throw $message }; Write-Output "PASS: $message" }
+. (Join-Path $PSScriptRoot 'confirm-prompt.ps1')
 function Control([int]$page, [int]$id) {
     $parent = if ($page) { [SettingsNative]::GetDlgItem($window, $page) } else { $window }
     [SettingsNative]::GetDlgItem($parent, $id)
@@ -105,7 +106,9 @@ try {
     Click 0 1104
     Click 115 1604
     Assert ((Text 111 1202) -eq '%g%V.%u' -and (Text 112 1303) -eq '11') 'saved local preset loads into the draft'
-    Click 115 1605
+    Click-Confirm (Control 115 1605) $window $false
+    Assert (@((Get-Content -LiteralPath $library -Raw | ConvertFrom-Json).presets).Count -eq 2) 'declining the delete confirmation keeps the preset'
+    Click-Confirm (Control 115 1605) $window $true
     $remaining = @((Get-Content -LiteralPath $library -Raw | ConvertFrom-Json).presets)
     Assert ($remaining.Count -eq 1 -and $remaining[0].name -eq 'Aardvark smoke') 'Delete removes the selected preset and preserves its neighbor'
     if (!$protocolWasPresent) {
