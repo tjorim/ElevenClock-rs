@@ -142,7 +142,7 @@ helpers use generated in-box Advapi32/Ole32/Version APIs, without a new Rust dep
 Version.dll is allowed for fixed local executable version lookup. Account lookup
 uses Advapi32 and GUID generation uses Ole32. These helpers run only after explicit
 administrator opt-in, inside the bounded inventory process. No network client is
-added. Optional central own-report replacement uses normal file I/O inside the same
+added. Optional central drop-box reporting uses normal file I/O inside the same
 bounded helper; it adds no HTTP/network client dependency or persistent service.
 
 The launcher's direct `clock-core` dependency reuses the workspace's existing format

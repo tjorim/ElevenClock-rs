@@ -12,6 +12,12 @@ pub struct Directory {
     path: PathBuf,
 }
 
+/// The owning account SID (`S-1-5-...`) of an opened report. Windows only: elsewhere this
+/// fails with `Unsupported`, and callers must not treat ownership as verified.
+pub fn owner_sid(file: &File) -> io::Result<String> {
+    native::owner_sid(file)
+}
+
 fn child_name(name: &OsStr) -> io::Result<()> {
     let mut components = Path::new(name).components();
     if !matches!(components.next(), Some(Component::Normal(_))) || components.next().is_some() {
@@ -74,6 +80,38 @@ impl Directory {
 mod native {
     use super::*;
     use crate::bindings::*;
+    use std::os::windows::io::AsRawHandle;
+    pub fn owner_sid(file: &File) -> io::Result<String> {
+        let mut owner = PSID::default();
+        let mut descriptor = PSECURITY_DESCRIPTOR::default();
+        // SAFETY: the handle stays open for the call; both outputs are live locals and the
+        // returned descriptor (which owns `owner`) is freed on every path below.
+        unsafe {
+            let status = GetSecurityInfo(
+                HANDLE(file.as_raw_handle().cast()),
+                SE_FILE_OBJECT,
+                SECURITY_INFORMATION(OWNER_SECURITY_INFORMATION as u32),
+                Some(&mut owner),
+                None,
+                None,
+                None,
+                Some(&mut descriptor),
+            );
+            if status != 0 {
+                return Err(io::Error::from_raw_os_error(status as i32));
+            }
+            let mut text = windows_core::PWSTR::null();
+            let converted = ConvertSidToStringSidW(owner, &mut text).ok();
+            let result = converted
+                .map_err(io::Error::other)
+                .and_then(|()| text.to_string().map_err(io::Error::other));
+            if !text.is_null() {
+                let _ = LocalFree(HANDLE(text.0.cast()));
+            }
+            let _ = LocalFree(HANDLE(descriptor.0));
+            result
+        }
+    }
     use std::{
         fs::OpenOptions,
         os::windows::fs::{MetadataExt, OpenOptionsExt},
@@ -135,6 +173,9 @@ mod tests {
 #[cfg(unix)]
 mod native {
     use super::*;
+    pub fn owner_sid(_file: &File) -> io::Result<String> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
     use std::{
         ffi::CString,
         fs::OpenOptions,
@@ -179,5 +220,22 @@ mod native {
             return Err(io::Error::other("nonregular report object"));
         }
         Ok(())
+    }
+}
+
+#[cfg(all(test, windows))]
+mod owner_tests {
+    use super::*;
+    #[test]
+    fn a_file_created_by_this_account_reports_its_sid() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("report.json"), b"{}").unwrap();
+        let directory = Directory::open(temp.path()).unwrap();
+        let file = directory.file(std::ffi::OsStr::new("report.json")).unwrap();
+        let owner = owner_sid(&file).unwrap();
+        assert!(owner.starts_with("S-1-"));
+        // Ordinary users own what they create; elevated tokens may default to Administrators.
+        let own = crate::instance::current_user_sid().unwrap();
+        assert!(owner == own || owner == "S-1-5-32-544");
     }
 }

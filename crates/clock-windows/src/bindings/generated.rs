@@ -552,6 +552,31 @@ pub unsafe fn GetProcessTimes(
     }
 }
 #[inline]
+pub unsafe fn GetSecurityInfo(
+    handle: HANDLE,
+    objecttype: SE_OBJECT_TYPE,
+    securityinfo: SECURITY_INFORMATION,
+    ppsidowner: Option<*mut PSID>,
+    ppsidgroup: Option<*mut PSID>,
+    ppdacl: Option<*mut PACL>,
+    ppsacl: Option<*mut PACL>,
+    ppsecuritydescriptor: Option<*mut PSECURITY_DESCRIPTOR>,
+) -> u32 {
+    windows_core::link!("advapi32.dll" "system" fn GetSecurityInfo(handle : HANDLE, objecttype : SE_OBJECT_TYPE, securityinfo : SECURITY_INFORMATION, ppsidowner : *mut PSID, ppsidgroup : *mut PSID, ppdacl : *mut PACL, ppsacl : *mut PACL, ppsecuritydescriptor : *mut PSECURITY_DESCRIPTOR) -> u32);
+    unsafe {
+        GetSecurityInfo(
+            handle,
+            objecttype,
+            securityinfo,
+            ppsidowner.unwrap_or(core::mem::zeroed()) as _,
+            ppsidgroup.unwrap_or(core::mem::zeroed()) as _,
+            ppdacl.unwrap_or(core::mem::zeroed()) as _,
+            ppsacl.unwrap_or(core::mem::zeroed()) as _,
+            ppsecuritydescriptor.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
+}
+#[inline]
 pub unsafe fn GetSysColor(nindex: i32) -> u32 {
     windows_core::link!("user32.dll" "system" fn GetSysColor(nindex : i32) -> u32);
     unsafe { GetSysColor(nindex) }
@@ -1710,6 +1735,15 @@ pub unsafe fn WinHttpSetTimeouts(
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ACCESS_MASK(pub u32);
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ACL {
+    pub AclRevision: u8,
+    pub Sbz1: u8,
+    pub AclSize: u16,
+    pub AceCount: u16,
+    pub Sbz2: u16,
+}
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ATOM(pub u16);
@@ -3943,6 +3977,8 @@ pub struct OVERLAPPED_0_0 {
     pub Offset: u32,
     pub OffsetHigh: u32,
 }
+pub const OWNER_SECURITY_INFORMATION: i32 = 1;
+pub type PACL = *mut ACL;
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct PATTERNID(pub i32);
@@ -3979,6 +4015,9 @@ pub const PROCESS_TERMINATE: i32 = 1;
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct PROPERTYID(pub i32);
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct PSECURITY_DESCRIPTOR(pub *mut core::ffi::c_void);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct PSID(pub *mut core::ffi::c_void);
@@ -4032,6 +4071,11 @@ pub struct SECURITY_ATTRIBUTES {
     pub lpSecurityDescriptor: *mut core::ffi::c_void,
     pub bInheritHandle: windows_core::BOOL,
 }
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct SECURITY_INFORMATION(pub u32);
+pub const SE_FILE_OBJECT: SE_OBJECT_TYPE = 1;
+pub type SE_OBJECT_TYPE = i32;
 pub const SHCNE_ASSOCCHANGED: i32 = 134217728;
 pub const SHCNF_IDLIST: i32 = 0;
 #[repr(C)]

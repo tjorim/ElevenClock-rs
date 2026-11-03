@@ -1,5 +1,11 @@
 use super::*;
-use crate::launch::{Exit, LaunchOutcome, Observation, RefreshOutcome};
+use crate::{
+    inventory_support::Code,
+    launch::{Exit, LaunchOutcome, Observation, RefreshOutcome},
+};
+use std::fs;
+
+const NAME: &str = "S-1-5-21-123.12345678-1234-4234-8234-123456789abc.json";
 
 fn snapshot() -> Snapshot {
     let mut value = Snapshot::from_observation(Observation {
@@ -14,113 +20,69 @@ fn snapshot() -> Snapshot {
     value.observed_utc = Some(100);
     value
 }
-fn provision(root: &Path, value: &Snapshot) -> PathBuf {
-    let folder = root.join(value.sid.as_ref().unwrap());
-    fs::create_dir(&folder).unwrap();
-    folder.join(format!("{}.json", value.installation_id.as_ref().unwrap()))
-}
 
 #[test]
-fn replacement_is_bounded_and_failures_preserve_the_previous_report() {
+fn one_named_file_is_written_in_place_without_staging_or_directories() {
     let root = tempfile::tempdir().unwrap();
-    let value = snapshot();
-    let target = provision(root.path(), &value);
+    let mut value = snapshot();
     publish(root.path(), &value, || Ok(())).unwrap();
-    let mut newer = value.clone();
-    newer.observed_utc = Some(200);
-    assert!(publish(root.path(), &newer, || Err(io::Error::other("interrupted"))).is_err());
-    assert_eq!(crate::inventory::read_latest(&target).unwrap(), value);
-    publish(root.path(), &newer, || Ok(())).unwrap();
-    publish(root.path(), &value, || {
-        panic!("older report must not replace newer")
-    })
-    .unwrap();
-    assert_eq!(crate::inventory::read_latest(&target).unwrap(), newer);
-    assert_eq!(fs::read_dir(target.parent().unwrap()).unwrap().count(), 2); // report + stable lock
+    let target = root.path().join(NAME);
+    assert_eq!(fs::read(&target).unwrap(), value.encode().unwrap());
+    // A shorter rewrite must not leave trailing bytes from the longer one.
+    value.support_issues = Some(Vec::new());
+    value.observed_utc = Some(200);
+    publish(root.path(), &value, || Ok(())).unwrap();
+    assert_eq!(fs::read(&target).unwrap(), value.encode().unwrap());
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
 }
 
 #[test]
-fn missing_destination_or_identity_does_not_create_directories_or_damage_local_data() {
+fn identity_time_folder_and_unchanged_configuration_are_required() {
     let root = tempfile::tempdir().unwrap();
-    let local = root.path().join("latest.json");
-    let value = snapshot();
-    crate::inventory::write_latest(&local, &value, || Ok(())).unwrap();
-    let missing = root.path().join("missing");
-    assert!(publish(&missing, &value, || Ok(())).is_err());
-    assert!(!missing.exists());
-    assert_eq!(crate::inventory::read_latest(&local).unwrap(), value);
-    let mut unknown = value;
+    let mut unknown = snapshot();
     unknown.sid = None;
     assert!(publish(root.path(), &unknown, || Ok(())).is_err());
-}
-
-#[test]
-fn contention_and_unknown_schema_preserve_existing_data() {
-    let root = tempfile::tempdir().unwrap();
-    let value = snapshot();
-    let target = provision(root.path(), &value);
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(target.with_extension("lock"))
-        .unwrap();
-    lock.lock().unwrap();
+    unknown = snapshot();
+    unknown.observed_utc = None;
+    assert!(publish(root.path(), &unknown, || Ok(())).is_err());
+    assert!(publish(&root.path().join("missing"), &snapshot(), || Ok(())).is_err());
     assert!(
-        publish(root.path(), &value, || panic!(
-            "must not replace while locked"
-        ))
+        publish(root.path(), &snapshot(), || Err(io::Error::other(
+            "revoked"
+        )))
         .is_err()
     );
-    drop(lock);
-    fs::write(&target, b"{\"schema_version\":99}").unwrap();
-    assert!(publish(root.path(), &value, || Ok(())).is_err());
-    assert_eq!(fs::read(target).unwrap(), b"{\"schema_version\":99}");
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+    assert!(!root.path().join("missing").exists());
 }
 
 #[test]
-fn killed_helper_leftovers_are_reused_without_accumulating_files() {
+fn simultaneous_sessions_leave_one_file_and_a_later_write_repairs_it() {
     let root = tempfile::tempdir().unwrap();
-    let value = snapshot();
-    let target = provision(root.path(), &value);
-    fs::write(target.with_extension("pending"), b"partial upload").unwrap();
-    publish(root.path(), &value, || Ok(())).unwrap();
-    assert_eq!(crate::inventory::read_latest(&target).unwrap(), value);
-    assert!(!target.with_extension("pending").exists());
-}
-
-#[test]
-fn simultaneous_sessions_never_publish_partial_json_or_accumulate_temp_files() {
-    let root = tempfile::tempdir().unwrap();
-    let value = snapshot();
-    let target = provision(root.path(), &value);
-    let results = std::thread::scope(|scope| {
-        let mut writers = Vec::new();
-        for time in 100..108 {
-            let root = root.path();
-            let mut value = value.clone();
-            value.observed_utc = Some(time);
-            writers.push(scope.spawn(move || publish(root, &value, || Ok(()))));
+    std::thread::scope(|scope| {
+        let writers: Vec<_> = (100..108)
+            .map(|time| {
+                let root = root.path();
+                scope.spawn(move || {
+                    let mut value = snapshot();
+                    value.observed_utc = Some(time);
+                    publish(root, &value, || Ok(()))
+                })
+            })
+            .collect();
+        for writer in writers {
+            // Overlapping writes may mix bytes or hit a sharing violation. They may not
+            // leave extra files, and the next launch rewrites a complete report.
+            let _ = writer.join().unwrap();
         }
-        writers
-            .into_iter()
-            .map(|writer| writer.join().unwrap())
-            .collect::<Vec<_>>()
     });
-    assert!(results.iter().any(Result::is_ok));
-    for error in results.into_iter().filter_map(Result::err) {
-        assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
-    }
-    let saved = crate::inventory::read_latest(&target).unwrap();
-    assert_eq!(saved.sid, value.sid);
-    assert!((100..108).contains(&saved.observed_utc.unwrap()));
-    assert_eq!(fs::read_dir(target.parent().unwrap()).unwrap().count(), 2);
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+    publish(root.path(), &snapshot(), || Ok(())).unwrap();
+    assert!(Snapshot::decode(&fs::read(root.path().join(NAME)).unwrap()).is_ok());
 }
 
 #[test]
 fn publication_status_is_local_on_failure_and_cleared_on_success() {
-    use crate::inventory_support::Code;
     let root = tempfile::tempdir().unwrap();
     let local = tempfile::tempdir().unwrap();
     let mut value = snapshot();
@@ -139,9 +101,8 @@ fn publication_status_is_local_on_failure_and_cleared_on_success() {
             .iter()
             .any(|i| i.code == Code::PublicationFailed)
     );
-    let target = provision(root.path(), &saved);
     publish_saved(root.path(), saved.clone(), local.path(), || true).unwrap();
-    for path in [&local_path, &target] {
+    for path in [&local_path, &root.path().join(NAME)] {
         assert!(
             crate::inventory::read_latest(path)
                 .unwrap()
@@ -156,4 +117,46 @@ fn publication_status_is_local_on_failure_and_cleared_on_success() {
     crate::inventory::record_local(local.path(), saved.clone(), || None).unwrap();
     assert!(publish_saved(root.path(), saved.clone(), local.path(), || false).is_err());
     assert_eq!(crate::inventory::read_latest(&local_path).unwrap(), saved);
+}
+
+/// Manual check against a real drop-box folder (see docs/managed-deployment.md):
+/// `ELEVENCLOCK_DROP_BOX=<folder> cargo test -p clock-launcher drop_box_folder -- --ignored`.
+/// Publishes twice, so the second write exercises the rewrite-without-read path.
+#[test]
+#[ignore = "needs a configured drop-box folder"]
+fn drop_box_folder_accepts_create_and_rewrite() {
+    let root = std::env::var_os("ELEVENCLOCK_DROP_BOX").expect("set ELEVENCLOCK_DROP_BOX");
+    let mut value = snapshot();
+    publish(Path::new(&root), &value, || Ok(())).unwrap();
+    value.observed_utc = Some(200);
+    value.support_issues = Some(Vec::new());
+    publish(Path::new(&root), &value, || Ok(())).unwrap();
+}
+
+#[test]
+fn a_busy_publication_lock_or_a_newer_local_snapshot_writes_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let local = tempfile::tempdir().unwrap();
+    let saved =
+        crate::inventory::record_local(local.path(), snapshot(), || snapshot().installation_id)
+            .unwrap()
+            .unwrap();
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(local.path().join("publication.lock"))
+        .unwrap();
+    lock.lock().unwrap();
+    let error = publish_saved(root.path(), saved.clone(), local.path(), || true).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+    drop(lock);
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+    // A newer observation recorded meanwhile supersedes this one.
+    let mut newer = snapshot();
+    newer.observed_utc = Some(500);
+    crate::inventory::record_local(local.path(), newer, || None).unwrap();
+    publish_saved(root.path(), saved, local.path(), || true).unwrap();
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
 }

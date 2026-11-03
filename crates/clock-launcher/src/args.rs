@@ -10,6 +10,8 @@ use std::path::PathBuf;
 pub const SOURCE: &str = "--source";
 pub const UNINSTALL: &str = "--uninstall";
 pub const INVENTORY_SUMMARY: &str = "--inventory-summary";
+/// Accept reports regardless of file owner, for local snapshots an administrator copied in.
+pub const SKIP_OWNER_CHECK: &str = "--skip-owner-check";
 /// The app's login marker (`clock_windows::instance::STARTUP_MARKER`).
 pub const STARTUP: &str = clock_windows::instance::STARTUP_MARKER;
 
@@ -21,6 +23,7 @@ pub enum Command {
         directory: PathBuf,
         output: PathBuf,
         recent_days: u32,
+        verify_owners: bool,
     },
 }
 
@@ -47,15 +50,19 @@ impl ArgError {
             Self::SourceNeedsFolder => "--source needs the folder that holds ElevenClock-rs.",
             Self::UninstallIsExclusive => "--uninstall cannot be combined with other arguments.",
             Self::SummaryUsage => {
-                "Use --inventory-summary <report folder> <output.json> [recent days, default 30]. Output must be outside the report folder."
+                "Use --inventory-summary <report folder> <output.json> [recent days, default 30] [--skip-owner-check]. Output must be outside the report folder."
             }
         }
     }
 }
 
 pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Command, ArgError> {
-    let args: Vec<OsString> = args.into_iter().collect();
+    let mut args: Vec<OsString> = args.into_iter().collect();
     if args.iter().any(|arg| arg == INVENTORY_SUMMARY) {
+        let verify_owners = args.last().is_none_or(|arg| arg != SKIP_OWNER_CHECK);
+        if !verify_owners {
+            args.pop();
+        }
         let valid_path =
             |arg: &OsString| !arg.is_empty() && !arg.to_string_lossy().starts_with("--");
         if !(args.len() == 3 || args.len() == 4)
@@ -78,6 +85,7 @@ pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Command, ArgEr
             directory: args[1].clone().into(),
             output: args[2].clone().into(),
             recent_days,
+            verify_owners,
         });
     }
     if args.iter().any(|arg| arg == UNINSTALL) {
@@ -132,9 +140,24 @@ mod tests {
             Ok(Command::InventorySummary {
                 directory: "reports".into(),
                 output: "summary.json".into(),
-                recent_days: 30
+                recent_days: 30,
+                verify_owners: true
             })
         );
+        assert!(matches!(
+            parse_text(&[
+                INVENTORY_SUMMARY,
+                "reports",
+                "summary.json",
+                "7",
+                SKIP_OWNER_CHECK
+            ]),
+            Ok(Command::InventorySummary {
+                recent_days: 7,
+                verify_owners: false,
+                ..
+            })
+        ));
         assert!(matches!(
             parse_text(&[INVENTORY_SUMMARY, "reports", "summary.json", "7"]),
             Ok(Command::InventorySummary { recent_days: 7, .. })
@@ -146,6 +169,7 @@ mod tests {
             vec![INVENTORY_SUMMARY, "reports", "summary.json", "36501"],
             vec![INVENTORY_SUMMARY, "reports", "summary.json", "--startup"],
             vec!["--startup", INVENTORY_SUMMARY, "reports", "summary.json"],
+            vec![INVENTORY_SUMMARY, SKIP_OWNER_CHECK, "summary.json"],
         ] {
             assert_eq!(parse_text(&args), Err(ArgError::SummaryUsage));
         }

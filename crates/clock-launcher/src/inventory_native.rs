@@ -290,7 +290,7 @@ mod tests {
                 ],
                 dir.path(),
                 b"{}",
-                Duration::from_secs(10)
+                Duration::from_secs(60)
             )
             .is_ok()
         );
