@@ -171,6 +171,9 @@ executable/configuration access stays read-only. Nothing is read back. The summa
 command trusts a flat drop-box report only when its file owner matches the SID inside
 it, unless `--skip-owner-check` is given. Reports in subfolders (an older layout) are
 not owner-checked.
+The central release version or hash is not collected, so update progress is each
+installation's own local version as a share of all reports, relative to the newest
+version observed.
 The configuration is not copied or cached locally. Missing/invalid/unreachable
 configuration disables collection, including offline launches; administrators can
 revoke it by setting false or removing the central file. No HKLM policy or device

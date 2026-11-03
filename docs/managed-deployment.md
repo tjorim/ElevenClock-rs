@@ -716,6 +716,22 @@ before the field existed start from their own last observation, and a new accoun
 starts a new installation. `new_installations` counts installations whose first
 observation is inside the recent-activity window.
 
+### Update progress
+
+`versions.by_version` lists each local app version found in the latest reports, newest
+first, with its installations, recent installations, distinct users and its percentage of
+all attributed installations. `versions.newest_observed` is the highest version any
+report carries and `versions.on_newest_percent` is the share of installations on it, so
+the percentage of PCs that have updated is read straight from what people run. Versions
+compare as dotted numbers (`0.2.10.0` is newer than `0.2.3.0`); a version that is not
+purely numeric is listed after them and never counts as newest.
+
+The central release's version or hash is deliberately not collected or written to
+reports. "Newest" therefore means newest observed, not newest deployed: while no PC has
+updated, the percentage reads 100% on the old version. Compare it with the version you
+deployed, and remember that a copy appears only when it is launched (see last seen
+above), so a PC that was off since the release is still counted at its older version.
+
 ### Generate an inventory summary
 
 The managed launcher includes an explicit administrator command. Run it from a
@@ -748,8 +764,9 @@ command also reads `.json` files in immediate child directories, so reports left
 earlier layout still count; owner checks do not apply to those. Links and deeper
 directories are skipped. The same library rules above
 deduplicate records, exclude malformed/future records, and count unavailable values.
-The output contains overall counts, formats sorted by recent distinct-user adoption,
-support counts, excluded-report counts, and the latest snapshot for each installation.
+The output contains overall counts, a version breakdown, formats sorted by recent
+distinct-user adoption, support counts, excluded-report and unverified-owner counts, and
+the latest snapshot for each installation.
 It therefore contains the same identity/format data as the input; restrict access and
 retention accordingly.
 

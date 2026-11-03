@@ -181,6 +181,7 @@ fn write_with(
         "unrecognized_files": unrecognized,
         "format_unavailable_installations": summary.format_unavailable_installations,
         "support_unavailable_installations": summary.support_unavailable_installations,
+        "versions": version_breakdown(summary.latest.values(), now, recent_seconds),
         "formats": formats, "support_issues": issues,
         "latest": summary.latest.values().collect::<Vec<_>>()
     });
@@ -203,6 +204,71 @@ fn owner_matches(file: &std::fs::File, bytes: &[u8]) -> bool {
         return false;
     };
     owner == sid
+}
+
+/// Dotted numeric version (`0.2.2.0`), or `None` when it is not purely numeric.
+fn parse_version(text: &str) -> Option<Vec<u64>> {
+    text.split('.').map(|part| part.parse().ok()).collect()
+}
+
+/// Installations per local app version, newest first (unknown last), with the share of
+/// all attributed installations. "Newest" is the highest version any report carries: the
+/// central release is deliberately not collected, so this is relative to what was seen.
+fn version_breakdown<'a>(
+    latest: impl Iterator<Item = &'a inventory::Snapshot>,
+    now: u64,
+    recent_seconds: u64,
+) -> Value {
+    #[derive(Default)]
+    struct Row {
+        installations: usize,
+        recent: usize,
+        users: std::collections::BTreeSet<String>,
+    }
+    let mut rows: std::collections::BTreeMap<Option<String>, Row> = Default::default();
+    let mut total = 0usize;
+    for snapshot in latest {
+        total += 1;
+        let row = rows.entry(snapshot.app_version.clone()).or_default();
+        row.installations += 1;
+        if snapshot
+            .observed_utc
+            .is_some_and(|time| now - time <= recent_seconds)
+        {
+            row.recent += 1;
+        }
+        if let Some(sid) = &snapshot.sid {
+            row.users.insert(sid.clone());
+        }
+    }
+    let mut ordered: Vec<_> = rows.into_iter().collect();
+    // Newest numeric version first; non-numeric text and unknown versions follow.
+    ordered.sort_by(|(a, _), (b, _)| {
+        let key = |version: &Option<String>| version.as_deref().and_then(parse_version);
+        key(b).cmp(&key(a)).then_with(|| a.cmp(b))
+    });
+    let percent = |count: usize| {
+        if total == 0 {
+            0.0
+        } else {
+            (count as f64 * 1000.0 / total as f64).round() / 10.0
+        }
+    };
+    let newest = ordered
+        .iter()
+        .find(|(version, _)| version.as_deref().and_then(parse_version).is_some())
+        .map(|(version, row)| (version.clone(), row.installations));
+    json!({
+        "newest_observed": newest.as_ref().and_then(|(version, _)| version.clone()),
+        "on_newest_percent": newest.as_ref().map_or(0.0, |(_, count)| percent(*count)),
+        "by_version": ordered.iter().map(|(version, row)| json!({
+            "app_version": version,
+            "installations": row.installations,
+            "recent_installations": row.recent,
+            "users": row.users.len(),
+            "percent": percent(row.installations),
+        })).collect::<Vec<_>>(),
+    })
 }
 
 /// `<SID>.<installation-ID>.json`, the only flat names the launcher writes.
@@ -348,6 +414,87 @@ mod tests {
         assert!(looks_like_report(std::ffi::OsStr::new(
             "S-1-5-21-1.12345678-1234-4234-8234-123456789abc.json"
         )));
+    }
+
+    #[test]
+    fn versions_are_ranked_newest_first_with_percentages() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("reports");
+        fs::create_dir(&root).unwrap();
+        let base: Value = serde_json::from_slice(include_bytes!(
+            "../tests/fixtures/inventory-v1-support.json"
+        ))
+        .unwrap();
+        let observed = base["observed_utc"].as_u64().unwrap();
+        let cases = [
+            (
+                "0.2.2.0",
+                "S-1-5-21-1",
+                "aaaaaaaa-1234-4234-8234-123456789abc",
+                observed,
+            ),
+            (
+                "0.2.2.0",
+                "S-1-5-21-2",
+                "bbbbbbbb-1234-4234-8234-123456789abc",
+                observed,
+            ),
+            (
+                "0.2.10.0",
+                "S-1-5-21-3",
+                "cccccccc-1234-4234-8234-123456789abc",
+                observed,
+            ),
+            (
+                "0.2.3.0",
+                "S-1-5-21-3",
+                "dddddddd-1234-4234-8234-123456789abc",
+                observed - 1_000_000,
+            ),
+        ];
+        for (version, sid, id, time) in cases {
+            let mut record = base.clone();
+            record["app_version"] = json!(version);
+            record["sid"] = json!(sid);
+            record["installation_id"] = json!(id);
+            record["observed_utc"] = json!(time);
+            record["first_observed_utc"] = Value::Null;
+            fs::write(
+                root.join(format!("{sid}.{id}.json")),
+                serde_json::to_vec(&record).unwrap(),
+            )
+            .unwrap();
+        }
+        let output = temp.path().join("summary.json");
+        write_checked(&root, &output, observed + 10, 100, false).unwrap();
+        let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+        let versions = &value["versions"];
+        // Numeric, not textual: 0.2.10.0 is newer than 0.2.3.0.
+        assert_eq!(versions["newest_observed"], "0.2.10.0");
+        assert_eq!(versions["on_newest_percent"], 25.0);
+        let rows = versions["by_version"].as_array().unwrap();
+        let order: Vec<_> = rows
+            .iter()
+            .map(|row| row["app_version"].as_str().unwrap())
+            .collect();
+        assert_eq!(order, ["0.2.10.0", "0.2.3.0", "0.2.2.0"]);
+        assert_eq!(rows[2]["installations"], 2);
+        assert_eq!(rows[2]["percent"], 50.0);
+        assert_eq!(rows[2]["recent_installations"], 2);
+        assert_eq!(rows[1]["recent_installations"], 0);
+        // One user (S-1-5-21-3) has two versions on two installations.
+        assert_eq!(rows[0]["users"], 1);
+        assert_eq!(rows[1]["users"], 1);
+    }
+
+    #[test]
+    fn version_parsing_is_numeric_and_unknown_versions_do_not_count_as_newest() {
+        assert!(parse_version("0.2.10.0") > parse_version("0.2.3.0"));
+        assert_eq!(parse_version("0.2.x"), None);
+        assert_eq!(parse_version(""), None);
+        let value = version_breakdown(std::iter::empty(), 0, 0);
+        assert_eq!(value["newest_observed"], Value::Null);
+        assert_eq!(value["on_newest_percent"], 0.0);
     }
 
     #[test]

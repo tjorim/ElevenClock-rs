@@ -104,7 +104,8 @@ Use Start-Process -Wait -PassThru in PowerShell to wait and inspect ExitCode. De
 recent window is 30 days. Output's existing parent must be outside the report tree.
 --skip-owner-check accepts reports from any file owner; use it only for local snapshots you
 copied in yourself, never for a drop-box folder.
-The JSON includes distinct users/installations, recent counts, format adoption,
+The JSON includes distinct users/installations, recent counts, a version breakdown with
+update percentages (relative to the newest version seen, not the central release), format adoption,
 support issues and latest snapshots. Protect it like the source identity-bearing
 reports. Invalid/future reports are excluded and counted; unreadable inputs fail
 without replacing a previous summary. Exit codes: 0 success, 1 I/O/limit failure,
