@@ -148,6 +148,7 @@ Windows.Win32.GetNativeSystemInfo
 Windows.Win32.GetProcessHandleCount
 Windows.Win32.GetProcessMemoryInfo
 Windows.Win32.GetProcessTimes
+Windows.Win32.GetSecurityInfo
 Windows.Win32.GetSysColor
 Windows.Win32.GetSystemMetrics
 Windows.Win32.GetSystemTimePreciseAsFileTime
@@ -275,6 +276,7 @@ Windows.Win32.OBJECT_ATTRIBUTES
 Windows.Win32.OBJID_CLIENT
 Windows.Win32.OBJID_WINDOW
 Windows.Win32.OBJ_CASE_INSENSITIVE
+Windows.Win32.OWNER_SECURITY_INFORMATION
 Windows.Win32.OpenClipboard
 Windows.Win32.OpenProcess
 Windows.Win32.OpenProcessToken
@@ -316,6 +318,7 @@ Windows.Win32.RegisterClassW
 Windows.Win32.RegisterWindowMessageW
 Windows.Win32.ReleaseCapture
 Windows.Win32.RtlNtStatusToDosError
+Windows.Win32.SE_FILE_OBJECT
 Windows.Win32.SHCNE_ASSOCCHANGED
 Windows.Win32.SHCNF_IDLIST
 Windows.Win32.SHChangeNotify

@@ -129,7 +129,16 @@ fn publication_status_is_local_on_failure_and_cleared_on_success() {
         .unwrap()
         .unwrap();
     let absent = root.path().join("missing");
-    assert!(publish_saved(&absent, saved.clone(), local.path(), || true).is_err());
+    assert!(
+        publish_saved(
+            &absent,
+            ReportMode::PerUserDirectory,
+            saved.clone(),
+            local.path(),
+            || true
+        )
+        .is_err()
+    );
     let local_path = local.path().join("latest.json");
     let failed = crate::inventory::read_latest(&local_path).unwrap();
     assert!(
@@ -140,7 +149,14 @@ fn publication_status_is_local_on_failure_and_cleared_on_success() {
             .any(|i| i.code == Code::PublicationFailed)
     );
     let target = provision(root.path(), &saved);
-    publish_saved(root.path(), saved.clone(), local.path(), || true).unwrap();
+    publish_saved(
+        root.path(),
+        ReportMode::PerUserDirectory,
+        saved.clone(),
+        local.path(),
+        || true,
+    )
+    .unwrap();
     for path in [&local_path, &target] {
         assert!(
             crate::inventory::read_latest(path)
@@ -154,6 +170,74 @@ fn publication_status_is_local_on_failure_and_cleared_on_success() {
     // Revocation prevents any export/status rewrite; an unfinished local attempt
     // remains pending instead of being mislabeled as a known failure or success.
     crate::inventory::record_local(local.path(), saved.clone(), || None).unwrap();
-    assert!(publish_saved(root.path(), saved.clone(), local.path(), || false).is_err());
+    assert!(
+        publish_saved(
+            root.path(),
+            ReportMode::PerUserDirectory,
+            saved.clone(),
+            local.path(),
+            || false
+        )
+        .is_err()
+    );
     assert_eq!(crate::inventory::read_latest(&local_path).unwrap(), saved);
+}
+
+#[test]
+fn drop_box_writes_one_named_file_in_place_without_staging_or_directories() {
+    let root = tempfile::tempdir().unwrap();
+    let mut value = snapshot();
+    publish_drop_box(root.path(), &value, || Ok(())).unwrap();
+    let name = "S-1-5-21-123.12345678-1234-4234-8234-123456789abc.json";
+    let target = root.path().join(name);
+    assert_eq!(fs::read(&target).unwrap(), value.encode().unwrap());
+    // A shorter rewrite must not leave trailing bytes from the longer one.
+    value.support_issues = Some(Vec::new());
+    value.observed_utc = Some(200);
+    publish_drop_box(root.path(), &value, || Ok(())).unwrap();
+    assert_eq!(fs::read(&target).unwrap(), value.encode().unwrap());
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn drop_box_requires_identity_time_an_existing_folder_and_unchanged_configuration() {
+    let root = tempfile::tempdir().unwrap();
+    let mut unknown = snapshot();
+    unknown.sid = None;
+    assert!(publish_drop_box(root.path(), &unknown, || Ok(())).is_err());
+    unknown = snapshot();
+    unknown.observed_utc = None;
+    assert!(publish_drop_box(root.path(), &unknown, || Ok(())).is_err());
+    assert!(publish_drop_box(&root.path().join("missing"), &snapshot(), || Ok(())).is_err());
+    assert!(
+        publish_drop_box(root.path(), &snapshot(), || Err(io::Error::other(
+            "revoked"
+        )))
+        .is_err()
+    );
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn saved_publication_uses_the_selected_mode() {
+    let root = tempfile::tempdir().unwrap();
+    let local = tempfile::tempdir().unwrap();
+    let saved =
+        crate::inventory::record_local(local.path(), snapshot(), || snapshot().installation_id)
+            .unwrap()
+            .unwrap();
+    publish_saved(
+        root.path(),
+        ReportMode::DropBox,
+        saved,
+        local.path(),
+        || true,
+    )
+    .unwrap();
+    assert!(
+        root.path()
+            .join("S-1-5-21-123.12345678-1234-4234-8234-123456789abc.json")
+            .is_file()
+    );
+    assert!(!root.path().join("S-1-5-21-123").exists());
 }

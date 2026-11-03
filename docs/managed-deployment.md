@@ -306,8 +306,8 @@ permissions for users as the deployed binaries. No local administrator privilege
 HKLM changes, device-management control or user approval prompts are required.
 The managed ZIP does not ship an enabled configuration. This file controls only
 inventory: it cannot override executable source/destination paths or startup.
-An optional `report_directory` enables central own-report replacement as described
-below. Unknown fields and schema versions are rejected; the file must
+An optional `report_directory` enables central reporting as described below, with
+an optional `report_mode` of `per_user_directory` (default) or `drop_box`. Unknown fields and schema versions are rejected; the file must
 be valid UTF-8 JSON no larger than 4 KiB with an explicit boolean setting.
 
 The helper resolves the source using the same priority as app deployment: `--source`,
@@ -362,8 +362,11 @@ must be an absolute UNC or drive path, at most 2048 UTF-8 bytes. Relative paths,
 parent traversal, environment-variable expansion and Windows device paths are not
 supported. `local_inventory_enabled: false` disables both collection and publication.
 
-The selected transport is **own-report replacement**, not create-only submissions.
-Administrators must provision the reporting root and a subdirectory named with each
+Two transports are supported, chosen with `report_mode` (default `per_user_directory`).
+`drop_box` is described under [Drop-box reports](#drop-box-reports) below.
+
+`per_user_directory` is **own-report replacement**. It suits a known group of users:
+administrators must provision the reporting root and a subdirectory named with each
 account's SID, for example:
 
 ```text
@@ -409,6 +412,49 @@ own central retention and cleanup, including old installation IDs after a reset.
 Collection remains disabled while the central configuration is unreachable, even if
 the report destination could otherwise be reached. There is no replay queue: a later
 successful launch publishes its new observation, not a backlog.
+
+#### Drop-box reports
+
+Use `"report_mode": "drop_box"` when every account may use the app and you cannot
+provision a folder per user. The launcher writes one file straight into
+`report_directory`:
+
+```text
+\fileserver\apps\ElevenClock-reports\S-1-5-21-123-456-789-1001.12345678-1234-4234-8234-123456789abc.json
+```
+
+The name is `<SID>.<installation-ID>.json`, so a person with several PCs has one file
+per PC and the folder grows by one file per installation, never per launch. The
+launcher creates no folders, reads nothing back and uses no lock, staging or rename
+step, because users in a blind folder cannot list, read, delete or rename. It opens the
+file for writing (without truncating on open), writes the whole report and sets the
+length. A crash mid-write can leave a short or mixed file. The summary excludes
+malformed files and the next launch rewrites the report.
+
+Example NTFS recipe, to be checked with two ordinary accounts before enabling it:
+
+```text
+icacls "\fileserver\apps\ElevenClock-reports" /inheritance:r
+icacls "\fileserver\apps\ElevenClock-reports" /grant "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F"
+icacls "\fileserver\apps\ElevenClock-reports" /grant "*S-1-5-11:(WD)"
+icacls "\fileserver\apps\ElevenClock-reports" /grant "*S-1-3-0:(OI)(IO)(WD,AD,WA,WEA,RC,S)"
+```
+
+This gives Administrators and SYSTEM full control, Authenticated Users the right to
+create files in this folder only, and the creating account (`CREATOR OWNER`) the rights
+to rewrite its own file, but no list, read, delete or take-ownership rights for anyone
+else. The share must also allow Change. Run the `icacls` commands from an
+administrator session on a machine that can reach the share, and keep this folder
+separate from the read-only deployed executables.
+
+Users can overwrite, but not read, the file they created, and file owners can
+usually change their own file's permissions. Because any account can create a
+file with any name, the summary command believes a drop-box report only when the file's
+**owner is the SID written inside it**. It excludes the report and counts it in
+`unverified_owner_reports` otherwise, for example a copy made by an administrator or a
+file created by another account. Owner checks need Windows, so run the summary there.
+Reports from user-controlled clients remain operational inventory, not an
+authenticated audit.
 
 ### Optional clock-format popularity reporting
 

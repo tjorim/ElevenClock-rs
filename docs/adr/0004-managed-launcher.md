@@ -167,6 +167,10 @@ destination and startup rules stay as above. Optional `report_directory` selects
 own-report replacement in a separately provisioned reporting root, with existing
 per-SID directories and suitable SMB/NTFS access. The app never creates directories
 on the share or changes permissions; executable/configuration access stays read-only.
+An optional `report_mode: "drop_box"` replaces the per-SID directories with one
+`<SID>.<installation-ID>.json` file in a create-only folder, for deployments where every
+account may report and no folder can be provisioned per user. It reads nothing back, so
+the summary command trusts a drop-box file only if its owner matches the SID inside it.
 The configuration is not copied or cached locally. Missing/invalid/unreachable
 configuration disables collection, including offline launches; administrators can
 revoke it by setting false or removing the central file. No HKLM policy or device

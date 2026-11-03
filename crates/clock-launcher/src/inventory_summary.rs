@@ -59,6 +59,7 @@ fn write_before_read(
         }
     }
     before_read();
+    let unverified = std::cell::Cell::new(0usize);
     let records = paths.iter().map(|(directory, name)| {
         let child = directory
             .as_ref()
@@ -66,10 +67,17 @@ fn write_before_read(
             .transpose()?;
         let directory = child.as_ref().unwrap_or(&root_directory);
         let mut bytes = Vec::new();
-        directory
-            .file(name)?
+        let file = directory.file(name)?;
+        (&file)
             .take(MAX_SNAPSHOT_BYTES as u64 + 1)
             .read_to_end(&mut bytes)?;
+        // Drop-box files sit in a folder every user can write to, so the claimed SID is only
+        // believed when the file is owned by that account. Unreadable or unsupported owner
+        // checks count as unverified rather than failing the whole summary.
+        if child.is_none() && !owner_matches(&file, &bytes) {
+            unverified.set(unverified.get() + 1);
+            bytes.clear();
+        }
         Ok(bytes)
     });
     // Files are read one at a time; malformed reports are counted as excluded,
@@ -139,6 +147,7 @@ fn write_before_read(
         "new_installations": new_installations,
         "counts": counts(summary.latest.len(), summary.users.len(), recent_installations, summary.recent_users.len()),
         "excluded_reports": summary.excluded,
+        "unverified_owner_reports": unverified.get(),
         "format_unavailable_installations": summary.format_unavailable_installations,
         "support_unavailable_installations": summary.support_unavailable_installations,
         "formats": formats, "support_issues": issues,
@@ -149,6 +158,20 @@ fn write_before_read(
         return Err(io::Error::other("summary is too large"));
     }
     output_parent.install(output_name, &bytes, || Ok(()))
+}
+
+/// Only a flat (drop-box) report needs this. Non-Windows hosts cannot read owners, so
+/// they treat flat reports as unverified; the managed summary command is a Windows tool.
+fn owner_matches(file: &std::fs::File, bytes: &[u8]) -> bool {
+    let Ok(snapshot) = inventory::Snapshot::decode(bytes) else {
+        // Malformed data is excluded by aggregation and counted there.
+        return true;
+    };
+    let (Some(sid), Ok(owner)) = (snapshot.sid, clock_windows::report_files::owner_sid(file))
+    else {
+        return false;
+    };
+    owner == sid
 }
 
 fn count_entry(visited: &mut usize) -> io::Result<()> {
@@ -214,6 +237,38 @@ mod tests {
             assert_eq!(value["new_installations"], expected);
             assert_eq!(value["latest"][0]["first_observed_utc"], observed - 50);
             fs::remove_file(&output).unwrap();
+        }
+    }
+
+    /// Drop-box reports are believed only when the file's owner is the SID inside it.
+    #[cfg(windows)]
+    #[test]
+    fn drop_box_reports_need_an_owner_matching_their_sid() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("reports");
+        fs::create_dir(&root).unwrap();
+        let mine = clock_windows::inventory_facts::account().0.unwrap();
+        let mut record: Value = serde_json::from_slice(include_bytes!(
+            "../tests/fixtures/inventory-v1-support.json"
+        ))
+        .unwrap();
+        record["sid"] = json!(mine);
+        fs::write(root.join("mine.json"), serde_json::to_vec(&record).unwrap()).unwrap();
+        record["sid"] = json!("S-1-5-21-999");
+        record["installation_id"] = json!("aaaaaaaa-1234-4234-8234-123456789abc");
+        fs::write(
+            root.join("forged.json"),
+            serde_json::to_vec(&record).unwrap(),
+        )
+        .unwrap();
+        let output = temp.path().join("summary.json");
+        write(&root, &output, 1_900_000_000, 31_536_000).unwrap();
+        let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+        // The forged report is owned by this account, not by the SID it claims.
+        let owner = fs::File::open(root.join("mine.json")).unwrap();
+        if clock_windows::report_files::owner_sid(&owner).unwrap() == mine {
+            assert_eq!(value["counts"]["installations"], 1);
+            assert_eq!(value["unverified_owner_reports"], 1);
         }
     }
 
