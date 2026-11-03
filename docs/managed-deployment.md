@@ -381,7 +381,32 @@ or mixed file. The summary excludes malformed files and the next launch rewrites
 report. Missing permissions make publication fail without changing launch results or
 the local snapshot.
 
-Example NTFS recipe, to be checked with two ordinary accounts before enabling it:
+#### Set up the drop-box folder
+
+Use a new folder that is **not** below the read-only deployed executables, because
+permissions inherited from there would let every user read the reports. Everything
+below changes only that one folder and its share; nothing touches the app files.
+
+1. **Share permissions.** In the folder's *Properties > Sharing > Advanced Sharing >
+   Permissions* (or on the file server's existing share), allow **Change** for
+   *Authenticated Users* and **Full Control** for *Administrators*. NTFS cannot grant
+   more than the share does, so a share that is read-only breaks publishing.
+2. **Stop inheritance.** In *Properties > Security > Advanced*, choose **Disable
+   inheritance** and then **Convert inherited permissions into explicit permissions**.
+   Then remove every entry except *SYSTEM* and *Administrators* (both Full control,
+   applies to "This folder, subfolders and files").
+3. **Let users create files here only.** Choose **Add**, principal *Authenticated Users*,
+   type *Allow*, applies to **This folder only**, and tick only
+   **Create files / write data**.
+4. **Let a user rewrite their own file only.** Choose **Add**, principal **CREATOR
+   OWNER**, type *Allow*, applies to **Files only**, and tick only: *Create files / write
+   data*, *Create folders / append data*, *Write attributes*, *Write extended
+   attributes*, *Read attributes* and *Read permissions*. Do not tick Read data, Delete,
+   Delete subfolders and files, Change permissions or Take ownership. (*Read attributes*
+   is required: without it a user can create their file once but cannot rewrite it.)
+5. Choose **OK** on each dialog.
+
+The same result with commands, run once from an administrator session:
 
 ```text
 icacls "\\fileserver\apps\ElevenClock-reports" /inheritance:r
@@ -390,20 +415,41 @@ icacls "\\fileserver\apps\ElevenClock-reports" /grant "*S-1-5-11:(WD)"
 icacls "\\fileserver\apps\ElevenClock-reports" /grant "*S-1-3-0:(OI)(IO)(WD,AD,WA,WEA,RA,RC,S)"
 ```
 
-This gives Administrators and SYSTEM full control, Authenticated Users the right to
-create files in this folder only, and the creating account (`CREATOR OWNER`) the rights
-to rewrite its own file, but no list, read, delete or take-ownership rights for anyone
-else. The share must also allow Change: NTFS cannot override a read-only share. Keep
-this folder separate from the read-only deployed executables and configuration, and do
-not create it below a folder that grants users read access. This needs no new share,
-local device administration or automatic ACL changes. The recipe was checked on a Windows 11 machine with two local accounts over loopback SMB.
-The real publisher created and rewrote its own file; the other account could not list,
-read, overwrite, delete or rename it, and could not publish over the same name, but could
-create a new name. The administrator summary excluded the report (owner not matching its
-SID) and counted it with `--skip-owner-check`. A domain share was not tested. Repeat the
-check on your own share with `scripts/test-dropbox-isolation.ps1` (disposable machine,
-elevated PowerShell; it creates and removes two local accounts and a share) or by hand
-with two ordinary accounts before enabling publication.
+The resulting list under *Security* should be exactly: SYSTEM, Administrators,
+Authenticated Users (this folder only, create files) and CREATOR OWNER (files only).
+If *Authenticated Users*, *Users* or *Everyone* appear with Read or List rights, the
+folder is not blind. No Rust, script or helper is needed, and nothing here changes the
+app's own permissions.
+
+#### Check it before enabling publication
+
+Use two ordinary test accounts, A and B, and a Windows PC that can reach the share. Do
+not use an administrator account: administrators can read everything by design.
+Replace the path with your own and use any file name.
+
+| As | Action | Expected |
+| --- | --- | --- |
+| A | `Set-Content "\\fileserver\apps\ElevenClock-reports\test.json" '{"a":1}'` | works |
+| A | the same command again with different, shorter text | works |
+| A | `dir "\\fileserver\apps\ElevenClock-reports"` | access denied |
+| A | `Get-Content "\\fileserver\apps\ElevenClock-reports\test.json"` | access denied |
+| A | `Remove-Item` or `Rename-Item` on `test.json` | access denied |
+| B | `Set-Content` on the same `test.json` | access denied |
+| B | `Get-Content`, `Remove-Item` or `Rename-Item` on `test.json` | access denied |
+| B | `Set-Content` to a new name such as `b.json` | works |
+| Admin | open the folder in File Explorer | both files visible |
+
+Delete the test files afterwards (as an administrator). If every row matches, set
+`report_directory` and launch the managed app as a test user; an administrator then
+finds `<SID>.<installation-ID>.json` in the folder. If publishing fails for a real
+user, check the share's *Change* permission and the *Read attributes* tick first.
+
+What has been verified: with two local accounts on one Windows 11 machine over
+loopback SMB, the real publisher created and rewrote its file, and the other
+account could not list, read, overwrite, delete or rename it or publish over the
+same name, but could create a new name. The summary excluded the report (owner not
+matching its SID) and counted it with `--skip-owner-check`. A domain share and your
+file server's own settings were not tested; the table above is the check for those.
 
 Users can rewrite, but not read, the file they created, and file owners can usually
 change their own file's permissions. Because any account can create a file with any
