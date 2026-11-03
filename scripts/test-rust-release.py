@@ -6,6 +6,7 @@ import struct
 import os
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 spec = importlib.util.spec_from_file_location("release", Path(__file__).with_name("rust-release.py"))
@@ -33,6 +34,22 @@ def pe(dll=b"KERNEL32.dll", machine=0x8664, subsystem=2, delayed=False):
 
 
 class Gates(unittest.TestCase):
+    def test_distribution_blockers_in_every_packaged_guide(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sources = (*release.README_SOURCES.values(), release.MANAGED_MANAGER_SOURCE)
+            for source in sources:
+                (root / source).parent.mkdir(parents=True, exist_ok=True)
+                (root / source).write_text("Ready to distribute", encoding="utf-8")
+            with mock.patch.object(release, "ROOT", root):
+                release.check_release_notices()
+                for source in sources:
+                    with self.subTest(source=source):
+                        (root / source).write_text("Distribution is blocked", encoding="utf-8")
+                        with self.assertRaises(ValueError):
+                            release.check_release_notices()
+                        (root / source).write_text("Ready to distribute", encoding="utf-8")
+
     def test_system_imports(self):
         self.assertEqual(release.inspect_pe(pe()), ["kernel32.dll"])
         self.assertEqual(release.inspect_pe(pe(b"api-ms-win-core-synch-l1-2-0.dll")), ["api-ms-win-core-synch-l1-2-0.dll"])

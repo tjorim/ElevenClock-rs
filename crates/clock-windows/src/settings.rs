@@ -550,7 +550,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             return Err(error);
         }
         self.sync_all(dialog);
-        self.refresh_templates(dialog);
+        self.refresh_templates(dialog, None);
         self.refresh(dialog, runtime);
         // Managed mode is checked again every time Settings opens.
         let managed = managed::detect();
@@ -609,6 +609,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 &template.share_link(),
             );
             select_page(dialog, PAGE_TEMPLATES);
+            self.retry_template_library(dialog);
             unsafe {
                 let _ = SetFocus(Some(control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_REVIEW)));
             }
@@ -618,15 +619,35 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         Ok(())
     }
 
-    fn refresh_templates(&self, dialog: HWND) {
+    fn retry_template_library(&mut self, dialog: HWND) {
+        if self.templates.is_none() {
+            self.templates = crate::templates::Library::open().ok();
+            self.refresh_templates(dialog, None);
+            self.status = if self.templates.is_some() { "Saved templates are available again." }
+                else { "Saved templates could not be read. Existing data was preserved; sharing and reviewing links are still available." }.into();
+        }
+    }
+
+    fn refresh_templates(&self, dialog: HWND, preferred_name: Option<&str>) {
         let list = control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LIST);
+        let previous_name = get_text(list);
+        let previous_index = usize::try_from(send(list, CB_GETCURSEL as u32, 0, 0)).unwrap_or(0);
         send(list, CB_RESETCONTENT as u32, 0, 0);
         if let Some(library) = &self.templates {
             for entry in library.entries() {
                 add_string(list, &entry.name);
             }
             if !library.entries().is_empty() {
-                send(list, CB_SETCURSEL as u32, 0, 0);
+                let name = preferred_name
+                    .unwrap_or(&previous_name)
+                    .trim()
+                    .to_lowercase();
+                let selected = library
+                    .entries()
+                    .iter()
+                    .position(|entry| entry.name.to_lowercase() == name)
+                    .unwrap_or_else(|| previous_index.min(library.entries().len() - 1));
+                send(list, CB_SETCURSEL as u32, selected, 0);
             }
         }
         for id in [ID_TEMPLATE_SAVE, ID_TEMPLATE_LOAD, ID_TEMPLATE_DELETE] {
@@ -695,14 +716,15 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             }
             ID_TEMPLATE_SAVE => {
                 let name = get_text(control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_NAME));
+                let mut saved = false;
                 self.status = match (self.templates.as_mut(), self.controller.template()) {
                     (Some(library), Ok(template)) => match library.save(&name, &template) {
-                        Ok(()) => "Local preset saved. The running clock is unchanged until Apply.".into(),
+                        Ok(()) => { saved = true; "Local preset saved. The running clock is unchanged until Apply.".into() },
                         Err(error) => error.to_string(),
                     },
                     _ => "Fix the format and font size before saving a preset. Saved templates must also be readable.".into(),
                 };
-                self.refresh_templates(dialog);
+                self.refresh_templates(dialog, saved.then_some(name.as_str()));
             }
             ID_TEMPLATE_DELETE => {
                 self.status = match (self.templates.as_mut(), selected) {
@@ -715,7 +737,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                     },
                     _ => "Choose a saved local preset first.".into(),
                 };
-                self.refresh_templates(dialog);
+                self.refresh_templates(dialog, None);
             }
             ID_TEMPLATE_SHARE => {
                 self.status = match self.controller.template() {
@@ -768,7 +790,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                     }
                     None => "Could not determine this executable's location.".into(),
                 };
-                self.refresh_templates(dialog);
+                self.refresh_templates(dialog, None);
             }
             _ => return,
         }
@@ -1343,8 +1365,10 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 // The registration can change outside this window (Task Manager,
                 // Windows Settings), so the page is read again whenever it is opened.
                 self.show_startup(dialog);
-                if self.templates.is_none() {
-                    self.status = "Saved templates could not be read. Existing data was preserved; sharing and reviewing links are still available.".into();
+                let selected =
+                    usize::try_from(send(item(dialog, ID_TAB), TCM_GETCURSEL as u32, 0, 0)).ok();
+                if selected.and_then(|index| PAGES.get(index)) == Some(&PAGE_TEMPLATES) {
+                    self.retry_template_library(dialog);
                     self.show_status(dialog, runtime);
                 }
             }

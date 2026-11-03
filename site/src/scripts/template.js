@@ -53,3 +53,16 @@ export function parseTemplateLink(link) {
   if (values[version] !== '1' || !/^[+]?\d+$/.test(values.font ?? '') || values.format === undefined) throw Error('Invalid or unsupported template version.');
   return validateTemplate(values);
 }
+
+// A shared link may replace only an unchanged draft or one the user agrees to
+// discard. Validate before prompting or touching the current controls.
+export function createTemplateLoader(read, apply, confirm) {
+  let baseline = JSON.stringify(read());
+  return link => {
+    const template = parseTemplateLink(link);
+    if (JSON.stringify(read()) !== baseline && !confirm()) return false;
+    apply(template);
+    baseline = JSON.stringify(read());
+    return true;
+  };
+}

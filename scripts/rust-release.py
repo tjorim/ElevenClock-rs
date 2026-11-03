@@ -139,6 +139,12 @@ def zip_tree(source, destination):
                 archive.write(file, file.relative_to(source).as_posix())
 
 
+def check_release_notices():
+    for readme in (*README_SOURCES.values(), MANAGED_MANAGER_SOURCE):
+        if "Distribution is blocked" in (ROOT / readme).read_text(encoding="utf-8"):
+            raise ValueError("Distribution requires reviewed release notice wording")
+
+
 def prepare(out, mode):
     if out.exists():
         raise ValueError("Output must be a new directory; stale artifacts are not reusable")
@@ -149,9 +155,7 @@ def prepare(out, mode):
         if dirty:
             raise ValueError("Distribution requires a clean source checkout")
         # Development checkouts may carry blocked wording; a release must not.
-        for readme in README_SOURCES.values():
-            if "Distribution is blocked" in (ROOT / readme).read_text():
-                raise ValueError("Distribution requires reviewed release notice wording")
+        check_release_notices()
     out.mkdir(parents=True)
     # The installer payload is flat; the portable ZIP is zipped from its parent so
     # that everything extracts into one ElevenClock-rs folder.

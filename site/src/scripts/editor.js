@@ -1,4 +1,4 @@
-import { TOKENS, WEB_PREFIX, splitFormat, validateTemplate, templateLinks, parseTemplateLink } from './template.js';
+import { TOKENS, WEB_PREFIX, splitFormat, validateTemplate, templateLinks, createTemplateLoader } from './template.js';
 
 export function setupEditor(updatePreview) {
   const input = document.getElementById('format');
@@ -104,12 +104,19 @@ export function setupEditor(updatePreview) {
   }
   document.getElementById('copy-format').addEventListener('click', () => copy(input.value, 'Format copied. Paste it into the app’s format editor.'));
   document.getElementById('copy-template').addEventListener('click', () => links && copy(links.web, 'Template link copied. It includes your format text, font size and theme.'));
+  const loadTemplate = createTemplateLoader(
+    () => ({ format: input.value, font: font.value, theme: theme.value }),
+    template => { input.value = template.format; font.value = String(template.font); theme.value = template.theme; refresh(true); },
+    () => window.confirm('Replace your current format and appearance edits with this shared template?'),
+  );
   function loadHash() {
     if (!location.hash.startsWith('#template=')) return;
     try {
-      const t = parseTemplateLink(WEB_PREFIX + location.hash.slice(1));
-      input.value = t.format; font.value = String(t.font); theme.value = t.theme;
-      refresh(true); document.getElementById('try').scrollIntoView();
+      if (!loadTemplate(WEB_PREFIX + location.hash.slice(1))) {
+        status.textContent = 'Shared template not loaded. Your current edits were kept.';
+        return;
+      }
+      document.getElementById('try').scrollIntoView();
       status.textContent = 'Shared template loaded. Review it here or open it in the app.';
     } catch (failure) { status.textContent = failure.message; }
   }

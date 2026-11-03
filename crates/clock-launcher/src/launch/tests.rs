@@ -55,6 +55,8 @@ struct FakeHost {
     logs: Vec<String>,
     key: FakeKey,
     support_codes: Vec<Code>,
+    template_removal_fails: bool,
+    template_removal_saw_app: bool,
 }
 impl FakeHost {
     fn new() -> Self {
@@ -68,6 +70,8 @@ impl FakeHost {
             logs: Vec::new(),
             key: FakeKey::default(),
             support_codes: Vec::new(),
+            template_removal_fails: false,
+            template_removal_saw_app: false,
         }
     }
     fn logged(&self, line: &str) -> bool {
@@ -80,6 +84,14 @@ impl FakeHost {
 impl Host for FakeHost {
     fn installer_entry_present(&mut self) -> bool {
         self.installer
+    }
+    fn remove_template_handler(&mut self, app: &Path) -> io::Result<()> {
+        self.template_removal_saw_app = app.is_file();
+        if self.template_removal_fails {
+            Err(io::Error::other("registry unavailable"))
+        } else {
+            Ok(())
+        }
     }
     fn claim_instance(&mut self) -> Claim {
         match self.instance {
@@ -772,6 +784,7 @@ fn uninstall_removes_the_known_files_and_nothing_else() {
     let mut host = FakeHost::new();
     let ctx = world.launched_from_share();
     assert_eq!(uninstall(&mut host, &ctx), Exit::Done);
+    assert!(host.template_removal_saw_app);
 
     assert_eq!(
         world.files(),
@@ -784,6 +797,23 @@ fn uninstall_removes_the_known_files_and_nothing_else() {
     assert!(host.started.is_empty() && host.errors.is_empty());
     // Running it again is fine.
     assert_eq!(uninstall(&mut host, &ctx), Exit::Done);
+}
+
+#[test]
+fn uninstall_preserves_the_installation_when_template_cleanup_fails() {
+    let world = deployed();
+    let before = world.files();
+    let mut host = FakeHost::new();
+    host.template_removal_fails = true;
+    assert_eq!(
+        uninstall(&mut host, &world.launched_from_share()),
+        Exit::UninstallIncomplete
+    );
+    assert!(host.template_removal_saw_app);
+    assert_eq!(world.files(), before);
+    assert!(world.local_app().is_some());
+    assert!(!host.key.removed);
+    assert!(host.logged_starting("template link registration not removed:"));
 }
 
 #[test]

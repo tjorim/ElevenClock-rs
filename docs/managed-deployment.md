@@ -284,8 +284,10 @@ path. See [Diagnostics](design/diagnostics.md).
 ## Local inventory (administrator opt-in)
 
 Managed launchers can record one latest local inventory snapshot after an eligible
-app start attempt, once that launch has established that the local launcher matches
-its refresh source. This applies only to the launcher shipped in the managed release ZIP. The
+app start attempt. A share or staging launch requires evidence that the local launcher
+matches its refresh source. A launch from the fixed local launcher path can record
+even when refresh was skipped or failed, while central configuration remains readable.
+This applies only to the launcher shipped in the managed release ZIP. The
 installer and portable ZIP do not include that launcher, and the app itself never
 collects inventory, even when the central configuration enables it.
 
@@ -311,8 +313,9 @@ be valid UTF-8 JSON no larger than 4 KiB with an explicit boolean setting.
 The helper resolves the source using the same priority as app deployment: `--source`,
 the folder a central/staging launcher was started from, then the source remembered by
 the local launcher. It reads the configuration directly from that source only on
-launches eligible for the inventory helper. Skipped app refreshes (running/check
-failed) do not establish launcher freshness and therefore do not start the helper. Configuration in the
+launches eligible for the inventory helper. Local launcher starts can invoke their
+own helper implementation after skipped or failed refreshes; share/staging starts
+still require a verified local launcher. Configuration in the
 local executable folder (including aliases) is rejected. The launcher does not copy
 or cache the configuration or an enabled flag on clients.
 

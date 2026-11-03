@@ -1,4 +1,4 @@
-//! Explicit administrator action: read existing reports and atomically write a
+//! Explicit manager action: read existing reports and atomically write a
 //! JSON summary outside the report tree. No app start, collection or registry I/O.
 use crate::{
     fsops,
@@ -6,13 +6,23 @@ use crate::{
 };
 use serde_json::{Value, json};
 use std::{
-    fs::{self, File},
     io::{self, Read},
     path::Path,
 };
 
 pub fn write(directory: &Path, output: &Path, now: u64, recent_seconds: u64) -> io::Result<()> {
+    write_before_read(directory, output, now, recent_seconds, || {})
+}
+
+fn write_before_read(
+    directory: &Path,
+    output: &Path,
+    now: u64,
+    recent_seconds: u64,
+    before_read: impl FnOnce(),
+) -> io::Result<()> {
     let root = directory.canonicalize()?;
+    let root_directory = clock_windows::report_files::Directory::open(&root)?;
     let output = std::path::absolute(output)?;
     let parent = output
         .parent()
@@ -25,27 +35,35 @@ pub fn write(directory: &Path, output: &Path, now: u64, recent_seconds: u64) -> 
     let mut visited = 0;
     // Exactly the root and its immediate per-SID directories. Never follow links
     // or recursively walk arbitrary client-provided directory trees.
-    for entry in fs::read_dir(&root)? {
+    for entry in root_directory.entries()? {
         let entry = entry?;
         count_entry(&mut visited)?;
         let kind = entry.file_type()?;
         if kind.is_dir() {
-            for child in fs::read_dir(entry.path())? {
+            let directory = root_directory.directory(&entry.file_name())?;
+            for child in directory.entries()? {
                 let child = child?;
                 count_entry(&mut visited)?;
                 if child.file_type()?.is_file()
                     && child.path().extension().is_some_and(|ext| ext == "json")
                 {
-                    paths.push(child.path());
+                    paths.push((Some(entry.file_name()), child.file_name()));
                 }
             }
         } else if kind.is_file() && entry.path().extension().is_some_and(|ext| ext == "json") {
-            paths.push(entry.path());
+            paths.push((None, entry.file_name()));
         }
     }
-    let records = paths.iter().map(|path| {
+    before_read();
+    let records = paths.iter().map(|(directory, name)| {
+        let child = directory
+            .as_ref()
+            .map(|name| root_directory.directory(name))
+            .transpose()?;
+        let directory = child.as_ref().unwrap_or(&root_directory);
         let mut bytes = Vec::new();
-        File::open(path)?
+        directory
+            .file(name)?
             .take(MAX_SNAPSHOT_BYTES as u64 + 1)
             .read_to_end(&mut bytes)?;
         Ok(bytes)
@@ -128,6 +146,7 @@ fn count_entry(visited: &mut usize) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn command_deduplicates_reports_counts_exclusions_and_preserves_sources() {
@@ -176,5 +195,86 @@ mod tests {
         let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
         assert_eq!(value["counts"]["installations"], 0);
         assert_eq!(value["excluded_reports"], 2);
+    }
+
+    fn directory_link(target: &Path, link: &Path) {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).unwrap();
+        #[cfg(windows)]
+        assert!(
+            std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link)
+                .arg(target)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+    }
+
+    #[test]
+    fn swapped_report_and_sid_links_abort_without_replacing_output() {
+        for swap_directory in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().join("reports");
+            let sid = root.join("S-1-5-21-123");
+            let outside = temp.path().join("outside");
+            fs::create_dir_all(&sid).unwrap();
+            fs::create_dir(&outside).unwrap();
+            let record = include_bytes!("../tests/fixtures/inventory-v1-support.json");
+            fs::write(sid.join("one.json"), record).unwrap();
+            fs::write(outside.join("one.json"), record).unwrap();
+            let output = temp.path().join("summary.json");
+            fs::write(&output, b"previous summary").unwrap();
+            let mut blocked_swap = false;
+            let result = write_before_read(&root, &output, 1_800_000_000, 31_536_000, || {
+                if swap_directory {
+                    match fs::rename(&sid, root.join("old-sid")) {
+                        Ok(()) => directory_link(&outside, &sid),
+                        Err(_) if cfg!(windows) => blocked_swap = true,
+                        Err(error) => panic!("unexpected rename error: {error}"),
+                    }
+                } else {
+                    fs::remove_file(sid.join("one.json")).unwrap();
+                    // A junction is also a nonregular JSON leaf and requires no
+                    // Windows developer-mode/symlink privilege in CI.
+                    directory_link(&outside, &sid.join("one.json"));
+                }
+            });
+            if blocked_swap {
+                // The held Windows root guard can prevent the swap itself.
+                result.unwrap();
+                let value: Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+                assert_eq!(value["counts"]["installations"], 1);
+            } else {
+                assert!(result.is_err());
+                assert_eq!(fs::read(output).unwrap(), b"previous summary");
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_report_replacement_between_enumeration_and_read_is_supported() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("reports");
+        let sid = root.join("S-1-5-21-123");
+        fs::create_dir_all(&sid).unwrap();
+        let report = sid.join("one.json");
+        fs::write(&report, b"old report").unwrap();
+        let staged = sid.join("one.pending");
+        fs::write(
+            &staged,
+            include_bytes!("../tests/fixtures/inventory-v1-support.json"),
+        )
+        .unwrap();
+        let output = temp.path().join("summary.json");
+        write_before_read(&root, &output, 1_800_000_000, 31_536_000, || {
+            fs::remove_file(&report).unwrap();
+            fs::rename(staged, report).unwrap();
+        })
+        .unwrap();
+        let value: Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+        assert_eq!(value["counts"]["installations"], 1);
     }
 }

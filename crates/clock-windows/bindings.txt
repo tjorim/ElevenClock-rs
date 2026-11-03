@@ -83,6 +83,12 @@ Windows.Win32.EnableWindow
 Windows.Win32.EnumChildWindows
 Windows.Win32.EnumWindows
 Windows.Win32.FILETIME
+Windows.Win32.FILE_ATTRIBUTE_REPARSE_POINT
+Windows.Win32.FILE_FLAG_BACKUP_SEMANTICS
+Windows.Win32.FILE_FLAG_OPEN_REPARSE_POINT
+Windows.Win32.FILE_SHARE_DELETE
+Windows.Win32.FILE_SHARE_READ
+Windows.Win32.FILE_SHARE_WRITE
 Windows.Win32.FileTimeToSystemTime
 Windows.Win32.FindWindowExW
 Windows.Win32.FindWindowW

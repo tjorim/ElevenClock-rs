@@ -17,10 +17,14 @@ pub fn command(exe: &Path) -> io::Result<String> {
 mod native {
     use super::*;
     use crate::bindings::*;
-    use windows_core::{HSTRING, PCWSTR, w};
+    use windows_core::{HSTRING, PCWSTR};
     const ROOT: &str = r"Software\Classes\elevenclock";
+    const DESCRIPTION: &str = "URL:ElevenClock-rs template";
     fn read(root: &str) -> io::Result<Option<String>> {
-        let path = HSTRING::from(format!(r"{root}\shell\open\command"));
+        read_value(&format!(r"{root}\shell\open\command"), "")
+    }
+    fn read_value(root: &str, name: &str) -> io::Result<Option<String>> {
+        let path = HSTRING::from(root);
         let mut data = vec![0u16; 4096];
         let mut bytes = (data.len() * 2) as u32;
         let mut kind = 0;
@@ -29,7 +33,7 @@ mod native {
             RegGetValueW(
                 HKEY_CURRENT_USER,
                 &path,
-                w!(""),
+                &HSTRING::from(name),
                 RRF_RT_ANY as u32,
                 Some(&mut kind),
                 Some(data.as_mut_ptr().cast()),
@@ -89,13 +93,16 @@ mod native {
     fn set(root: &str, exe: &Path, enabled: bool) -> io::Result<()> {
         let expected = command(exe)?;
         let existing = read(root)?;
-        if existing.as_ref().is_some_and(|value| value != &expected) {
+        if existing.as_ref().is_some_and(|value| value != &expected)
+            || read_value(root, "")?.is_some_and(|value| value != DESCRIPTION)
+            || read_value(root, "URL Protocol")?.is_some_and(|value| !value.is_empty())
+        {
             return Err(io::Error::other(
                 "Another copy or program owns template links. Its registration was preserved.",
             ));
         }
         if enabled {
-            write(root, "", "URL:ElevenClock-rs template")?;
+            write(root, "", DESCRIPTION)?;
             write(root, "URL Protocol", "")?;
             write(&format!(r"{root}\shell\open\command"), "", &expected)
         } else if existing.is_some() {
@@ -156,6 +163,25 @@ mod native {
             assert_eq!(read(&root).unwrap(), Some(command(exe).unwrap()));
             assert!(remove_owned(&root, exe).unwrap());
             assert_eq!(read(&root).unwrap(), None);
+            for (name, value) in [("", "Another program"), ("URL Protocol", "foreign")] {
+                write(&root, name, value).unwrap();
+                assert!(set(&root, exe, true).is_err());
+                assert_eq!(read_value(&root, name).unwrap().as_deref(), Some(value));
+                assert_eq!(read(&root).unwrap(), None);
+                write(
+                    &format!(r"{root}\shell\open\command"),
+                    "",
+                    &command(exe).unwrap(),
+                )
+                .unwrap();
+                assert!(remove_owned(&root, exe).is_err());
+                assert_eq!(read_value(&root, name).unwrap().as_deref(), Some(value));
+                // SAFETY: this test owns the isolated scratch key.
+                assert_eq!(
+                    unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, &HSTRING::from(&root)) }.0,
+                    0
+                );
+            }
         }
     }
 }

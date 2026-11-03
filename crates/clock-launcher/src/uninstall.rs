@@ -25,6 +25,15 @@ pub fn uninstall(host: &mut dyn Host, ctx: &Context) -> Exit {
         host.log("uninstall refused: running");
         return Exit::UninstallIncomplete;
     }
+    // Keep the installed files usable if the owned URL registration cannot be
+    // removed. Otherwise it would point at an executable we just deleted.
+    if let Err(error) = host.remove_template_handler(&layout.app()) {
+        host.log(&format!(
+            "template link registration not removed: {}",
+            describe(&error)
+        ));
+        return Exit::UninstallIncomplete;
+    }
     let mut complete = true;
     let files = [
         layout.app(),
@@ -60,13 +69,6 @@ pub fn uninstall(host: &mut dyn Host, ctx: &Context) -> Exit {
             host.log(&format!("startup entry not removed: {message}"));
             complete = false;
         }
-    }
-    if let Err(error) = host.remove_template_handler(&layout.app()) {
-        host.log(&format!(
-            "template link registration not removed: {}",
-            describe(&error)
-        ));
-        complete = false;
     }
     if complete {
         host.log("uninstalled");

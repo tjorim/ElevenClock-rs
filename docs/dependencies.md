@@ -3,6 +3,12 @@
 No command parser, async runtime or web UI runtime is used. What each dependency is
 for is listed [below](#what-each-dependency-is-for).
 
+On Unix development hosts, `clock-windows` directly uses the already locked
+`libc` crate for descriptor-relative, no-follow inventory report opens. This
+prevents report and parent-directory link swaps during portable summary tests.
+It uses the maintained rust-lang bindings with default features and their
+MIT/Apache-2.0 license choice; it adds no dependency to shipped Windows binaries.
+
 Commit Cargo.lock and use --locked for all checks/builds. New dependencies must
 explain product need, maintenance, feature selection and license impact.
 Update in a dedicated PR against the default branch. Run the Linux and Windows

@@ -20,6 +20,7 @@ mod inventory_version;
 pub mod logging;
 pub mod managed;
 pub mod preferences_store;
+pub mod report_files;
 pub mod settings_model;
 pub mod startup;
 pub mod support;

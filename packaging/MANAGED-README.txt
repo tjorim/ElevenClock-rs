@@ -9,10 +9,13 @@ Getting started
   Use the shortcut or launcher supplied by your organization. If you were directed
   to this folder, open elevenclock-rs-launcher.exe. Leave elevenclock-rs.data alone;
   the launcher copies the app to your account and runs it locally. After the first
-  successful launch, you can start offline using the local launcher:
+  successful launch, you can start offline using the local launcher if it exists:
     %LOCALAPPDATA%\Programs\ElevenClock-rs\elevenclock-rs-launcher.exe
-  Sign-in startup also uses that local launcher. A shortcut to an unavailable
-  network share cannot start until the share is accessible again.
+  If that file is missing, exit the clock and run the central launcher again while
+  connected. It will try to copy the launcher locally; contact your deployment
+  manager if the local file is still missing.
+  Once available, that local launcher is also used for sign-in startup. A shortcut
+  to an unavailable network share cannot start until the share is accessible again.
   Do not run legacy ElevenClock at the same time.
 
   Settings opens when you launch interactively. Choose your clock format and

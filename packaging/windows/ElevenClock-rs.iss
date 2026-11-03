@@ -75,14 +75,21 @@ begin
   Result := '"' + ExpandConstant('{app}\elevenclock-rs.exe') + '" --template "%1"';
 end;
 
-function CanRegisterTemplateLinks(): Boolean;
+function TemplateValueAvailable(Key, Name, Expected: String): Boolean;
 var
-  Command: String;
+  Value: String;
 begin
-  Result := not RegValueExists(HKCU, TemplateKey + '\shell\open\command', '');
+  Result := not RegValueExists(HKCU, Key, Name);
   if not Result then
-    if RegQueryStringValue(HKCU, TemplateKey + '\shell\open\command', '', Command) then
-      Result := Command = TemplateCommand();
+    if RegQueryStringValue(HKCU, Key, Name, Value) then
+      Result := Value = Expected;
+end;
+
+function CanRegisterTemplateLinks(): Boolean;
+begin
+  Result := TemplateValueAvailable(TemplateKey, '', 'URL:ElevenClock-rs template') and
+    TemplateValueAvailable(TemplateKey, 'URL Protocol', '') and
+    TemplateValueAvailable(TemplateKey + '\shell\open\command', '', TemplateCommand());
 end;
 
 function ManagedCopyMessage(): String;
@@ -141,7 +148,7 @@ var
 begin
   if CurUninstallStep = usUninstall then begin
     if RegQueryStringValue(HKCU, TemplateKey + '\shell\open\command', '', Command) then
-      if Command = TemplateCommand() then
+      if (Command = TemplateCommand()) and CanRegisterTemplateLinks() then
         RegDeleteKeyIncludingSubkeys(HKCU, TemplateKey);
     OwnedCommand := '"' + ExpandConstant('{app}\elevenclock-rs.exe') + '" --startup';
     if RegQueryStringValue(HKCU, RunKey, StartupValue, Command) then

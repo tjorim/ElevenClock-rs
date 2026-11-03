@@ -1848,6 +1848,12 @@ pub struct FILETIME {
     pub dwLowDateTime: u32,
     pub dwHighDateTime: u32,
 }
+pub const FILE_ATTRIBUTE_REPARSE_POINT: i32 = 1024;
+pub const FILE_FLAG_BACKUP_SEMANTICS: i32 = 33554432;
+pub const FILE_FLAG_OPEN_REPARSE_POINT: i32 = 2097152;
+pub const FILE_SHARE_DELETE: i32 = 4;
+pub const FILE_SHARE_READ: i32 = 1;
+pub const FILE_SHARE_WRITE: i32 = 2;
 pub const GMEM_MOVEABLE: i32 = 2;
 pub const GR_GDIOBJECTS: i32 = 0;
 pub const GR_USEROBJECTS: i32 = 1;

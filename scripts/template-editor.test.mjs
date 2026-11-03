@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateTemplate, templateLinks, parseTemplateLink, splitFormat } from '../site/src/scripts/template.js';
+import { validateTemplate, templateLinks, parseTemplateLink, splitFormat, createTemplateLoader } from '../site/src/scripts/template.js';
 test('template codec matches the app contract and retains literal Unicode text', () => {
   const value = { format: '%H:%M\né & 日 %%', font: 12, theme: 'dark' };
   const links = templateLinks(value);
@@ -24,4 +24,25 @@ test('malformed UTF-8 rejects repeated and mixed encodings without recursive dec
   }
   assert.deepEqual(parseTemplateLink(link('%25%25FF%20%2B%20%26%20%3D')),
     { format: '%%FF + & =', font: 9, theme: 'dark' });
+});
+test('incoming links preserve dirty edits unless confirmed and reset the baseline after loading', () => {
+  let draft = { format: '%H', font: 9, theme: 'system' };
+  let allow = false, prompts = 0, writes = 0;
+  const load = createTemplateLoader(() => draft, template => { draft = template; writes++; },
+    () => { prompts++; return allow; });
+  const incoming = templateLinks({ format: '%M', font: 12, theme: 'dark' }).web;
+  draft.theme = 'light';
+  assert.equal(load(incoming), false);
+  assert.deepEqual(draft, { format: '%H', font: 9, theme: 'light' });
+  assert.equal(writes, 0);
+  allow = true;
+  assert.equal(load(incoming), true);
+  assert.deepEqual(draft, { format: '%M', font: 12, theme: 'dark' });
+  assert.equal(prompts, 2);
+  assert.equal(load(incoming), true);
+  assert.equal(prompts, 2);
+  draft.format = 'my unsaved text';
+  assert.throws(() => load(incoming + '&startup=true'));
+  assert.equal(draft.format, 'my unsaved text');
+  assert.equal(writes, 2);
 });

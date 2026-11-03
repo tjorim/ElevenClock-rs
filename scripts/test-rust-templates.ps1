@@ -21,7 +21,6 @@ $library = Join-Path $data 'templates.json'
 $backups = @{}
 foreach ($path in @($preferences, $library)) {
     $backups[$path] = if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllBytes($path) } else { $null }
-    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path }
 }
 $clipboard = Get-Clipboard -Raw
 $protocol = 'HKCU:\Software\Classes\elevenclock'
@@ -44,6 +43,10 @@ function Launch-Link([string]$link) {
     Start-Sleep -Milliseconds 400
 }
 try {
+    foreach ($path in @($preferences, $library)) {
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path }
+    }
+    [IO.File]::WriteAllText($library, '{"version":999,"presets":[]}')
     $first = 'elevenclock://template?v=1&format=%25H%3A%25M&font=9&theme=dark'
     # The window under test must be visible; SW_HIDE would hide its first ShowWindow.
     $app = Start-Process -FilePath $exe -ArgumentList '--template', ('"' + $first + '"') -PassThru
@@ -52,6 +55,10 @@ try {
     while ($window -eq [IntPtr]::Zero -and [DateTime]::UtcNow -lt $deadline)
     Assert ($window -ne [IntPtr]::Zero) 'template first launch opens Settings'
     foreach ($id in 1601..1610) { Assert ((Control 115 $id) -ne [IntPtr]::Zero) "Templates control $id exists" }
+    Assert (![SettingsNative]::IsWindowEnabled((Control 115 1603))) 'unreadable template library disables Save'
+    [IO.File]::WriteAllText($library, '{"version":1,"presets":[]}')
+    Launch-Link $first
+    Assert ([SettingsNative]::IsWindowEnabled((Control 115 1603))) 'reopening Templates retries the repaired library without an app restart'
     Assert ((Text 115 1607) -like 'https://tjorim.github.io/ElevenClock-rs/#template=1*theme=dark') 'first-launch link is offered for review'
     $tab = Control 0 1100
     foreach ($id in @(1602,1604,1605,1601,1603,1606,1609,1610,1607,1608)) {
@@ -66,6 +73,8 @@ try {
     Click 0 1105
     Assert ((Text 0 1102) -eq 'Settings applied.') 'template uses the normal Apply path'
     $saved = [IO.File]::ReadAllText($preferences)
+    [SettingsNative]::SetText((Control 115 1601), 'Aardvark smoke')
+    Click 115 1603
     [SettingsNative]::SetText((Control 111 1202), '%d')
     Assert ((Text 111 1202) -eq '%d') 'native edit accepts the unsaved draft'
     # WM_SETTEXT does not emit EN_CHANGE for a multiline edit. Queue the same
@@ -83,14 +92,16 @@ try {
     [SettingsNative]::SetText((Control 115 1601), 'Template smoke')
     Click 115 1603
     $stored = Get-Content -LiteralPath $library -Raw | ConvertFrom-Json
-    Assert ($stored.presets.Count -eq 1 -and $stored.presets[0].name -eq 'Template smoke') 'named preset is saved separately'
+    Assert ($stored.presets.Count -eq 2 -and $stored.presets[1].name -eq 'Template smoke') 'named presets are saved separately in name order'
+    Assert ([SettingsNative]::SendMessageW((Control 115 1602), 0x0147, [IntPtr]::Zero, [IntPtr]::Zero).ToInt32() -eq 1) 'Save selects the new preset rather than the first entry'
     Click 115 1606
-    Assert ((Get-Clipboard -Raw).Trim() -eq $stored.presets[0].link) 'sharing copies the saved presentation link'
+    Assert ((Get-Clipboard -Raw).Trim() -eq $stored.presets[1].link) 'sharing copies the saved presentation link'
     Click 0 1104
     Click 115 1604
     Assert ((Text 111 1202) -eq '%g%V.%u' -and (Text 112 1303) -eq '11') 'saved local preset loads into the draft'
     Click 115 1605
-    Assert (@((Get-Content -LiteralPath $library -Raw | ConvertFrom-Json).presets).Count -eq 0) 'saved preset can be deleted'
+    $remaining = @((Get-Content -LiteralPath $library -Raw | ConvertFrom-Json).presets)
+    Assert ($remaining.Count -eq 1 -and $remaining[0].name -eq 'Aardvark smoke') 'Delete removes the selected preset and preserves its neighbor'
     if (!$protocolWasPresent) {
         Click 115 1610
         Assert ((Get-Item -LiteralPath ($protocol + '\shell\open\command')).GetValue('') -eq $ownedCommand) 'template protocol is quoted and registered per-user'
@@ -119,19 +130,37 @@ try {
     Click 0 2
     Assert ([IO.File]::ReadAllText($preferences) -eq $saved) 'Cancel discards the imported draft'
 } finally {
-    if (!$protocolWasPresent -and (Test-Path -LiteralPath ($protocol + '\shell\open\command'))) {
-        if ((Get-Item -LiteralPath ($protocol + '\shell\open\command')).GetValue('') -eq $ownedCommand) { Remove-Item -LiteralPath $protocol -Recurse }
+    $cleanupFailures = @()
+    foreach ($cleanup in @(
+        {
+            if (!$protocolWasPresent -and (Test-Path -LiteralPath ($protocol + '\shell\open\command'))) {
+                if ((Get-Item -LiteralPath ($protocol + '\shell\open\command')).GetValue('') -eq $ownedCommand) { Remove-Item -LiteralPath $protocol -Recurse }
+            }
+        },
+        {
+            Get-Process elevenclock-rs -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | ForEach-Object {
+                Stop-Process -Id $_.Id -Force
+                $_.WaitForExit()
+            }
+        },
+        {
+            $restoreFailures = @()
+            foreach ($path in @($preferences, $library)) {
+                try {
+                    if ($null -eq $backups[$path]) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path } }
+                    elseif (!(Test-Path -LiteralPath $path) -or [Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -ne [Convert]::ToBase64String([byte[]]$backups[$path])) { [IO.File]::WriteAllBytes($path, [byte[]]$backups[$path]) }
+                } catch { $restoreFailures += $_ }
+            }
+            if ($restoreFailures.Count) { throw $restoreFailures[0] }
+        },
+        { if ([string]::IsNullOrEmpty($clipboard)) { [SettingsNative]::ClearClipboard() } else { Set-Clipboard -Value $clipboard } },
+        {
+            # The disposable executable is removed by exact file path, without recursion.
+            Remove-Item -LiteralPath $exe -ErrorAction SilentlyContinue
+            Write-Output ('Evidence: ' + $OutputDirectory)
+        }
+    )) {
+        try { & $cleanup } catch { $cleanupFailures += $_ }
     }
-    Get-Process elevenclock-rs -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | ForEach-Object {
-        Stop-Process -Id $_.Id -Force
-        $_.WaitForExit()
-    }
-    foreach ($path in @($preferences, $library)) {
-        if ($null -eq $backups[$path]) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path } }
-        else { [IO.File]::WriteAllBytes($path, [byte[]]$backups[$path]) }
-    }
-    if ($null -eq $clipboard) { Set-Clipboard -Value '' } else { Set-Clipboard -Value $clipboard }
-    # The disposable executable is removed by exact file path, without recursion.
-    Remove-Item -LiteralPath $exe -ErrorAction SilentlyContinue
-    Write-Output ('Evidence: ' + $OutputDirectory)
+    if ($cleanupFailures.Count) { throw $cleanupFailures[0] }
 }
