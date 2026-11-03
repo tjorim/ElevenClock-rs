@@ -15,6 +15,8 @@ pub mod overlay;
 
 #[cfg(windows)]
 pub mod inventory_facts;
+#[cfg(any(windows, test))]
+mod inventory_version;
 pub mod logging;
 pub mod managed;
 pub mod preferences_store;

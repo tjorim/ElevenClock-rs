@@ -91,8 +91,9 @@ pub fn file_version(path: &Path) -> Option<String> {
     if wide[..wide.len() - 1].contains(&0) {
         return None;
     }
-    // SAFETY: NUL-terminated path, bounded aligned version block and checked query
-    // result. The returned pointer is read only while its backing block is alive.
+    // SAFETY: NUL-terminated path, live aligned output block sized for the API,
+    // and live query output slots. The returned pointer is never dereferenced:
+    // only a checked offset is used to decode bytes from our owned block.
     unsafe {
         let size = GetFileVersionInfoSizeW(PCWSTR(wide.as_ptr()), None);
         if size == 0 || size > 1024 * 1024 {
@@ -107,20 +108,15 @@ pub fn file_version(path: &Path) -> Option<String> {
         VerQueryValueW(data.as_ptr().cast(), w!("\\"), &mut ptr, &mut len)
             .ok()
             .ok()?;
-        if ptr.is_null() || len < std::mem::size_of::<VS_FIXEDFILEINFO>() as u32 {
+        if ptr.is_null() {
             return None;
         }
-        let info = ptr.cast::<VS_FIXEDFILEINFO>().read_unaligned();
-        if info.dwSignature != 0xfeef04bd {
-            return None;
-        }
-        Some(format!(
-            "{}.{}.{}.{}",
-            info.dwFileVersionMS >> 16,
-            info.dwFileVersionMS & 0xffff,
-            info.dwFileVersionLS >> 16,
-            info.dwFileVersionLS & 0xffff
-        ))
+        const _: () = assert!(
+            std::mem::size_of::<VS_FIXEDFILEINFO>()
+                == crate::inventory_version::FIXED_FILE_INFO_BYTES
+        );
+        let offset = ptr.addr().checked_sub(data.as_ptr().addr())?;
+        crate::inventory_version::decode_fixed_version(&data, size as usize, offset, len as usize)
     }
 }
 
