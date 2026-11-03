@@ -226,8 +226,14 @@ pub fn record_local(
     // A failed/rolled-back clock for the same identity must not overwrite a later
     // observation. A different known SID must rotate even if its clock is earlier.
     // No time means unavailable; retain the old identity's snapshot on lookup failure.
-    if same_identity.is_some_and(|old| old.observed_utc > snapshot.observed_utc) {
-        return Ok(None);
+    if let Some(old) = same_identity {
+        if snapshot.observed_utc.is_none() && old.observed_utc.is_some() {
+            // Surface the lookup failure instead of silently keeping a stale report.
+            return Err(io::Error::other("observation time unavailable"));
+        }
+        if old.observed_utc > snapshot.observed_utc {
+            return Ok(None);
+        }
     }
     write_latest(&path, &snapshot, || Ok(()))?;
     Ok(Some(snapshot))

@@ -6,7 +6,9 @@ pub fn command(exe: &Path) -> io::Result<String> {
         .to_str()
         .ok_or_else(|| io::Error::other("executable unavailable"))?;
     if !exe.is_absolute()
-        || text.chars().any(|c| c == '"' || c.is_control())
+        || text
+            .chars()
+            .any(|c| matches!(c, '"' | '%') || c.is_control())
         || !text.to_ascii_lowercase().ends_with(".exe")
     {
         return Err(io::Error::other("executable unavailable"));

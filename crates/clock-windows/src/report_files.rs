@@ -60,7 +60,13 @@ impl Directory {
             fs::read_dir(Path::new(descriptors).join(self.file.as_raw_fd().to_string()))
         }
         #[cfg(windows)]
-        fs::read_dir(&self.path)
+        {
+            // Windows has no descriptor-relative enumeration in std. This relies on `open`
+            // sharing directories read-only (no FILE_SHARE_DELETE/WRITE): while this handle
+            // is held the pinned directory cannot be renamed, deleted or replaced by a
+            // junction, so the path still names the same directory. Keep that share mode.
+            fs::read_dir(&self.path)
+        }
     }
 }
 

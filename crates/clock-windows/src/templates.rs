@@ -13,7 +13,27 @@ use std::{
 pub const MAX_PRESETS: usize = 50;
 const MAX_BYTES: usize = 256 * 1024;
 static STAGING_ID: AtomicU64 = AtomicU64::new(0);
-thread_local! { static INCOMING: RefCell<Option<ClockTemplate>> = const { RefCell::new(None) }; }
+thread_local! {
+    static INCOMING: RefCell<Option<ClockTemplate>> = const { RefCell::new(None) };
+    static LAST_ACCEPTED: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
+}
+const MIN_DELIVERY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+/// Accepts a template delivered by another process only when none is already waiting
+/// and the previous delivery was not just now, so a flood cannot replace a waiting
+/// template or repeatedly pull focus.
+pub fn try_receive(template: ClockTemplate) -> bool {
+    let now = std::time::Instant::now();
+    let recent = LAST_ACCEPTED.with(|last| {
+        last.get()
+            .is_some_and(|at| now.duration_since(at) < MIN_DELIVERY_INTERVAL)
+    });
+    if recent || INCOMING.with(|slot| slot.borrow().is_some()) {
+        return false;
+    }
+    LAST_ACCEPTED.with(|last| last.set(Some(now)));
+    receive(template);
+    true
+}
 pub fn receive(template: ClockTemplate) {
     INCOMING.with(|slot| *slot.borrow_mut() = Some(template));
 }
@@ -94,6 +114,8 @@ impl Library {
                 "Enter a preset name of 1 to 48 characters.",
             ));
         }
+        // Re-read the file so another session's changes are not overwritten.
+        self.entries = Self::at(&self.path)?.entries;
         let mut entries = self.entries.clone();
         if let Some(entry) = entries
             .iter_mut()
@@ -115,11 +137,14 @@ impl Library {
         entries.sort_by_key(|entry| entry.name.to_lowercase());
         self.commit(entries)
     }
-    pub fn remove(&mut self, index: usize) -> io::Result<()> {
+    /// Removes the preset with this name from the current on-disk library.
+    pub fn remove(&mut self, name: &str) -> io::Result<()> {
+        self.entries = Self::at(&self.path)?.entries;
         let mut entries = self.entries.clone();
-        if index >= entries.len() {
-            return Err(invalid());
-        }
+        let index = entries
+            .iter()
+            .position(|entry| entry.name == name)
+            .ok_or_else(|| io::Error::other("That preset no longer exists."))?;
         entries.remove(index);
         self.commit(entries)
     }
@@ -209,7 +234,15 @@ mod tests {
         assert_eq!(library.entries().len(), 1);
         let mut reopened = Library::at(&path).unwrap();
         assert_eq!(ClockTemplate::from_link(&reopened.entries()[0].link), Ok(b));
-        reopened.remove(0).unwrap();
+        // A second session's save is kept by a stale handle's later write.
+        let mut stale = Library::at(&path).unwrap();
+        reopened.save("Home", &a).unwrap();
+        stale.save("Other", &a).unwrap();
+        assert_eq!(Library::at(&path).unwrap().entries().len(), 3);
+        assert!(stale.remove("missing").is_err());
+        reopened.remove("Home").unwrap();
+        reopened.remove("Other").unwrap();
+        reopened.remove("work").unwrap();
         assert!(Library::at(&path).unwrap().entries().is_empty());
         assert!(!dir.path().join("preferences.dat").exists());
     }

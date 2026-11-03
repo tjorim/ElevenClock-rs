@@ -218,6 +218,7 @@ dependencies = [
  "chrono",
  "criterion",
  "proptest",
+ "serde_json",
 ]
 
 [[package]]

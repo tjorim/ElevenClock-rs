@@ -46,3 +46,12 @@ test('incoming links preserve dirty edits unless confirmed and reset the baselin
   assert.equal(draft.format, 'my unsaved text');
   assert.equal(writes, 2);
 });
+test('website and app share one template contract (crates/clock-core/tests/fixtures/template-vectors.json)', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const vectors = JSON.parse(await readFile(new URL('../crates/clock-core/tests/fixtures/template-vectors.json', import.meta.url), 'utf8'));
+  for (const { link, format, font, theme } of vectors.accept) {
+    assert.deepEqual(parseTemplateLink(link), { format, font, theme });
+    assert.equal(templateLinks({ format, font, theme }).app, link);
+  }
+  for (const link of vectors.reject) assert.throws(() => parseTemplateLink(link));
+});

@@ -545,7 +545,9 @@ fn guard(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
                                 clock_core::template::ClockTemplate::from_link(link).ok()
                             })
                             .is_some_and(|template| {
-                                crate::templates::receive(template);
+                                if !crate::templates::try_receive(template) {
+                                    return false;
+                                }
                                 SHOW_SETTINGS.set(true);
                                 // A synchronous sent message does not itself make
                                 // GetMessage return. Wake the ordinary pump even

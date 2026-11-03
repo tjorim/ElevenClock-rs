@@ -15,7 +15,7 @@ use clock_windows::{
 use std::{
     io::{self, Read, Write},
     process::{Command, Stdio},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -99,7 +99,8 @@ fn supervise(
     let job = match HelperJob::attach(&child) {
         Ok(job) => job,
         Err(_) => {
-            terminate(&mut child);
+            let _ = child.kill();
+            let _ = child.wait();
             return Err(io::Error::other("inventory job unavailable"));
         }
     };
@@ -110,33 +111,22 @@ fn supervise(
         .take()
         .ok_or_else(|| io::Error::other("inventory pipe unavailable"))
         .and_then(|mut stdin| stdin.write_all(payload));
-    let start = Instant::now();
+    // A waiter thread blocks in `wait`, so the launcher wakes the moment the helper exits
+    // instead of polling. On deadline, closing the job kills the helper and unblocks the thread.
+    let (done, finished) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = done.send(child.wait());
+    });
     if sent.is_ok() {
-        while start.elapsed() < deadline {
-            if let Ok(Some(status)) = child.try_wait() {
-                return if status.success() {
-                    Ok(())
-                } else {
-                    Err(io::Error::other("inventory failed"))
-                };
-            }
-            std::thread::sleep(Duration::from_millis(10));
+        match finished.recv_timeout(deadline) {
+            Ok(Ok(status)) if status.success() => return Ok(()),
+            Ok(_) => return Err(io::Error::other("inventory failed")),
+            Err(_) => {}
         }
     }
     drop(job);
-    terminate(&mut child);
+    let _ = finished.recv_timeout(TEARDOWN);
     Err(io::Error::other("inventory deadline"))
-}
-
-fn terminate(child: &mut std::process::Child) {
-    let _ = child.kill();
-    let teardown = Instant::now();
-    while teardown.elapsed() < TEARDOWN {
-        if matches!(child.try_wait(), Ok(Some(_))) {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 /// Private helper role: it never launches the app, touches startup or shows UI.
@@ -304,7 +294,7 @@ mod tests {
             )
             .is_ok()
         );
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         assert!(
             supervise(
                 &powershell,

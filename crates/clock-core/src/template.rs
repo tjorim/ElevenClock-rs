@@ -219,3 +219,37 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod shared_vectors {
+    use super::*;
+    use crate::Theme;
+    /// The website (`site/src/scripts/template.js`) runs the same vectors in
+    /// `scripts/template-editor.test.mjs`, so the two implementations cannot drift.
+    const VECTORS: &str = include_str!("../tests/fixtures/template-vectors.json");
+    #[test]
+    fn rust_and_website_agree_on_the_template_contract() {
+        let vectors: serde_json::Value = serde_json::from_str(VECTORS).unwrap();
+        for case in vectors["accept"].as_array().unwrap() {
+            let template = ClockTemplate::from_link(case["link"].as_str().unwrap()).unwrap();
+            assert_eq!(template.format(), case["format"].as_str().unwrap());
+            assert_eq!(
+                u64::from(template.font_size_pt()),
+                case["font"].as_u64().unwrap()
+            );
+            let theme = match case["theme"].as_str().unwrap() {
+                "light" => Theme::Light,
+                "dark" => Theme::Dark,
+                _ => Theme::System,
+            };
+            assert_eq!(template.theme(), theme);
+            assert_eq!(template.app_link(), case["link"].as_str().unwrap());
+        }
+        for link in vectors["reject"].as_array().unwrap() {
+            assert!(
+                ClockTemplate::from_link(link.as_str().unwrap()).is_err(),
+                "{link}"
+            );
+        }
+    }
+}

@@ -696,7 +696,13 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         match id {
             ID_TEMPLATE_REVIEW | ID_TEMPLATE_LOAD => {
                 let link = if id == ID_TEMPLATE_LOAD {
-                    saved.map(|entry| entry.link).unwrap_or_default()
+                    match saved {
+                        Some(entry) => entry.link,
+                        None => {
+                            self.status = "Choose a saved local preset first.".into();
+                            return;
+                        }
+                    }
                 } else {
                     get_text(control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LINK))
                         .trim()
@@ -727,14 +733,19 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 self.refresh_templates(dialog, saved.then_some(name.as_str()));
             }
             ID_TEMPLATE_DELETE => {
-                self.status = match (self.templates.as_mut(), selected) {
-                    (Some(library), Some(index)) => match library.remove(index) {
-                        Ok(()) => {
-                            "Local preset deleted. Your current clock and draft are unchanged."
-                                .into()
+                self.status = match (self.templates.as_mut(), saved) {
+                    (Some(library), Some(entry)) => {
+                        if !confirm_delete_preset(dialog, &entry.name) {
+                            return;
                         }
-                        Err(error) => error.to_string(),
-                    },
+                        match library.remove(&entry.name) {
+                            Ok(()) => {
+                                "Local preset deleted. Your current clock and draft are unchanged."
+                                    .into()
+                            }
+                            Err(error) => error.to_string(),
+                        }
+                    }
                     _ => "Choose a saved local preset first.".into(),
                 };
                 self.refresh_templates(dialog, None);
@@ -1643,6 +1654,21 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             // SAFETY: destroys our own dialog on its owning thread.
             let _ = unsafe { DestroyWindow(dialog) };
         }
+    }
+}
+
+fn confirm_delete_preset(dialog: HWND, name: &str) -> bool {
+    let text = wide(&format!(
+        "Delete the local preset \"{name}\"? This cannot be undone."
+    ));
+    // SAFETY: modal message box owned by our dialog; `text` is NUL-terminated and outlives the call.
+    unsafe {
+        MessageBoxW(
+            Some(dialog),
+            PCWSTR(text.as_ptr()),
+            w!("ElevenClock-rs"),
+            (MB_YESNO | MB_ICONQUESTION) as u32,
+        ) == IDYES
     }
 }
 

@@ -79,6 +79,11 @@ pub fn uninstall(host: &mut dyn Host, ctx: &Context) -> Exit {
             )),
         }
     }
+    if handler_removed && !app_kept && !complete {
+        host.log(
+            "template link registration removed; enable it again in Settings if the app remains",
+        );
+    }
     match remove_startup_entry(host.run_key(), &layout.app(), &layout.launcher()) {
         Ok(true) => host.log("startup entry removed"),
         Ok(false) => host.log("startup entry left alone"),
