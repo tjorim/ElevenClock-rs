@@ -35,8 +35,10 @@ The release also has a portable ZIP: extract it to a folder you can write to and
 double-click `ElevenClock-rs\elevenclock-rs.exe`.
 
 Companies that deploy from a central location use the managed ZIP. It holds the same app
-and a launcher that keeps each user's local copy up to date; its `README.txt` is for
-administrators; the [managed deployment guide](https://tjorim.github.io/ElevenClock-rs/docs/managed-deployment/)
+and a launcher that keeps each user's local copy up to date. It includes a user
+`README.txt` and a deployment-manager `README-MANAGER.txt`; managing the deployment
+does not mean using a Windows administrator account. The
+[managed deployment guide](https://tjorim.github.io/ElevenClock-rs/docs/managed-deployment/)
 covers setup. Do not combine it with the installer on one account.
 
 ## Use
@@ -49,10 +51,18 @@ The first launch opens **Settings**. Closing Settings keeps the clock running.
 | Appearance | Primary display only or all displays; font size 6–24 pt; theme System, Light or Dark |
 | Startup | Start ElevenClock-rs when you sign in. Off until you turn it on |
 | Support | Version and status, and **Copy diagnostics** |
+| Templates | Review shared format-and-appearance links, copy your own template link, save/load/delete local presets, and enable `elevenclock://` links for your Windows account |
 
 Click **Apply** or **OK** to use your changes; **Cancel** discards them, and
 **Reset to defaults** stages the defaults for you to apply. A format that is invalid
 or does not fit the taskbar is explained beside the field and is never applied.
+
+The [website editor](https://tjorim.github.io/ElevenClock-rs/#try) lets you build a
+format with draggable pieces or keyboard controls, preview its appearance and copy
+a share link. Open a compatible link in the app, select **Review template**, then
+**Apply** when it looks right. Templates include format text, font size and theme;
+startup and organization settings stay local. See [templates and sharing](docs/design/templates.md)
+for registration, privacy and local preset details.
 
 On the taskbar:
 

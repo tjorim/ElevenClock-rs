@@ -99,6 +99,28 @@ BEGIN
     LTEXT "The theme applies to the clock on the taskbar. This window follows your Windows colors and contrast settings.", -1, 4, 118, 316, 20
 END
 
+// Page 5: presentation templates. Import stages a draft; Apply remains explicit.
+115 DIALOGEX 0, 0, 324, 208
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
+EXSTYLE WS_EX_CONTROLPARENT
+FONT 9, "Segoe UI Variable Text"
+BEGIN
+    LTEXT "Saved local &presets:", -1, 4, 4, 220, 10
+    COMBOBOX 1602, 4, 16, 220, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON "&Load", 1604, 230, 16, 42, 14, WS_TABSTOP
+    PUSHBUTTON "&Delete", 1605, 276, 16, 44, 14, WS_TABSTOP
+    LTEXT "Preset nam&e (saving an existing name replaces it):", -1, 4, 36, 316, 10
+    EDITTEXT 1601, 4, 48, 220, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON "&Save current draft", 1603, 230, 48, 90, 14, WS_TABSTOP
+    PUSHBUTTON "Copy s&hare link", 1606, 4, 72, 96, 14, WS_TABSTOP
+    PUSHBUTTON "&Website editor", 1609, 108, 72, 94, 14, WS_TABSTOP
+    PUSHBUTTON "Enable template lin&ks", 1610, 210, 72, 110, 14, WS_TABSTOP
+    LTEXT "&Template link (paste a shared link here):", -1, 4, 96, 316, 10
+    EDITTEXT 1607, 4, 108, 316, 38, ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON "Re&view template", 1608, 4, 152, 100, 14, WS_TABSTOP
+    LTEXT "Templates contain clock format, font size and theme only. Review changes on Date and time / Appearance, then Apply. Sharing includes any personal text in your format.", -1, 4, 174, 316, 30
+END
+
 
 // Page 3: Startup. The checkbox is the Windows login registration itself (never a
 // stored preference): it acts immediately and always shows what the registry holds.

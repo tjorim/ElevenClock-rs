@@ -5,7 +5,7 @@
 //! atomic file replace, and cannot disagree about them.
 use crate::{
     args::{self, Command, STARTUP, UNINSTALL},
-    launch::{Claim, Context, Exit, Host, PROBE_TIMEOUT, launch},
+    launch::{Claim, Context, Exit, Host, PROBE_TIMEOUT, observe_launch, report_after},
     uninstall::uninstall,
 };
 use clock_windows::{
@@ -39,6 +39,7 @@ pub struct NativeHost {
     installer_entry: Vec<u16>,
     run_key: RegistryRunKey,
     log: Option<RotatingLog>,
+    support_codes: Vec<crate::inventory_support::Code>,
 }
 impl NativeHost {
     pub fn new() -> Self {
@@ -56,6 +57,7 @@ impl NativeHost {
             installer_entry: wide_nul(installer_entry),
             run_key,
             log,
+            support_codes: Vec::new(),
         }
     }
 }
@@ -142,8 +144,20 @@ impl Host for NativeHost {
         }
     }
 
+    fn support_issue(&mut self, code: crate::inventory_support::Code) {
+        if !self.support_codes.contains(&code) {
+            self.support_codes.push(code);
+        }
+    }
+
     fn run_key(&mut self) -> &mut dyn RunKey {
         &mut self.run_key
+    }
+    fn remove_template_handler(&mut self, app: &Path) -> io::Result<bool> {
+        clock_windows::template_protocol::remove_if_owned(app)
+    }
+    fn restore_template_handler(&mut self, app: &Path) -> io::Result<()> {
+        clock_windows::template_protocol::set_enabled(app, true)
     }
 }
 
@@ -161,10 +175,17 @@ fn context() -> Option<Context> {
 fn run() -> Exit {
     let mut host = NativeHost::new();
     let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if arguments == [OsString::from(crate::inventory_native::HELPER_MARKER)] {
+        return if crate::inventory_native::collect().is_ok() {
+            Exit::Done
+        } else {
+            Exit::Internal
+        };
+    }
     // Login starts and the uninstall helper must never wait on a message box.
     let silent = arguments
         .iter()
-        .any(|arg| arg == STARTUP || arg == UNINSTALL);
+        .any(|arg| arg == STARTUP || arg == UNINSTALL || arg == args::INVENTORY_SUMMARY);
     let command = match args::parse(arguments) {
         Ok(command) => command,
         Err(error) => {
@@ -175,6 +196,30 @@ fn run() -> Exit {
             return Exit::Usage;
         }
     };
+    if let Command::InventorySummary {
+        directory,
+        output,
+        recent_days,
+        verify_owners,
+    } = &command
+    {
+        let result = clock_windows::inventory_facts::observed_utc()
+            .ok_or_else(|| io::Error::other("summary time unavailable"))
+            .and_then(|now| {
+                crate::inventory_summary::write_checked(
+                    directory,
+                    output,
+                    now,
+                    u64::from(*recent_days) * 86400,
+                    *verify_owners,
+                )
+            });
+        if result.is_err() {
+            host.log("inventory summary failed");
+            return Exit::Internal;
+        }
+        return Exit::Done;
+    }
     let Some(ctx) = context() else {
         host.log("folders unavailable");
         if !silent {
@@ -183,8 +228,15 @@ fn run() -> Exit {
         return Exit::Internal;
     };
     match command {
-        Command::Launch(request) => launch(&mut host, &ctx, &request),
+        Command::Launch(request) => {
+            let observation = observe_launch(&mut host, &ctx, &request);
+            // Reporting follows the app start attempt and cannot change its result.
+            report_after(observation, |observation| {
+                crate::inventory_native::report(&ctx, &request, observation, &host.support_codes)
+            })
+        }
         Command::Uninstall => uninstall(&mut host, &ctx),
+        Command::InventorySummary { .. } => unreachable!("summary handled before launch context"),
     }
 }
 
@@ -192,6 +244,17 @@ fn run() -> Exit {
 /// called back from Windows, so there is no foreign frame for a panic to cross, and
 /// one that happens anyway is logged and turned into an exit code.
 pub fn main() -> ExitCode {
+    let helper = std::env::args_os()
+        .skip(1)
+        .eq([OsString::from(crate::inventory_native::HELPER_MARKER)]);
+    if helper {
+        std::panic::set_hook(Box::new(|_| {}));
+        return ExitCode::from(
+            std::panic::catch_unwind(run)
+                .unwrap_or(Exit::Internal)
+                .code(),
+        );
+    }
     std::panic::set_hook(Box::new(|info| {
         let message = info
             .payload()

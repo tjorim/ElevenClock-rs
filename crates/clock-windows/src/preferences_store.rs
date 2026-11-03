@@ -337,6 +337,17 @@ impl LocalPreferencesStore {
         })
     }
 }
+impl LocalPreferencesStore {
+    /// Read only the committed clock format for explicitly enabled managed
+    /// inventory. Missing preferences mean the built-in default; errors propagate
+    /// so inventory does not mistake damaged/unreadable data for a chosen default.
+    /// This never saves, migrates or recovers the preference file.
+    pub fn saved_clock_format(&self) -> Result<String, StoreError> {
+        self.load()
+            .map(|stored| stored.preferences.format_source().to_owned())
+    }
+}
+
 impl PreferencesStore for LocalPreferencesStore {
     fn load(&self) -> Result<StoredPreferences, StoreError> {
         let file = match File::open(&self.path) {
@@ -942,5 +953,45 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(fs::read(&path).unwrap(), before);
         assert_eq!(session.active().draft(), Preferences::default());
+    }
+}
+
+#[cfg(test)]
+mod inventory_tests {
+    use super::*;
+    #[test]
+    fn inventory_format_reads_committed_data_without_writes_or_error_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferences.dat");
+        let mut store = LocalPreferencesStore {
+            path: path.clone(),
+            recovery_save_allowed: false,
+        };
+        assert_eq!(
+            store.saved_clock_format().unwrap(),
+            Preferences::default().format
+        );
+        assert!(!path.exists());
+        let stored = StoredPreferences {
+            preferences: Preferences {
+                format: "Work %H:%M\n%Y-%m-%d".into(),
+                ..Preferences::default()
+            }
+            .validate()
+            .unwrap(),
+            ..StoredPreferences::default()
+        };
+        store.save(&stored).unwrap();
+        let before = fs::read(&path).unwrap();
+        assert_eq!(store.saved_clock_format().unwrap(), "Work %H:%M\n%Y-%m-%d");
+        assert_eq!(fs::read(&path).unwrap(), before);
+        fs::write(&path, b"damaged").unwrap();
+        assert!(store.saved_clock_format().is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"damaged");
+        fs::write(&path, br#"{"version":999}"#).unwrap();
+        assert!(matches!(
+            store.saved_clock_format(),
+            Err(StoreError::UnsupportedVersion(999))
+        ));
     }
 }

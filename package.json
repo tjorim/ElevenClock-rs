@@ -8,7 +8,7 @@
     "dev": "node scripts/prepare-site.mjs && astro dev --root site --host 127.0.0.1",
     "build": "node scripts/prepare-site.mjs && astro build --root site",
     "preview": "astro preview --root site --host 127.0.0.1",
-    "test": "node --test scripts/site-links.test.mjs",
+    "test": "node --test scripts/*.test.mjs",
     "check:site": "python3 scripts/check-site.py"
   },
   "devDependencies": {

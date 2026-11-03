@@ -207,6 +207,22 @@ impl<S: PreferencesStore> SettingsController<S> {
     pub fn set_theme(&mut self, theme: Theme) {
         self.draft.theme = theme;
     }
+    pub fn template(
+        &self,
+    ) -> Result<clock_core::template::ClockTemplate, clock_core::template::TemplateError> {
+        clock_core::template::ClockTemplate::new(
+            &self.draft.format,
+            self.draft
+                .font()
+                .map_err(|_| clock_core::template::TemplateError)?,
+            self.draft.theme,
+        )
+    }
+    pub fn stage_template(&mut self, template: &clock_core::template::ClockTemplate) {
+        self.draft.format = template.format().into();
+        self.draft.font_size = template.font_size_pt().to_string();
+        self.draft.theme = template.theme();
+    }
     /// Stage a preset's format. Returns false for an unknown index.
     pub fn select_preset(&mut self, index: usize) -> bool {
         PRESETS.get(index).is_some_and(|preset| {
@@ -566,6 +582,24 @@ mod tests {
         assert!(!c.is_dirty());
         assert!(c.first_run());
         assert!(c.notice().is_none());
+    }
+
+    #[test]
+    fn importing_a_template_stages_only_presentation_until_apply() {
+        let (mut c, log) = fresh();
+        c.set_monitors(Monitors::All);
+        c.set_update_check_enabled(true);
+        let active = c.active().clone();
+        let template = clock_core::template::ClockTemplate::new("%H:%M", 12, Theme::Dark).unwrap();
+        c.stage_template(&template);
+        assert_eq!(c.template(), Ok(template));
+        assert_eq!(c.draft().monitors, Monitors::All);
+        assert!(c.draft().update_check_enabled);
+        assert_eq!(c.active(), &active);
+        assert!(log.0.borrow().is_empty());
+        c.discard();
+        assert_eq!(c.active(), &active);
+        assert!(!c.is_dirty());
     }
 
     #[test]

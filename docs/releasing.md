@@ -47,7 +47,7 @@ The PR/manual `rust-release.yml` workflow uploads these development artifacts:
 | --- | --- |
 | `*-setup.exe` | Normal per-user installer, Start menu shortcut, uninstaller |
 | `*-portable.zip` | One `ElevenClock-rs/` folder with the executable, `README.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `RUST-COPYRIGHT.html` (an explicit allowlist) |
-| `*-managed.zip` | The portable ZIP's `ElevenClock-rs/` folder plus `elevenclock-rs-launcher.exe` and the admin `README.txt` ([ADR 0004](adr/0004-managed-launcher.md)); the app is the same executable, stored as `elevenclock-rs.data` so nobody runs it from the share, with a `SHA256SUMS.txt` that lists it |
+| `*-managed.zip` | One `ElevenClock-rs/` folder with the user `README.txt`, deployment-manager `README-MANAGER.txt`, launcher and license notices ([ADR 0004](adr/0004-managed-launcher.md)); the app is the same executable, stored as `elevenclock-rs.data` so nobody runs it from the share, with a `SHA256SUMS.txt` that lists it |
 | `SHA256SUMS.txt` | Installer, portable ZIP, managed ZIP and raw executable (app and launcher) hashes |
 | Separate symbols artifact | Matching PDB and its own checksums, for debugging a recent build |
 | Packaging evidence (failed runs only) | Actual installer/lifecycle/Settings logs and environment limitations |
@@ -60,8 +60,9 @@ dynamic-CRT gate with no network imports (`winhttp.dll`, `wininet.dll`, `ws2_32.
 The symbols stay a workflow artifact with the default retention, so crash dumps from
 older releases cannot be symbolised. Each package gets its own
 readme from `packaging/` (`INSTALLER-README.txt` is the installer's `InfoBeforeFile`;
-`PORTABLE-README.txt` and `MANAGED-README.txt` become the ZIPs' `README.txt`). The PE import
-inspection, the dynamic CRT ban and the system-DLL allowlist run at build time
+`PORTABLE-README.txt` and `MANAGED-README.txt` become the ZIPs' user `README.txt`;
+`MANAGED-MANAGER-README.txt` additionally ships as `README-MANAGER.txt` in the managed ZIP).
+The PE import inspection, the dynamic CRT ban and the system-DLL allowlist run at build time
 (`prepare`, and again on the shipped executable in `verify`); their results are not
 published.
 

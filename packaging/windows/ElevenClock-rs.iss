@@ -39,6 +39,7 @@ CloseApplications=no
 RestartApplications=no
 SetupMutex=ElevenClock-rs.Setup
 SignedUninstaller=no
+ChangesAssociations=yes
 
 [Files]
 ; An explicit allowlist: no probes, scripts, PDBs, Python or Qt.
@@ -51,6 +52,13 @@ Source: "{#PayloadDir}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{userprograms}\ElevenClock-rs"; Filename: "{app}\elevenclock-rs.exe"; WorkingDir: "{app}"; AppUserModelID: "tjorim.ElevenClockRs"
 
+[Registry]
+; Per-user template handler; preserve a handler owned by another copy/program.
+; Removal below checks the exact command again rather than blindly deleting keys.
+Root: HKCU; Subkey: "Software\Classes\elevenclock"; ValueType: string; ValueName: ""; ValueData: "URL:ElevenClock-rs template"; Check: CanRegisterTemplateLinks
+Root: HKCU; Subkey: "Software\Classes\elevenclock"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Check: CanRegisterTemplateLinks
+Root: HKCU; Subkey: "Software\Classes\elevenclock\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\elevenclock-rs.exe"" --template ""%1"""; Check: CanRegisterTemplateLinks
+
 [Run]
 Filename: "{app}\elevenclock-rs.exe"; Description: "Open ElevenClock-rs Settings"; Flags: nowait postinstall skipifsilent unchecked
 
@@ -60,6 +68,29 @@ const
   ApprovedKey = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
   StartupValue = 'ElevenClockRust';
   ManagedLauncher = 'elevenclock-rs-launcher.exe';
+  TemplateKey = 'Software\Classes\elevenclock';
+
+function TemplateCommand(): String;
+begin
+  Result := '"' + ExpandConstant('{app}\elevenclock-rs.exe') + '" --template "%1"';
+end;
+
+function TemplateValueAvailable(Key, Name, Expected: String): Boolean;
+var
+  Value: String;
+begin
+  Result := not RegValueExists(HKCU, Key, Name);
+  if not Result then
+    if RegQueryStringValue(HKCU, Key, Name, Value) then
+      Result := Value = Expected;
+end;
+
+function CanRegisterTemplateLinks(): Boolean;
+begin
+  Result := TemplateValueAvailable(TemplateKey, '', 'URL:ElevenClock-rs template') and
+    TemplateValueAvailable(TemplateKey, 'URL Protocol', '') and
+    TemplateValueAvailable(TemplateKey + '\shell\open\command', '', TemplateCommand());
+end;
 
 function ManagedCopyMessage(): String;
 begin
@@ -116,6 +147,16 @@ var
   Command, OwnedCommand: String;
 begin
   if CurUninstallStep = usUninstall then begin
+    if RegQueryStringValue(HKCU, TemplateKey + '\shell\open\command', '', Command) then
+      if (Command = TemplateCommand()) and CanRegisterTemplateLinks() then begin
+        RegDeleteValue(HKCU, TemplateKey + '\shell\open\command', '');
+        RegDeleteValue(HKCU, TemplateKey, 'URL Protocol');
+        RegDeleteValue(HKCU, TemplateKey, '');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey + '\shell\open\command');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey + '\shell\open');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey + '\shell');
+        RegDeleteKeyIfEmpty(HKCU, TemplateKey);
+      end;
     OwnedCommand := '"' + ExpandConstant('{app}\elevenclock-rs.exe') + '" --startup';
     if RegQueryStringValue(HKCU, RunKey, StartupValue, Command) then
       if CompareText(Trim(Command), OwnedCommand) = 0 then begin

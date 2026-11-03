@@ -1,7 +1,7 @@
 //! Where the central copy is, and what counts as one.
 //!
 //! The source is a folder. Which folder is decided by [`resolve`] from three inputs in
-//! a fixed order, so an administrator never edits a config file (ADR 0004):
+//! a fixed order, independently of the optional inventory configuration (ADR 0004):
 //!
 //! 1. `--source <folder>`, for a launcher IT pushed to the machine;
 //! 2. the launcher's own folder, when it was started from the share;

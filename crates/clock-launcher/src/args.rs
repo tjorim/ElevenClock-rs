@@ -1,6 +1,7 @@
 //! The launcher's command line.
 //!
-//! Two arguments are the launcher's own: `--source <folder>` and `--uninstall`.
+//! Launcher actions: `--source <folder>`, `--uninstall`, and the exclusive
+//! `--inventory-summary <report-root> <output.json> [recent-days]` admin command.
 //! Everything else belongs to the app and is passed on unchanged and in order, which
 //! is how `--startup` (login start, no Settings window) reaches it.
 use std::ffi::OsString;
@@ -8,6 +9,9 @@ use std::path::PathBuf;
 
 pub const SOURCE: &str = "--source";
 pub const UNINSTALL: &str = "--uninstall";
+pub const INVENTORY_SUMMARY: &str = "--inventory-summary";
+/// Accept reports regardless of file owner, for local snapshots an administrator copied in.
+pub const SKIP_OWNER_CHECK: &str = "--skip-owner-check";
 /// The app's login marker (`clock_windows::instance::STARTUP_MARKER`).
 pub const STARTUP: &str = clock_windows::instance::STARTUP_MARKER;
 
@@ -15,6 +19,12 @@ pub const STARTUP: &str = clock_windows::instance::STARTUP_MARKER;
 pub enum Command {
     Launch(Launch),
     Uninstall,
+    InventorySummary {
+        directory: PathBuf,
+        output: PathBuf,
+        recent_days: u32,
+        verify_owners: bool,
+    },
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -32,18 +42,52 @@ pub enum ArgError {
     SourceNeedsFolder,
     /// `--uninstall` deletes files, so it is only accepted on its own.
     UninstallIsExclusive,
+    SummaryUsage,
 }
 impl ArgError {
     pub fn message(self) -> &'static str {
         match self {
             Self::SourceNeedsFolder => "--source needs the folder that holds ElevenClock-rs.",
             Self::UninstallIsExclusive => "--uninstall cannot be combined with other arguments.",
+            Self::SummaryUsage => {
+                "Use --inventory-summary <report folder> <output.json> [recent days, default 30] [--skip-owner-check]. Output must be outside the report folder."
+            }
         }
     }
 }
 
 pub fn parse<I: IntoIterator<Item = OsString>>(args: I) -> Result<Command, ArgError> {
-    let args: Vec<OsString> = args.into_iter().collect();
+    let mut args: Vec<OsString> = args.into_iter().collect();
+    if args.iter().any(|arg| arg == INVENTORY_SUMMARY) {
+        let verify_owners = args.last().is_none_or(|arg| arg != SKIP_OWNER_CHECK);
+        if !verify_owners {
+            args.pop();
+        }
+        let valid_path =
+            |arg: &OsString| !arg.is_empty() && !arg.to_string_lossy().starts_with("--");
+        if !(args.len() == 3 || args.len() == 4)
+            || args[0] != INVENTORY_SUMMARY
+            || !valid_path(&args[1])
+            || !valid_path(&args[2])
+        {
+            return Err(ArgError::SummaryUsage);
+        }
+        let recent_days = if args.len() == 4 {
+            args[3]
+                .to_str()
+                .and_then(|s| s.parse::<u32>().ok())
+                .filter(|days| (1..=36500).contains(days))
+                .ok_or(ArgError::SummaryUsage)?
+        } else {
+            30
+        };
+        return Ok(Command::InventorySummary {
+            directory: args[1].clone().into(),
+            output: args[2].clone().into(),
+            recent_days,
+            verify_owners,
+        });
+    }
     if args.iter().any(|arg| arg == UNINSTALL) {
         return if args.len() == 1 {
             Ok(Command::Uninstall)
@@ -80,13 +124,55 @@ mod tests {
     fn launch(args: &[&str]) -> Launch {
         match parse_text(args).unwrap() {
             Command::Launch(launch) => launch,
-            Command::Uninstall => panic!("expected a launch"),
+            _ => panic!("expected a launch"),
         }
     }
 
     #[test]
     fn no_arguments_is_an_interactive_launch() {
         assert_eq!(launch(&[]), Launch::default());
+    }
+
+    #[test]
+    fn inventory_summary_is_exclusive_with_bounded_recent_days() {
+        assert_eq!(
+            parse_text(&[INVENTORY_SUMMARY, "reports", "summary.json"]),
+            Ok(Command::InventorySummary {
+                directory: "reports".into(),
+                output: "summary.json".into(),
+                recent_days: 30,
+                verify_owners: true
+            })
+        );
+        assert!(matches!(
+            parse_text(&[
+                INVENTORY_SUMMARY,
+                "reports",
+                "summary.json",
+                "7",
+                SKIP_OWNER_CHECK
+            ]),
+            Ok(Command::InventorySummary {
+                recent_days: 7,
+                verify_owners: false,
+                ..
+            })
+        ));
+        assert!(matches!(
+            parse_text(&[INVENTORY_SUMMARY, "reports", "summary.json", "7"]),
+            Ok(Command::InventorySummary { recent_days: 7, .. })
+        ));
+        for args in [
+            vec![INVENTORY_SUMMARY],
+            vec![INVENTORY_SUMMARY, "reports"],
+            vec![INVENTORY_SUMMARY, "reports", "summary.json", "0"],
+            vec![INVENTORY_SUMMARY, "reports", "summary.json", "36501"],
+            vec![INVENTORY_SUMMARY, "reports", "summary.json", "--startup"],
+            vec!["--startup", INVENTORY_SUMMARY, "reports", "summary.json"],
+            vec![INVENTORY_SUMMARY, SKIP_OWNER_CHECK, "summary.json"],
+        ] {
+            assert_eq!(parse_text(&args), Err(ArgError::SummaryUsage));
+        }
     }
 
     #[test]

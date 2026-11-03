@@ -38,8 +38,31 @@ const PAGE_DATE: i32 = 111;
 const PAGE_APPEARANCE: i32 = 112;
 const PAGE_STARTUP: i32 = 113;
 const PAGE_SUPPORT: i32 = 114;
-const PAGES: [i32; 4] = [PAGE_DATE, PAGE_APPEARANCE, PAGE_STARTUP, PAGE_SUPPORT];
-const PAGE_TITLES: [&str; 4] = ["Date and time", "Appearance", "Startup", "Support"];
+const PAGE_TEMPLATES: i32 = 115;
+const PAGES: [i32; 5] = [
+    PAGE_DATE,
+    PAGE_APPEARANCE,
+    PAGE_STARTUP,
+    PAGE_SUPPORT,
+    PAGE_TEMPLATES,
+];
+const PAGE_TITLES: [&str; 5] = [
+    "Date and time",
+    "Appearance",
+    "Startup",
+    "Support",
+    "Templates",
+];
+pub const ID_TEMPLATE_NAME: i32 = 1601;
+pub const ID_TEMPLATE_LIST: i32 = 1602;
+pub const ID_TEMPLATE_SAVE: i32 = 1603;
+pub const ID_TEMPLATE_LOAD: i32 = 1604;
+pub const ID_TEMPLATE_DELETE: i32 = 1605;
+pub const ID_TEMPLATE_SHARE: i32 = 1606;
+pub const ID_TEMPLATE_LINK: i32 = 1607;
+pub const ID_TEMPLATE_REVIEW: i32 = 1608;
+pub const ID_TEMPLATE_WEBSITE: i32 = 1609;
+pub const ID_TEMPLATE_PROTOCOL: i32 = 1610;
 
 pub const ID_TAB: i32 = 1100;
 const ID_INTRO: i32 = 1101;
@@ -415,6 +438,7 @@ pub struct SettingsWindow<S> {
     update_due: Option<std::time::Duration>,
     update_worker: Option<Worker>,
     release_url: String,
+    templates: Option<crate::templates::Library>,
 }
 
 /// Startup page state. Nothing here is a preference: the registry is read each time
@@ -464,6 +488,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 update_due: None,
                 update_worker: None,
                 release_url: update_check::RELEASES_URL.into(),
+                templates: crate::templates::Library::open().ok(),
                 welcome: false,
                 support: SupportPage {
                     environment: support::detect_environment(),
@@ -525,6 +550,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             return Err(error);
         }
         self.sync_all(dialog);
+        self.refresh_templates(dialog, None);
         self.refresh(dialog, runtime);
         // Managed mode is checked again every time Settings opens.
         let managed = managed::detect();
@@ -569,6 +595,217 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             let _ = SetForegroundWindow(dialog);
         }
         Ok(())
+    }
+
+    pub fn receive_template<P: Platform>(
+        &mut self,
+        runtime: &mut Runtime<P>,
+        template: &clock_core::template::ClockTemplate,
+    ) -> Result<(), PlatformError> {
+        self.show_or_focus(runtime)?;
+        if let Some(dialog) = open_dialog() {
+            set_text(
+                control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LINK),
+                &template.share_link(),
+            );
+            select_page(dialog, PAGE_TEMPLATES);
+            self.retry_template_library(dialog);
+            unsafe {
+                let _ = SetFocus(Some(control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_REVIEW)));
+            }
+            self.status = "Template received. Select Review template to stage it; your current edits are unchanged.".into();
+            self.show_status(dialog, runtime);
+        }
+        Ok(())
+    }
+
+    fn retry_template_library(&mut self, dialog: HWND) {
+        if self.templates.is_none() {
+            self.templates = crate::templates::Library::open().ok();
+            self.refresh_templates(dialog, None);
+            self.status = if self.templates.is_some() { "Saved templates are available again." }
+                else { "Saved templates could not be read. Existing data was preserved; sharing and reviewing links are still available." }.into();
+        }
+    }
+
+    fn refresh_templates(&self, dialog: HWND, preferred_name: Option<&str>) {
+        let list = control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LIST);
+        let previous_name = get_text(list);
+        let previous_index = usize::try_from(send(list, CB_GETCURSEL as u32, 0, 0)).unwrap_or(0);
+        send(list, CB_RESETCONTENT as u32, 0, 0);
+        if let Some(library) = &self.templates {
+            for entry in library.entries() {
+                add_string(list, &entry.name);
+            }
+            if !library.entries().is_empty() {
+                let name = preferred_name
+                    .unwrap_or(&previous_name)
+                    .trim()
+                    .to_lowercase();
+                let selected = library
+                    .entries()
+                    .iter()
+                    .position(|entry| entry.name.to_lowercase() == name)
+                    .unwrap_or_else(|| previous_index.min(library.entries().len() - 1));
+                send(list, CB_SETCURSEL as u32, selected, 0);
+            }
+        }
+        for id in [ID_TEMPLATE_SAVE, ID_TEMPLATE_LOAD, ID_TEMPLATE_DELETE] {
+            enable(
+                dialog,
+                control(dialog, PAGE_TEMPLATES, id),
+                self.templates.is_some(),
+            );
+        }
+        let enabled = current_executable()
+            .and_then(|exe| crate::template_protocol::enabled(&exe).ok())
+            .unwrap_or(false);
+        set_text(
+            control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_PROTOCOL),
+            if enabled {
+                "Disable template lin&ks"
+            } else {
+                "Enable template lin&ks"
+            },
+        );
+        send(
+            control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LINK),
+            EM_LIMITTEXT as u32,
+            clock_core::template::MAX_LINK_BYTES,
+            0,
+        );
+        send(
+            control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_NAME),
+            EM_LIMITTEXT as u32,
+            96,
+            0,
+        );
+    }
+
+    fn template_action<P: Platform>(&mut self, dialog: HWND, id: i32, runtime: &mut Runtime<P>) {
+        let selected = usize::try_from(send(
+            control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LIST),
+            CB_GETCURSEL as u32,
+            0,
+            0,
+        ))
+        .ok();
+        let saved = selected
+            .and_then(|index| self.templates.as_ref()?.entries().get(index))
+            .cloned();
+        match id {
+            ID_TEMPLATE_REVIEW | ID_TEMPLATE_LOAD => {
+                let link = if id == ID_TEMPLATE_LOAD {
+                    match saved {
+                        Some(entry) => entry.link,
+                        None => {
+                            self.status = "Choose a saved local preset first.".into();
+                            return;
+                        }
+                    }
+                } else {
+                    get_text(control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LINK))
+                        .trim()
+                        .to_owned()
+                };
+                match clock_core::template::ClockTemplate::from_link(&link) {
+                    Ok(template) if !self.controller.saving_blocked() => {
+                        self.controller.stage_template(&template);
+                        self.sync_all(dialog);
+                        select_page(dialog, PAGE_DATE);
+                        unsafe { let _ = SetFocus(Some(control(dialog, PAGE_DATE, ID_FORMAT))); }
+                        self.status = "Template staged. Review the format and appearance, then Apply to change the clock.".into();
+                    }
+                    Ok(_) => self.status = "Templates cannot be applied while saved settings are from a newer version.".into(),
+                    Err(error) => self.status = error.to_string(),
+                }
+            }
+            ID_TEMPLATE_SAVE => {
+                let name = get_text(control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_NAME));
+                let mut saved = false;
+                self.status = match (self.templates.as_mut(), self.controller.template()) {
+                    (Some(library), Ok(template)) => match library.save(&name, &template) {
+                        Ok(()) => { saved = true; "Local preset saved. The running clock is unchanged until Apply.".into() },
+                        Err(error) => error.to_string(),
+                    },
+                    _ => "Fix the format and font size before saving a preset. Saved templates must also be readable.".into(),
+                };
+                self.refresh_templates(dialog, saved.then_some(name.as_str()));
+            }
+            ID_TEMPLATE_DELETE => {
+                self.status = match (self.templates.as_mut(), saved) {
+                    (Some(library), Some(entry)) => {
+                        if !confirm_delete_preset(dialog, &entry.name) {
+                            return;
+                        }
+                        match library.remove(&entry.name) {
+                            Ok(()) => {
+                                "Local preset deleted. Your current clock and draft are unchanged."
+                                    .into()
+                            }
+                            Err(error) => error.to_string(),
+                        }
+                    }
+                    _ => "Choose a saved local preset first.".into(),
+                };
+                self.refresh_templates(dialog, None);
+            }
+            ID_TEMPLATE_SHARE => {
+                self.status = match self.controller.template() {
+                    Ok(template) => {
+                        let link = template.share_link();
+                        set_text(control(dialog, PAGE_TEMPLATES, ID_TEMPLATE_LINK), &link);
+                        match WindowsClipboard::new(dialog).set_text(&link) {
+                            Ok(()) => "Template link copied. It includes your format text, font size and theme.".into(),
+                            Err(_) => "Could not copy the link. Select and copy it from the Template link box.".into(),
+                        }
+                    }
+                    Err(_) => "Fix the format and font size before sharing a template.".into(),
+                };
+            }
+            ID_TEMPLATE_WEBSITE => {
+                let link = self
+                    .controller
+                    .template()
+                    .map(|template| template.share_link())
+                    .unwrap_or_else(|_| "https://tjorim.github.io/ElevenClock-rs/#try".into());
+                let url = wide(&link);
+                // SAFETY: hard-coded website or a validated template fragment;
+                // live NUL-terminated URL. No imported command/path is executed.
+                let opened = unsafe {
+                    ShellExecuteW(
+                        Some(dialog),
+                        w!("open"),
+                        PCWSTR(url.as_ptr()),
+                        None,
+                        None,
+                        SW_SHOW,
+                    )
+                };
+                self.status = if opened.0 as isize > 32 {
+                    "Opened the website template editor."
+                } else {
+                    "Could not open the website editor."
+                }
+                .into();
+            }
+            ID_TEMPLATE_PROTOCOL => {
+                self.status = match current_executable() {
+                    Some(exe) => {
+                        let result = crate::template_protocol::enabled(&exe)
+                            .and_then(|on| crate::template_protocol::set_enabled(&exe, !on));
+                        match result {
+                            Ok(()) => "Template link registration updated for your Windows account.".into(),
+                            Err(_) => "Could not change template links. Any other program's registration was preserved.".into(),
+                        }
+                    }
+                    None => "Could not determine this executable's location.".into(),
+                };
+                self.refresh_templates(dialog, None);
+            }
+            _ => return,
+        }
+        self.refresh(dialog, runtime);
     }
 
     fn build(&self, dialog: HWND) -> Result<(), PlatformError> {
@@ -1139,9 +1376,18 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                 // The registration can change outside this window (Task Manager,
                 // Windows Settings), so the page is read again whenever it is opened.
                 self.show_startup(dialog);
+                let selected =
+                    usize::try_from(send(item(dialog, ID_TAB), TCM_GETCURSEL as u32, 0, 0)).ok();
+                if selected.and_then(|index| PAGES.get(index)) == Some(&PAGE_TEMPLATES) {
+                    self.retry_template_library(dialog);
+                    self.show_status(dialog, runtime);
+                }
             }
             UiEvent::Close => self.finish(dialog),
             UiEvent::Command { id, code } => match (id, code) {
+                (id, 0) if (ID_TEMPLATE_SAVE..=ID_TEMPLATE_PROTOCOL).contains(&id) => {
+                    self.template_action(dialog, id, runtime)
+                }
                 (id, _) if id == IDCANCEL => self.finish(dialog),
                 (id, _) if id == IDOK => self.apply(dialog, runtime, true),
                 (ID_APPLY, _) => self.apply(dialog, runtime, false),
@@ -1408,6 +1654,21 @@ impl<S: PreferencesStore> SettingsWindow<S> {
             // SAFETY: destroys our own dialog on its owning thread.
             let _ = unsafe { DestroyWindow(dialog) };
         }
+    }
+}
+
+fn confirm_delete_preset(dialog: HWND, name: &str) -> bool {
+    let text = wide(&format!(
+        "Delete the local preset \"{name}\"? This cannot be undone."
+    ));
+    // SAFETY: modal message box owned by our dialog; `text` is NUL-terminated and outlives the call.
+    unsafe {
+        MessageBoxW(
+            Some(dialog),
+            PCWSTR(text.as_ptr()),
+            w!("ElevenClock-rs"),
+            (MB_YESNO | MB_ICONQUESTION) as u32,
+        ) == IDYES
     }
 }
 

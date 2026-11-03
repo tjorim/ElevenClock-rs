@@ -13,12 +13,20 @@ pub use settings::{PlatformError, SettingsWindow};
 
 pub mod overlay;
 
+#[cfg(windows)]
+pub mod inventory_facts;
+#[cfg(any(windows, test))]
+mod inventory_version;
 pub mod logging;
 pub mod managed;
 pub mod preferences_store;
+pub mod report_files;
 pub mod settings_model;
 pub mod startup;
+pub mod summary_output;
 pub mod support;
+pub mod template_protocol;
+pub mod templates;
 pub mod update_check;
 
 pub mod render;

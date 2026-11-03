@@ -121,7 +121,20 @@ try {
     # Only the installed executable owns the registration deleted on uninstall.
     Set-ItemProperty $run $value ('"' + $exe + '" --startup')
     New-ItemProperty $approved $value -PropertyType Binary -Value ([byte[]](3,0,0,0,0,0,0,0,0,0,0,0)) -Force | Out-Null
+    $protocol = 'HKCU:\Software\Classes\elevenclock'
+    $protocolCommand = $protocol + '\shell\open\command'
+    Assert ((Get-Item -LiteralPath $protocolCommand).GetValue('') -eq ('"' + $exe + '" --template "%1"')) 'Installer template registration missing'
+    New-ItemProperty -LiteralPath $protocol -Name 'HarnessNeighbor' -Value 'keep-root-value' -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $protocolCommand -Name 'HarnessNeighbor' -Value 'keep-command-value' -PropertyType String -Force | Out-Null
+    $neighborVerb = $protocol + '\shell\harness-neighbor\command'
+    New-Item -Path $neighborVerb -Force | Out-Null
+    Set-Item -LiteralPath $neighborVerb -Value 'keep-other-verb'
     Uninstall $install 'uninstall-owned'
+    Assert ($null -eq (Get-Item -LiteralPath $protocolCommand).GetValue('', $null)) 'Owned template command survived uninstall'
+    Assert ($null -eq (Get-Item -LiteralPath $protocol).GetValue('URL Protocol', $null)) 'Owned URL Protocol marker survived uninstall'
+    Assert ((Get-Item -LiteralPath $protocol).GetValue('HarnessNeighbor') -eq 'keep-root-value') 'Unrelated protocol root value removed'
+    Assert ((Get-Item -LiteralPath $protocolCommand).GetValue('HarnessNeighbor') -eq 'keep-command-value') 'Unrelated protocol command value removed'
+    Assert ((Get-Item -LiteralPath $neighborVerb).GetValue('') -eq 'keep-other-verb') 'Unrelated protocol verb removed'
     Assert ($null -eq (Read-Run $value)) 'Owned startup value survived uninstall'
     Assert ($null -eq (Get-ItemProperty $approved -Name $value -ErrorAction SilentlyContinue)) 'Owned approval survived uninstall'
     Assert ((Get-Content $sentinel) -eq 'keep-private-data') 'Private data removed'

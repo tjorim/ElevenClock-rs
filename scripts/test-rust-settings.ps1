@@ -52,12 +52,27 @@ public static class SettingsNative {
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr dialog, int id);
+    [DllImport("user32.dll")] public static extern IntPtr GetNextDlgTabItem(IntPtr dialog, IntPtr control, bool previous);
     [DllImport("user32.dll")] public static extern int GetDlgCtrlID(IntPtr control);
     [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] static extern bool OpenClipboard(IntPtr owner);
+    [DllImport("user32.dll")] static extern bool EmptyClipboard();
+    [DllImport("user32.dll")] static extern bool CloseClipboard();
+    // Windows PowerShell 5.1 Set-Clipboard rejects both null and empty strings.
+    public static void ClearClipboard() {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (!OpenClipboard(IntPtr.Zero)) {
+            if (DateTime.UtcNow >= deadline) throw new InvalidOperationException("Clipboard unavailable for restoration");
+            System.Threading.Thread.Sleep(20);
+        }
+        try { if (!EmptyClipboard()) throw new InvalidOperationException("Could not restore empty clipboard"); }
+        finally { CloseClipboard(); }
+    }
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint thread, ref GuiInfo info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageW(IntPtr window, uint message, int wparam, StringBuilder text);
+    public static void SetText(IntPtr window, string text) { SendMessageW(window, 0x000C, 0, new StringBuilder(text)); }
 
     // Key presses go through the real input queue and the dialog manager.
     public static void KeyStroke(ushort key, ushort modifier) {
@@ -118,7 +133,7 @@ public static class SettingsNative {
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
 # --- control lookup: pages are children of the dialog, controls children of pages ---
-$PAGE = @{ Date = 111; Appearance = 112; Startup = 113; Support = 114 }
+$PAGE = @{ Date = 111; Appearance = 112; Startup = 113; Support = 114; Templates = 115 }
 function Control([IntPtr]$Window, [int]$Page, [int]$Id) {
     if ($Page -eq 0) { return [SettingsNative]::GetDlgItem($Window, $Id) }
     return [SettingsNative]::GetDlgItem([SettingsNative]::GetDlgItem($Window, $Page), $Id)
@@ -139,6 +154,7 @@ function Type-Text([string]$Text) {
 function Click([IntPtr]$Button) { [SettingsNative]::SendMessageW($Button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null; Start-Sleep -Milliseconds 500 } # BM_CLICK
 function Focused-Id([IntPtr]$Window) { [SettingsNative]::GetDlgCtrlID([SettingsNative]::Focus($Window)) }
 function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
+. (Join-Path $PSScriptRoot 'confirm-prompt.ps1')
 Add-Type -AssemblyName System.Windows.Forms
 # Let queued out-of-process accessibility events reach this thread's callbacks.
 function Pump([int]$Milliseconds) {
@@ -163,7 +179,9 @@ function Capture-Window([IntPtr]$Window, [string]$Name) {
 # --- the current user's preferences are saved and restored around the run ---
 $preferences = Join-Path $env:LOCALAPPDATA 'ElevenClock-rs\preferences.dat'
 $backup = $null
-if (Test-Path $preferences) { $backup = [IO.File]::ReadAllBytes($preferences); Remove-Item $preferences -Force }
+if (Test-Path $preferences) { $backup = [IO.File]::ReadAllBytes($preferences) }
+$templatesFile = Join-Path $env:LOCALAPPDATA 'ElevenClock-rs\templates.json'
+$templatesBackup = if (Test-Path -LiteralPath $templatesFile) { [IO.File]::ReadAllBytes($templatesFile) } else { $null }
 
 # Processes of this executable that exist before the run (other tests, helpers).
 $baseline = @(Get-Process -Name elevenclock-rs -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
@@ -179,36 +197,41 @@ function Clear-Startup {
     Remove-ItemProperty -Path $approvedKey -Name $startupName -ErrorAction SilentlyContinue
 }
 $startupBackup = @{ Run = Get-Registered; Approved = Get-Approved }
-Clear-Startup
-# A launcher beside the executable makes it a managed copy (ADR 0004), which registers
-# the launcher for startup. This harness covers the plain app, so a build folder that
-# also holds the launcher is tested through a lone copy of the executable.
+$app = $null
 $isolated = $null
-$sibling = Join-Path (Split-Path (Resolve-Path -LiteralPath $Executable).Path) 'elevenclock-rs-launcher.exe'
-if (Test-Path -LiteralPath $sibling) {
-    $isolated = Join-Path ([IO.Path]::GetTempPath()) "settings-smoke-$([guid]::NewGuid().ToString('N'))"
-    New-Item -ItemType Directory -Path $isolated | Out-Null
-    $Executable = Copy-Item -LiteralPath $Executable -Destination $isolated -PassThru | Select-Object -ExpandProperty FullName
-}
-$app = Start-Process $Executable -PassThru
-function Wait-Settings([bool]$Open, [string]$What) {
-    $deadline = [DateTime]::UtcNow.AddSeconds(15)
-    do {
-        Start-Sleep -Milliseconds 100
-        $app.Refresh()
-        if ($app.HasExited) { throw "Application exited while waiting for: $What" }
-        $isOpen = [SettingsNative]::Settings($app.Id) -ne [IntPtr]::Zero
-    } while ($isOpen -ne $Open -and [DateTime]::UtcNow -lt $deadline)
-    if ($isOpen -ne $Open) { throw "Timed out waiting for: $What" }
-}
-function Foreground([IntPtr]$Window) {
-    [SettingsNative]::SetForegroundWindow($Window) | Out-Null
-    $deadline = [DateTime]::UtcNow.AddSeconds(3)
-    while ([SettingsNative]::GetForegroundWindow() -ne $Window -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
-    Assert ([SettingsNative]::GetForegroundWindow() -eq $Window) 'Keyboard test cannot activate the actual dialog'
-}
-$steps = [ordered]@{}
+$startupTouched = $false
 try {
+    if (Test-Path -LiteralPath $preferences) { Remove-Item -LiteralPath $preferences -Force }
+    if (Test-Path -LiteralPath $templatesFile) { Remove-Item -LiteralPath $templatesFile }
+    $startupTouched = $true
+    Clear-Startup
+    # A launcher beside the executable makes it a managed copy (ADR 0004), which registers
+    # the launcher for startup. This harness covers the plain app, so a build folder that
+    # also holds the launcher is tested through a lone copy of the executable.
+    $sibling = Join-Path (Split-Path (Resolve-Path -LiteralPath $Executable).Path) 'elevenclock-rs-launcher.exe'
+    if (Test-Path -LiteralPath $sibling) {
+        $isolated = Join-Path ([IO.Path]::GetTempPath()) "settings-smoke-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Path $isolated | Out-Null
+        $Executable = Copy-Item -LiteralPath $Executable -Destination $isolated -PassThru | Select-Object -ExpandProperty FullName
+    }
+    $app = Start-Process $Executable -PassThru
+    function Wait-Settings([bool]$Open, [string]$What) {
+        $deadline = [DateTime]::UtcNow.AddSeconds(15)
+        do {
+            Start-Sleep -Milliseconds 100
+            $app.Refresh()
+            if ($app.HasExited) { throw "Application exited while waiting for: $What" }
+            $isOpen = [SettingsNative]::Settings($app.Id) -ne [IntPtr]::Zero
+        } while ($isOpen -ne $Open -and [DateTime]::UtcNow -lt $deadline)
+        if ($isOpen -ne $Open) { throw "Timed out waiting for: $What" }
+    }
+    function Foreground([IntPtr]$Window) {
+        [SettingsNative]::SetForegroundWindow($Window) | Out-Null
+        $deadline = [DateTime]::UtcNow.AddSeconds(3)
+        while ([SettingsNative]::GetForegroundWindow() -ne $Window -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
+        Assert ([SettingsNative]::GetForegroundWindow() -eq $Window) 'Keyboard test cannot activate the actual dialog'
+    }
+    $steps = [ordered]@{}
     Wait-Settings $true 'first launch to open Settings'
     $window = [SettingsNative]::Settings($app.Id)
     $dpi = [SettingsNative]::GetDpiForWindow($window)
@@ -225,6 +248,7 @@ try {
     foreach ($id in 1301, 1302, 1303, 1304, 1305, 1306) { Assert ((Control $window $PAGE.Appearance $id) -ne [IntPtr]::Zero) "Missing Appearance control $id" }
     Assert ((Control $window $PAGE.Startup 1401) -ne [IntPtr]::Zero) 'Missing Startup page'
     Assert ((Control $window $PAGE.Support 1501) -ne [IntPtr]::Zero) 'Missing Support page'
+    foreach ($id in 1601..1610) { Assert ((Control $window $PAGE.Templates $id) -ne [IntPtr]::Zero) "Missing Templates control $id" }
     Assert ([SettingsNative]::Text((Control $window $PAGE.Support 1501)) -like '*version*') 'Support page must show the version'
     Assert (-not [SettingsNative]::IsWindowEnabled((Control $window 0 1105))) 'Apply must be disabled while nothing changed'
     $fileVersion = $app.MainModule.FileVersionInfo.ProductVersion
@@ -547,7 +571,7 @@ try {
     Assert (([SettingsNative]::AlertsFrom($feedback) - $alertsBefore) -ge 1) 'The copy result must be announced'
     Assert ($copyFeedback -eq 'Diagnostics copied to the clipboard.') "Copy did not report success: '$copyFeedback'"
     Assert ($copied.TrimEnd() -eq $report.TrimEnd()) 'The clipboard must hold exactly the previewed report'
-    if ($null -ne $clipboardBefore) { Set-Clipboard -Value $clipboardBefore } else { Set-Clipboard -Value $null }
+    if ([string]::IsNullOrEmpty($clipboardBefore)) { [SettingsNative]::ClearClipboard() } else { Set-Clipboard -Value $clipboardBefore }
     # The bounded local log exists, names the start and holds no personal data.
     $log = Join-Path $env:LOCALAPPDATA 'ElevenClock-rs\logs\elevenclock-rs.log'
     Assert (Test-Path $log) 'The local log was not created'
@@ -559,6 +583,49 @@ try {
     [IO.File]::WriteAllText((Join-Path (Resolve-Path $OutputDirectory) 'support-report.txt'), $report)
     Press 0x22 0x11                # Ctrl+PageDown: back to Date and time
     $steps.support = 'Support status, previewed report (no user name or paths), bounded Refresh status, exact clipboard copy and bounded log verified'
+
+    # Template import is delivered to this same window and preserves an open draft.
+    $draftBefore = [SettingsNative]::Text((Control $window $PAGE.Date 1202))
+    $preferencesBefore = [IO.File]::ReadAllText($preferences)
+    $link = 'elevenclock://template?v=1&format=%25H%3A%25M&font=11&theme=dark'
+    $sender = Start-Process $Executable -ArgumentList '--template', ('"' + $link + '"') -PassThru
+    Assert ($sender.WaitForExit(10000) -and $sender.ExitCode -eq 0) 'Template second launch did not finish successfully'
+    Pump 500
+    Assert ([SettingsNative]::Settings($app.Id) -eq $window) 'Template must reuse the existing Settings window'
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq $draftBefore) 'Receiving a template replaced unsaved edits'
+    $received = [SettingsNative]::Text((Control $window $PAGE.Templates 1607))
+    Assert ($received -like 'https://tjorim.github.io/ElevenClock-rs/#template=1*font=11*theme=dark') 'Template payload did not reach Settings'
+    Assert ((Focused-Id $window) -eq 1608) 'Template arrival must focus its Review action'
+    Capture-Window $window 'templates-received.png'
+    Click (Control $window $PAGE.Templates 1608)
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq '%H:%M') 'Review did not stage the format'
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Appearance 1303)) -eq '11') 'Review did not stage the font size'
+    Assert ([SettingsNative]::SendMessageW((Control $window $PAGE.Appearance 1306), 0x0147, [IntPtr]::Zero, [IntPtr]::Zero) -eq [IntPtr]2) 'Review did not stage the dark theme'
+    Assert ([IO.File]::ReadAllText($preferences) -eq $preferencesBefore) 'Review saved before Apply'
+    Press 0x21 0x11 # Date and time -> Templates (wrap backwards)
+    $templateOrder = @(1602,1604,1605,1601,1603,1606,1609,1610,1607,1608)
+    [SettingsNative]::SendMessageW($window, 0x0028, (Control $window 0 1100), [IntPtr]1) | Out-Null
+    foreach ($id in $templateOrder) { Press 9; Assert ((Focused-Id $window) -eq $id) "Templates Tab must reach $id" }
+    $presetName = 'HarnessTemplate' + [guid]::NewGuid().ToString('N').Substring(0,16)
+    [SettingsNative]::SetText((Control $window $PAGE.Templates 1601), $presetName)
+    Click (Control $window $PAGE.Templates 1603)
+    $library = Get-Content -LiteralPath $templatesFile -Raw | ConvertFrom-Json
+    Assert ($library.presets.Count -eq 1 -and $library.presets[0].name -eq $presetName) 'Named preset was not saved'
+    $templateClipboard = Get-Clipboard -Raw
+    try {
+        Click (Control $window $PAGE.Templates 1606)
+        Assert ((Get-Clipboard -Raw).Trim() -eq $library.presets[0].link) 'Shared template must match the saved presentation'
+    } finally { if ([string]::IsNullOrEmpty($templateClipboard)) { [SettingsNative]::ClearClipboard() } else { Set-Clipboard -Value $templateClipboard } }
+    Click (Control $window 0 1104)
+    Click (Control $window $PAGE.Templates 1604)
+    Assert ([SettingsNative]::Text((Control $window $PAGE.Date 1202)) -eq '%H:%M') 'Saved preset did not load into the draft'
+    Press 0x21 0x11
+    Click-Confirm (Control $window $PAGE.Templates 1605) $window $false
+    Assert (@((Get-Content -LiteralPath $templatesFile -Raw | ConvertFrom-Json).presets).Count -eq 1) 'Declining the delete confirmation must keep the preset'
+    Click-Confirm (Control $window $PAGE.Templates 1605) $window $true
+    Assert (@((Get-Content -LiteralPath $templatesFile -Raw | ConvertFrom-Json).presets).Count -eq 0) 'Delete did not remove the named preset'
+    Assert ([IO.File]::ReadAllText($preferences) -eq $preferencesBefore) 'Template library actions wrote active preferences'
+    $steps.templates = 'Second-instance link delivery, draft preservation, review, font/theme, keyboard order, save/load/delete and share clipboard passed'
 
     # 9. Reset stages defaults; nothing is saved until Apply.
     Click (Control $window 0 1104)
@@ -634,19 +701,49 @@ try {
     } while ($left.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline)
     if ($left.Count -gt 0) { throw "Processes remained after Exit: $($left.Id -join ',')" }
 } finally {
-    $app.Refresh()
-    if (!$app.HasExited) { $app.Kill() }
-    $app.Dispose()
-    if ($isolated) { Remove-Item -LiteralPath $isolated -Recurse -Force -ErrorAction SilentlyContinue }
-    Remove-ItemProperty -Path $runKey -Name $neighbour -ErrorAction SilentlyContinue
-    Clear-Startup
-    if ($null -ne $startupBackup.Run) { Set-ItemProperty -Path $runKey -Name $startupName -Value $startupBackup.Run }
-    if ($null -ne $startupBackup.Approved) {
-        if (-not (Test-Path $approvedKey)) { New-Item -Path $approvedKey -Force | Out-Null }
-        Set-ItemProperty -Path $approvedKey -Name $startupName -Type Binary -Value ([byte[]]$startupBackup.Approved)
+    # One failed cleanup must never skip restoration of the other saved data.
+    $cleanupFailures = @()
+    foreach ($cleanup in @(
+        {
+            if ($app) {
+                $app.Refresh()
+                if (!$app.HasExited) { $app.Kill(); $app.WaitForExit() }
+                $app.Dispose()
+            }
+        },
+        {
+            if ($isolated) {
+                $resolvedIsolated = [IO.Path]::GetFullPath($isolated)
+                $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+                if (!$resolvedIsolated.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -or (Split-Path $resolvedIsolated -Leaf) -notlike 'settings-smoke-*') { throw 'Unexpected isolated test directory' }
+                Remove-Item -LiteralPath $resolvedIsolated -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        },
+        {
+            if ($startupTouched) {
+                Remove-ItemProperty -Path $runKey -Name $neighbour -ErrorAction SilentlyContinue
+                Clear-Startup
+                if ($null -ne $startupBackup.Run) { Set-ItemProperty -Path $runKey -Name $startupName -Value $startupBackup.Run }
+                if ($null -ne $startupBackup.Approved) {
+                    if (-not (Test-Path $approvedKey)) { New-Item -Path $approvedKey -Force | Out-Null }
+                    Set-ItemProperty -Path $approvedKey -Name $startupName -Type Binary -Value ([byte[]]$startupBackup.Approved)
+                }
+            }
+        },
+        {
+            if ($null -ne $backup) {
+                New-Item -ItemType Directory -Path (Split-Path $preferences) -Force | Out-Null
+                [IO.File]::WriteAllBytes($preferences, $backup)
+            } elseif (Test-Path -LiteralPath $preferences) { Remove-Item -LiteralPath $preferences -Force }
+        },
+        {
+            if ($null -ne $templatesBackup) {
+                if (!(Test-Path -LiteralPath $templatesFile) -or [Convert]::ToBase64String([IO.File]::ReadAllBytes($templatesFile)) -ne [Convert]::ToBase64String($templatesBackup)) { [IO.File]::WriteAllBytes($templatesFile, $templatesBackup) }
+            }
+            elseif (Test-Path -LiteralPath $templatesFile) { Remove-Item -LiteralPath $templatesFile }
+        }
+    )) {
+        try { & $cleanup } catch { $cleanupFailures += $_ }
     }
-    if ($null -ne $backup) {
-        New-Item -ItemType Directory -Path (Split-Path $preferences) -Force | Out-Null
-        [IO.File]::WriteAllBytes($preferences, $backup)
-    } elseif (Test-Path $preferences) { Remove-Item $preferences -Force }
+    if ($cleanupFailures.Count) { throw $cleanupFailures[0] }
 }

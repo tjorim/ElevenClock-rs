@@ -218,14 +218,18 @@ dependencies = [
  "chrono",
  "criterion",
  "proptest",
+ "serde_json",
 ]
 
 [[package]]
 name = "clock-launcher"
 version = "0.2.2"
 dependencies = [
+ "clock-core",
  "clock-windows",
  "embed-resource",
+ "serde",
+ "serde_json",
  "tempfile",
  "windows-core",
 ]
@@ -236,6 +240,7 @@ version = "0.2.2"
 dependencies = [
  "chrono",
  "clock-core",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",

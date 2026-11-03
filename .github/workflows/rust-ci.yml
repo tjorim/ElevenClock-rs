@@ -122,6 +122,12 @@ jobs:
       - name: Native dialog launch, focus, capture and close smoke check
         shell: pwsh
         run: ./scripts/test-rust-settings.ps1
+      - name: Native harness setup failures preserve saved data
+        shell: powershell
+        run: ./scripts/test-rust-harness-cleanup.ps1
+      - name: Native template links, sharing and local presets
+        shell: pwsh
+        run: ./scripts/test-rust-templates.ps1
       - name: High contrast, keyboard and real display-scaling feasibility
         shell: powershell
         run: ./scripts/test-rust-ui-environment.ps1

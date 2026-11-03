@@ -54,6 +54,12 @@ struct FakeHost {
     errors: Vec<String>,
     logs: Vec<String>,
     key: FakeKey,
+    support_codes: Vec<Code>,
+    template_removal_fails: bool,
+    template_removal_saw_app: bool,
+    template_owned: bool,
+    template_restored: bool,
+    template_restore_fails: bool,
 }
 impl FakeHost {
     fn new() -> Self {
@@ -66,6 +72,12 @@ impl FakeHost {
             errors: Vec::new(),
             logs: Vec::new(),
             key: FakeKey::default(),
+            support_codes: Vec::new(),
+            template_removal_fails: false,
+            template_removal_saw_app: false,
+            template_owned: false,
+            template_restored: false,
+            template_restore_fails: false,
         }
     }
     fn logged(&self, line: &str) -> bool {
@@ -78,6 +90,23 @@ impl FakeHost {
 impl Host for FakeHost {
     fn installer_entry_present(&mut self) -> bool {
         self.installer
+    }
+    fn remove_template_handler(&mut self, app: &Path) -> io::Result<bool> {
+        self.template_removal_saw_app = app.is_file();
+        if self.template_removal_fails {
+            Err(io::Error::other("registry unavailable"))
+        } else {
+            Ok(std::mem::take(&mut self.template_owned))
+        }
+    }
+    fn restore_template_handler(&mut self, app: &Path) -> io::Result<()> {
+        assert!(app.exists());
+        if self.template_restore_fails {
+            return Err(io::Error::other("foreign registration"));
+        }
+        self.template_restored = true;
+        self.template_owned = true;
+        Ok(())
     }
     fn claim_instance(&mut self) -> Claim {
         match self.instance {
@@ -109,6 +138,9 @@ impl Host for FakeHost {
         } else {
             Ok(())
         }
+    }
+    fn support_issue(&mut self, code: Code) {
+        self.support_codes.push(code);
     }
     fn run_key(&mut self) -> &mut dyn RunKey {
         &mut self.key
@@ -767,6 +799,7 @@ fn uninstall_removes_the_known_files_and_nothing_else() {
     let mut host = FakeHost::new();
     let ctx = world.launched_from_share();
     assert_eq!(uninstall(&mut host, &ctx), Exit::Done);
+    assert!(host.template_removal_saw_app);
 
     assert_eq!(
         world.files(),
@@ -779,6 +812,23 @@ fn uninstall_removes_the_known_files_and_nothing_else() {
     assert!(host.started.is_empty() && host.errors.is_empty());
     // Running it again is fine.
     assert_eq!(uninstall(&mut host, &ctx), Exit::Done);
+}
+
+#[test]
+fn uninstall_preserves_the_installation_when_template_cleanup_fails() {
+    let world = deployed();
+    let before = world.files();
+    let mut host = FakeHost::new();
+    host.template_removal_fails = true;
+    assert_eq!(
+        uninstall(&mut host, &world.launched_from_share()),
+        Exit::UninstallIncomplete
+    );
+    assert!(host.template_removal_saw_app);
+    assert_eq!(world.files(), before);
+    assert!(world.local_app().is_some());
+    assert!(!host.key.removed);
+    assert!(host.logged_starting("template link registration not removed:"));
 }
 
 #[test]
@@ -849,4 +899,249 @@ fn uninstall_reports_a_file_it_could_not_remove() {
     );
     // The rest was still done.
     assert!(world.local_app().is_none() && host.key.removed);
+}
+
+#[cfg(windows)]
+#[test]
+fn incomplete_uninstall_restores_only_the_handler_it_removed_when_the_app_remains() {
+    use std::os::windows::fs::OpenOptionsExt;
+    for (owned, conflict) in [(true, false), (false, false), (true, true)] {
+        let world = deployed();
+        let app = world.layout().app();
+        let _held = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&app)
+            .unwrap();
+        let mut host = FakeHost::new();
+        host.template_owned = owned;
+        host.template_restore_fails = conflict;
+        assert_eq!(
+            uninstall(&mut host, &world.launched_from_share()),
+            Exit::UninstallIncomplete
+        );
+        assert!(app.is_file());
+        assert_eq!(host.template_restored, owned && !conflict);
+        if owned && conflict {
+            assert!(host.logged_starting("template link registration not restored:"));
+        }
+    }
+}
+
+#[test]
+fn structured_outcomes_cover_refresh_launch_and_fallback_independently() {
+    use RefreshOutcome::*;
+    for (scenario, expected, fallback, exit, started) in [
+        (
+            "updated",
+            Updated,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "unchanged",
+            Unchanged,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "running",
+            SkippedRunning,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "check_failed",
+            SkippedCheckFailed,
+            false,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "offline",
+            SourceUnreachable,
+            true,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "invalid",
+            SourceInvalid,
+            true,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "copy_failed",
+            CopyFailed,
+            true,
+            Exit::Done,
+            LaunchOutcome::ProcessCreated,
+        ),
+        (
+            "start_failed",
+            Updated,
+            false,
+            Exit::StartFailed,
+            LaunchOutcome::StartFailed,
+        ),
+        (
+            "no_copy",
+            SourceUnreachable,
+            false,
+            Exit::NoCopy,
+            LaunchOutcome::NotAttempted,
+        ),
+        (
+            "refused",
+            NotAttempted,
+            false,
+            Exit::Refused,
+            LaunchOutcome::NotAttempted,
+        ),
+    ] {
+        let world = World::with_app(NEW);
+        let ctx = world.launched_from_share();
+        let mut host = FakeHost::new();
+        if !matches!(scenario, "updated" | "start_failed" | "no_copy" | "refused") {
+            fs::create_dir_all(&world.destination).unwrap();
+            fs::write(
+                world.layout().app(),
+                app(if scenario == "unchanged" { NEW } else { OLD }),
+            )
+            .unwrap();
+        }
+        match scenario {
+            "running" => host.instance = Instance::Running,
+            "check_failed" => host.instance = Instance::Unknown,
+            "offline" | "no_copy" => world.remove_share(),
+            "invalid" => fs::write(world.share.join(source::APP_EXE), b"invalid").unwrap(),
+            "copy_failed" => host.interrupted.push(source::APP_EXE),
+            "start_failed" => host.start_fails = true,
+            "refused" => host.installer = true,
+            _ => {}
+        }
+        assert_eq!(
+            observe_launch(&mut host, &ctx, &interactive()),
+            Observation {
+                local_launcher_current: matches!(
+                    scenario,
+                    "updated" | "unchanged" | "start_failed"
+                ),
+                exit,
+                refresh: expected,
+                launch: started,
+                fallback,
+            },
+            "{scenario}"
+        );
+    }
+}
+
+#[test]
+fn reporting_failure_or_panic_preserves_launch_exit_and_refusal_collects_nothing() {
+    for exit in [Exit::Done, Exit::NoCopy, Exit::StartFailed] {
+        let observation = Observation {
+            local_launcher_current: true,
+            exit,
+            refresh: RefreshOutcome::SourceUnreachable,
+            launch: LaunchOutcome::NotAttempted,
+            fallback: false,
+        };
+        assert_eq!(
+            report_after(observation, |_| Err(io::Error::other("report failed"))),
+            exit
+        );
+        assert_eq!(
+            report_after(observation, |_| panic!("report panicked")),
+            exit
+        );
+    }
+    let observation = Observation {
+        local_launcher_current: true,
+        exit: Exit::Refused,
+        refresh: RefreshOutcome::NotAttempted,
+        launch: LaunchOutcome::NotAttempted,
+        fallback: false,
+    };
+    let mut collected = false;
+    assert_eq!(
+        report_after(observation, |_| {
+            collected = true;
+            Ok(())
+        }),
+        Exit::Refused
+    );
+    assert!(!collected);
+}
+
+#[test]
+fn ancillary_launcher_failures_have_structured_codes_without_affecting_start() {
+    let world = World::with_app(NEW);
+    let ctx = world.launched_from_share();
+    let mut host = FakeHost::new();
+    host.interrupted = vec![source::LAUNCHER_EXE, source::STATE_FILE];
+    assert_eq!(launch(&mut host, &ctx, &login()), Exit::Done);
+    assert!(host.support_codes.contains(&Code::LauncherRefreshFailed));
+    assert!(host.support_codes.contains(&Code::SourceNotRecorded));
+    assert_eq!(host.started.len(), 1);
+}
+
+#[test]
+fn reporting_adapter_can_select_the_executing_local_launcher_without_refresh() {
+    let observation = Observation {
+        exit: Exit::Done,
+        local_launcher_current: false,
+        refresh: RefreshOutcome::SkippedRunning,
+        launch: LaunchOutcome::ProcessCreated,
+        fallback: false,
+    };
+    let mut reported = false;
+    assert_eq!(
+        report_after(observation, |_| {
+            reported = true;
+            Ok(())
+        }),
+        Exit::Done
+    );
+    assert!(reported);
+}
+
+#[test]
+fn helper_gate_tracks_launcher_refresh_results_without_changing_app_start() {
+    let world = World::with_app(NEW);
+    let ctx = world.launched_from_share();
+    let mut host = FakeHost::new();
+    assert!(observe_launch(&mut host, &ctx, &login()).local_launcher_current);
+    // Matching hash is also positive evidence, with no replacement required.
+    host.interrupted = vec![source::LAUNCHER_EXE];
+    assert!(observe_launch(&mut host, &ctx, &login()).local_launcher_current);
+    // Changed central launcher, interrupted replacement: old local file survives
+    // but must not be invoked with a marker that it might pass on to the app.
+    world.publish_launcher("different");
+    let failed = observe_launch(&mut host, &ctx, &login());
+    assert_eq!(failed.exit, Exit::Done);
+    assert!(!failed.local_launcher_current);
+    fs::write(world.share.join(source::LAUNCHER_EXE), b"invalid").unwrap();
+    assert!(!observe_launch(&mut host, &ctx, &login()).local_launcher_current);
+    // Missing central launcher on a local start cannot establish freshness either.
+    fs::remove_file(world.share.join(source::LAUNCHER_EXE)).unwrap();
+    assert!(!observe_launch(&mut host, &world.launched_locally(), &login()).local_launcher_current);
+}
+
+#[test]
+fn refresh_source_that_is_the_local_launcher_needs_no_replacement() {
+    let world = World::with_app(NEW);
+    let ctx = world.launched_from_share();
+    let mut host = FakeHost::new();
+    launch(&mut host, &ctx, &login());
+    assert!(refresh_launcher(
+        &mut host,
+        &world.launched_locally(),
+        &world.layout(),
+        &world.destination
+    ));
 }

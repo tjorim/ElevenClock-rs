@@ -162,6 +162,68 @@ try {
     Exit-App $app
     $results.update = 'passed: the next launch replaced the local copy'
 
+    # Inventory must also run when refresh is skipped or the app payload fails,
+    # provided the separately opted-in central configuration is still readable.
+    $inventory = Join-Path $env:LOCALAPPDATA 'ElevenClock-rs/inventory/latest.json'
+    $reportRoot = Join-Path $work 'reports'
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    New-Item -ItemType Directory -Path $reportRoot -Force | Out-Null
+    $configPath = Join-Path $source 'elevenclock-rs-launcher.json'
+    [IO.File]::WriteAllText($configPath, (@{
+        schema_version = 1; local_inventory_enabled = $true
+        include_clock_format = $true; report_directory = $reportRoot
+    } | ConvertTo-Json -Compress))
+    Invoke-Launcher $localLauncher
+    $app = Wait-App
+    $first = Get-Content -LiteralPath $inventory -Raw | ConvertFrom-Json
+    Assert ($first.sid -eq $sid -and $first.installation_id) 'Inventory lacks native identity'
+    Assert ($first.clock_format -and $first.app_version) 'Inventory lacks opted-in format/version'
+    Invoke-Launcher $localLauncher @('--startup')
+    $running = Get-Content -LiteralPath $inventory -Raw | ConvertFrom-Json
+    Assert ($running.refresh -eq 'skipped_running') 'Running app did not produce a new inventory observation'
+    Assert ($running.installation_id -eq $first.installation_id) 'Inventory ID changed between launches'
+    Exit-App $app
+
+    $sourceBytes = [IO.File]::ReadAllBytes($sourceApp)
+    try {
+        [IO.File]::WriteAllText($sourceApp, 'invalid executable')
+        Invoke-Launcher $localLauncher
+        $app = Wait-App
+        $failed = Get-Content -LiteralPath $inventory -Raw | ConvertFrom-Json
+        Assert ($failed.refresh -eq 'source_invalid' -and $failed.fallback) 'Invalid payload fallback was not reported'
+        Assert ($failed.support_issues.code -contains 'source_invalid') 'Invalid source support code missing'
+        Exit-App $app
+    } finally { [IO.File]::WriteAllBytes($sourceApp, $sourceBytes) }
+
+    Move-Item -LiteralPath $sourceApp -Destination ($sourceApp + '.offline')
+    try {
+        Invoke-Launcher $localLauncher
+        $app = Wait-App
+        $failed = Get-Content -LiteralPath $inventory -Raw | ConvertFrom-Json
+        Assert ($failed.refresh -eq 'source_unreachable' -and $failed.fallback) 'Missing payload fallback was not reported'
+        Exit-App $app
+    } finally { Move-Item -LiteralPath ($sourceApp + '.offline') -Destination $sourceApp }
+    $published = Join-Path $reportRoot ($sid + '.' + $first.installation_id + '.json')
+    Assert ((Get-Content -LiteralPath $published -Raw) -eq (Get-Content -LiteralPath $inventory -Raw)) 'Published report differs from local snapshot'
+
+    $summaryPath = Join-Path $evidence 'inventory-summary.json'
+    # An elevated hosted account creates files owned by the Administrators group, so the
+    # report may be unverified; either way the owner check must account for the one report.
+    Invoke-Launcher $sourceLauncher @('--inventory-summary', ('"' + $reportRoot + '"'), ('"' + $summaryPath + '"'))
+    $checked = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+    Assert (($checked.counts.installations + $checked.unverified_owner_reports) -eq 1) 'Owner check did not account for the drop-box report'
+    Invoke-Launcher $sourceLauncher @('--inventory-summary', ('"' + $reportRoot + '"'), ('"' + $summaryPath + '"'), '--skip-owner-check')
+    $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+    Assert ($summary.counts.users -eq 1 -and $summary.counts.installations -eq 1) 'Summary did not deduplicate launcher observations'
+    Assert ($summary.support_issues.code -contains 'source_unreachable') 'Summary lacks latest failure'
+    $previous = [IO.File]::ReadAllText($inventory)
+    [IO.File]::WriteAllText($configPath, '{"schema_version":1,"local_inventory_enabled":false}')
+    Invoke-Launcher $localLauncher
+    $app = Wait-App
+    Assert ([IO.File]::ReadAllText($inventory) -eq $previous) 'Disabled inventory changed the snapshot'
+    Exit-App $app
+    $results.inventory = 'passed: running app, invalid/missing payload fallback, stable ID, publication, summary and revocation'
+
     # 5. The installer refuses while the managed copy is present, and changes nothing.
     $before = Hash $localApp
     $setup = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$evidence/refused-install.log`"" -PassThru

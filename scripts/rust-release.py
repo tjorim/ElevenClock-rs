@@ -15,7 +15,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = "x86_64-pc-windows-msvc"
 PORTABLE_FOLDER = "ElevenClock-rs"
-# Each artifact type gets its own readme, shipped as README.txt.
+# Each artifact type gets its own user readme, shipped as README.txt.
 README_SOURCES = {
     "installer": "packaging/INSTALLER-README.txt",
     "portable": "packaging/PORTABLE-README.txt",
@@ -25,19 +25,21 @@ APP_EXE = "elevenclock-rs.exe"
 # The managed launcher (ADR 0004) ships only in the managed ZIP.
 LAUNCHER_EXE = "elevenclock-rs-launcher.exe"
 RAW_LAUNCHER = f"launcher/{LAUNCHER_EXE}"
+MANAGED_MANAGER_README = "README-MANAGER.txt"
+MANAGED_MANAGER_SOURCE = "packaging/MANAGED-MANAGER-README.txt"
 PORTABLE_FILES = {
     f"{PORTABLE_FOLDER}/{file}" for file in (
         APP_EXE, "README.txt", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "RUST-COPYRIGHT.html",
     )
 }
-# The managed ZIP is the portable ZIP plus the launcher, with the same app bytes stored
+# The managed ZIP adds the launcher and manager guide, with the same app bytes stored
 # as .data: users who open the central folder cannot start the app from the share by
 # accident, and the launcher accepts that name.
 MANAGED_APP = "elevenclock-rs.data"
 # SHA256SUMS.txt lists the app, so the launcher refuses a truncated or swapped copy.
 MANAGED_SUMS = "SHA256SUMS.txt"
 MANAGED_FILES = (PORTABLE_FILES - {f"{PORTABLE_FOLDER}/{APP_EXE}"}) | {
-    f"{PORTABLE_FOLDER}/{name}" for name in (MANAGED_APP, LAUNCHER_EXE, MANAGED_SUMS)
+    f"{PORTABLE_FOLDER}/{name}" for name in (MANAGED_APP, LAUNCHER_EXE, MANAGED_SUMS, MANAGED_MANAGER_README)
 }
 # The launcher only copies files: it must never be able to reach a network.
 NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsock32.dll"}
@@ -45,8 +47,8 @@ NETWORK_DLLS = {"winhttp.dll", "wininet.dll", "ws2_32.dll", "mswsock.dll", "wsoc
 # this to what is actually imported: a new entry is a reviewed native dependency.
 SYSTEM_DLLS = {
     "advapi32.dll", "bcryptprimitives.dll", "comctl32.dll", "d2d1.dll", "dwmapi.dll", "dwrite.dll",
-    "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll",
-    "uiautomationcore.dll", "user32.dll", "winhttp.dll", "wtsapi32.dll",
+    "kernel32.dll", "ntdll.dll", "ole32.dll", "oleaut32.dll", "shell32.dll", "shlwapi.dll",
+    "uiautomationcore.dll", "user32.dll", "version.dll", "winhttp.dll", "wtsapi32.dll",
 }
 
 
@@ -137,6 +139,12 @@ def zip_tree(source, destination):
                 archive.write(file, file.relative_to(source).as_posix())
 
 
+def check_release_notices():
+    for readme in (*README_SOURCES.values(), MANAGED_MANAGER_SOURCE):
+        if "Distribution is blocked" in (ROOT / readme).read_text(encoding="utf-8"):
+            raise ValueError("Distribution requires reviewed release notice wording")
+
+
 def prepare(out, mode):
     if out.exists():
         raise ValueError("Output must be a new directory; stale artifacts are not reusable")
@@ -147,9 +155,7 @@ def prepare(out, mode):
         if dirty:
             raise ValueError("Distribution requires a clean source checkout")
         # Development checkouts may carry blocked wording; a release must not.
-        for readme in README_SOURCES.values():
-            if "Distribution is blocked" in (ROOT / readme).read_text():
-                raise ValueError("Distribution requires reviewed release notice wording")
+        check_release_notices()
     out.mkdir(parents=True)
     # The installer payload is flat; the portable ZIP is zipped from its parent so
     # that everything extracts into one ElevenClock-rs folder.
@@ -194,6 +200,7 @@ def prepare(out, mode):
         (directory / "THIRD-PARTY-NOTICES.txt").write_text(notices.getvalue(), encoding="utf-8")
         shutil.copy2(rust_docs / "COPYRIGHT.html", directory / "RUST-COPYRIGHT.html")
     (managed / APP_EXE).rename(managed / MANAGED_APP)
+    shutil.copy2(ROOT / MANAGED_MANAGER_SOURCE, managed / MANAGED_MANAGER_README)
     write_managed_sums(managed)
     shutil.copy2(launcher, managed / LAUNCHER_EXE)
     (out / "launcher").mkdir()

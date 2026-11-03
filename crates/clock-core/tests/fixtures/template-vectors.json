@@ -1,0 +1,18 @@
+{
+  "accept": [
+    { "link": "elevenclock://template?v=1&format=%25H%3A%25M&font=9&theme=system", "format": "%H:%M", "font": 9, "theme": "system" },
+    { "link": "elevenclock://template?v=1&format=%25%25&font=24&theme=dark", "format": "%%", "font": 24, "theme": "dark" },
+    { "link": "elevenclock://template?v=1&format=%25H%0A%25M&font=6&theme=light", "format": "%H\n%M", "font": 6, "theme": "light" },
+    { "link": "elevenclock://template?v=1&format=%25A%20%25d%20%25B&font=12&theme=system", "format": "%A %d %B", "font": 12, "theme": "system" }
+  ],
+  "reject": [
+    "elevenclock://template?v=1&format=%25H&font=5&theme=dark",
+    "elevenclock://template?v=1&format=%25H&font=25&theme=dark",
+    "elevenclock://template?v=1&format=%25H&font=9&theme=blue",
+    "elevenclock://template?v=1&format=%25Q&font=9&theme=dark",
+    "elevenclock://template?v=1&format=%25H%0A%25M%0A%25S&font=9&theme=dark",
+    "elevenclock://template?v=1&format=&font=9&theme=dark",
+    "elevenclock://template?v=1&format=%25&font=9&theme=dark",
+    "elevenclock://template?v=2&format=%25H&font=9&theme=dark"
+  ]
+}

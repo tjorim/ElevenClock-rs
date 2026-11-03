@@ -93,7 +93,9 @@ function Read-Probe([Diagnostics.Process]$Process, [string]$Name, [int]$TimeoutS
     return $records
 }
 function Wait-Helper([Diagnostics.Process]$Parent) {
-    $deadline = [DateTime]::UtcNow.AddSeconds(8)
+    # Same cold-start allowance as Wait-Stall: a freshly built binary on a loaded hosted
+    # ARM64 runner can need well over 8 seconds before it spawns its helper.
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
     do {
         $child = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($Parent.Id)" |
             Where-Object { $_.Name -eq 'taskbar_probe.exe' -and $_.CommandLine -match '--helper' } | Select-Object -First 1

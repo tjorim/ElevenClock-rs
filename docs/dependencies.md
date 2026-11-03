@@ -3,6 +3,17 @@
 No command parser, async runtime or web UI runtime is used. What each dependency is
 for is listed [below](#what-each-dependency-is-for).
 
+On Unix development hosts, `clock-windows` directly uses the already locked
+`libc` crate for descriptor-relative, no-follow inventory report opens. This
+prevents report and parent-directory link swaps during portable summary tests.
+It uses the maintained rust-lang bindings with default features and their
+MIT/Apache-2.0 license choice; it adds no dependency to shipped Windows binaries.
+
+Windows uses the in-box `shlwapi.dll` function `SHDeleteEmptyKeyW` to prune only
+empty protocol registry keys, preserving unrelated values and subkeys. Summary
+publication uses `ntdll.dll` handle-relative file operations so an output-path
+substitution cannot redirect the write. Neither DLL is bundled with the app.
+
 Commit Cargo.lock and use --locked for all checks/builds. New dependencies must
 explain product need, maintenance, feature selection and license impact.
 Update in a dedicated PR against the default branch. Run the Linux and Windows
@@ -99,6 +110,17 @@ uses the existing serde_json dependency. The launcher still forbids network DLLs
 
 ## Optional features
 
+### Presentation templates
+
+The [template workflow](design/templates.md) adds no packages or service. The core
+uses bounded value parsing; the existing Serde/JSON dependencies store named local
+presets. The website uses plain JavaScript and URL fragments, with no upload or
+fetch. Sharing copies a link only on request. Opening the editor explicitly uses
+the default browser. Per-user protocol registration and the bounded single-instance
+handoff use generated Shell/registry/window APIs; no background worker, network
+client, polling timer or vendor endpoint is added. Only presentation fields cross
+the template boundary; Apply retains its existing validation and persistence rules.
+
 A heavyweight or network-dependent capability requires an explicit design decision
 covering product need, dependency size/maintenance/license impact, data collected
 and transmitted (destination, consent, retention and diagnostic redaction), and
@@ -109,3 +131,20 @@ accounts unless a deliberate reviewed product-policy change says otherwise. An
 optional feature must not silently add startup traffic or background polling.
 Use the contributor extension checklist and the existing dependency checks; this
 policy introduces no plugin system or optional-feature framework.
+
+### Managed local inventory
+
+`clock-launcher` reuses the existing serde 1.0 (derive) and serde_json 1.0 versions
+and features for bounded inventory JSON; there are no new packages or license terms.
+Both are maintained upstream and already used for preference persistence. The lockfile
+only adds these existing packages to the launcher's dependency edges. Windows fact
+helpers use generated in-box Advapi32/Ole32/Version APIs, without a new Rust dependency.
+Version.dll is allowed for fixed local executable version lookup. Account lookup
+uses Advapi32 and GUID generation uses Ole32. These helpers run only after explicit
+administrator opt-in, inside the bounded inventory process. No network client is
+added. Optional central drop-box reporting uses normal file I/O inside the same
+bounded helper; it adds no HTTP/network client dependency or persistent service.
+
+The launcher's direct `clock-core` dependency reuses the workspace's existing format
+validator and preset catalog for optional managed format inventory and aggregation;
+it adds no packages, versions or license terms.

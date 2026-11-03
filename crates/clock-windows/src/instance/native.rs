@@ -32,7 +32,7 @@ pub enum Acquired {
     Existing(InstanceNames),
 }
 
-fn current_user_sid() -> Result<String> {
+pub(crate) fn current_user_sid() -> Result<String> {
     // SAFETY: standard two-call token query. The token handle is closed on every
     // path, the buffer is sized by the first call, and the converted SID string
     // is LocalFree'd after copying.
@@ -92,12 +92,20 @@ pub fn acquire() -> Result<Acquired> {
 /// creating its host window (simultaneous launches) or shutting down, so the
 /// lookup is bounded rather than assumed. Returns whether the signal was posted.
 pub fn signal_existing(names: &InstanceNames, wait: Duration) -> bool {
+    let Some(host) = find_existing(names, wait) else {
+        return false;
+    };
+    // SAFETY: fixed pointer-free request to the located user/session host.
+    unsafe { PostMessageW(Some(host), WM_SHOW_SETTINGS, WPARAM(0), LPARAM(0)).as_bool() }
+}
+
+fn find_existing(names: &InstanceNames, wait: Duration) -> Option<crate::bindings::HWND> {
     let title = HSTRING::from(names.window_title.as_str());
     let class = HSTRING::from(HOST_CLASS);
     let started = Instant::now();
     loop {
-        // SAFETY: lookups and a post to a window of another process of the same
-        // user; a stale handle fails safely. Posting carries no pointers.
+        // SAFETY: bounded lookup of the current user's host; a stale handle
+        // fails safely, and no pointers are passed to the target process.
         unsafe {
             let host = FindWindowW(&class, &title);
             if !host.is_invalid() {
@@ -105,12 +113,46 @@ pub fn signal_existing(names: &InstanceNames, wait: Duration) -> bool {
                 GetWindowThreadProcessId(host, Some(&mut pid));
                 // Let the existing process take the foreground for its window.
                 let _ = AllowSetForegroundWindow(pid);
-                return PostMessageW(Some(host), WM_SHOW_SETTINGS, WPARAM(0), LPARAM(0)).as_bool();
+                return Some(host);
             }
         }
         if started.elapsed() >= wait {
-            return false;
+            return None;
         }
         std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// WM_COPYDATA marshals these bounded bytes while this synchronous call is live.
+/// The receiver copies validated values; no sender pointer is retained.
+pub fn signal_template(
+    names: &InstanceNames,
+    template: &clock_core::template::ClockTemplate,
+    wait: Duration,
+) -> bool {
+    let Some(host) = find_existing(names, wait) else {
+        return false;
+    };
+    let link = template.app_link();
+    let data = crate::bindings::COPYDATASTRUCT {
+        dwData: super::TEMPLATE_MESSAGE_TAG,
+        cbData: link.len() as u32,
+        lpData: link.as_ptr().cast_mut().cast(),
+    };
+    let mut result = 0;
+    // SAFETY: system-marshalled WM_COPYDATA, live UTF-8 payload and structure for
+    // the entire bounded send, and a live output slot. No pointer is posted.
+    unsafe {
+        crate::bindings::SendMessageTimeoutW(
+            host,
+            crate::bindings::WM_COPYDATA as u32,
+            WPARAM(0),
+            LPARAM((&data as *const crate::bindings::COPYDATASTRUCT) as isize),
+            crate::bindings::SMTO_ABORTIFHUNG as u32,
+            1000,
+            Some(&mut result),
+        )
+        .0 != 0
+            && result == 1
     }
 }

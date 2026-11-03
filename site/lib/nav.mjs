@@ -15,6 +15,7 @@ export const navigation = [
     ['docs/design/lifecycle.md', 'Lifecycle'],
     ['docs/design/interaction.md', 'Interaction'],
     ['docs/design/settings.md', 'Settings window'],
+    ['docs/design/templates.md', 'Templates and sharing'],
     ['docs/design/diagnostics.md', 'Diagnostics'],
     ['docs/design/startup.md', 'Startup'],
   ]],
