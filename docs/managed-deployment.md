@@ -396,11 +396,14 @@ to rewrite its own file, but no list, read, delete or take-ownership rights for 
 else. The share must also allow Change: NTFS cannot override a read-only share. Keep
 this folder separate from the read-only deployed executables and configuration, and do
 not create it below a folder that grants users read access. This needs no new share,
-local device administration or automatic ACL changes. The recipe was checked with one account on local NTFS and over loopback SMB (the real
-publisher creates and rewrites its file;
-list, read, delete, rename and subfolder creation are denied). Cross-user isolation, a
-domain share and the owner check on remote files were not. Test create, rewrite, enumerate,
-read, delete and cross-user access with ordinary accounts before enabling publication.
+local device administration or automatic ACL changes. The recipe was checked on a Windows 11 machine with two local accounts over loopback SMB.
+The real publisher created and rewrote its own file; the other account could not list,
+read, overwrite, delete or rename it, and could not publish over the same name, but could
+create a new name. The administrator summary excluded the report (owner not matching its
+SID) and counted it with `--skip-owner-check`. A domain share was not tested. Repeat the
+check on your own share with `scripts/test-dropbox-isolation.ps1` (disposable machine,
+elevated PowerShell; it creates and removes two local accounts and a share) or by hand
+with two ordinary accounts before enabling publication.
 
 Users can rewrite, but not read, the file they created, and file owners can usually
 change their own file's permissions. Because any account can create a file with any
