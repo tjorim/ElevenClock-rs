@@ -306,8 +306,7 @@ permissions for users as the deployed binaries. No local administrator privilege
 HKLM changes, device-management control or user approval prompts are required.
 The managed ZIP does not ship an enabled configuration. This file controls only
 inventory: it cannot override executable source/destination paths or startup.
-An optional `report_directory` enables central reporting as described below, with
-an optional `report_mode` of `per_user_directory` (default) or `drop_box`. Unknown fields and schema versions are rejected; the file must
+An optional `report_directory` enables central drop-box reporting as described below. Unknown fields and schema versions are rejected; the file must
 be valid UTF-8 JSON no larger than 4 KiB with an explicit boolean setting.
 
 The helper resolves the source using the same priority as app deployment: `--source`,
@@ -362,62 +361,8 @@ must be an absolute UNC or drive path, at most 2048 UTF-8 bytes. Relative paths,
 parent traversal, environment-variable expansion and Windows device paths are not
 supported. `local_inventory_enabled: false` disables both collection and publication.
 
-Two transports are supported, chosen with `report_mode` (default `per_user_directory`).
-`drop_box` is described under [Drop-box reports](#drop-box-reports) below.
-
-`per_user_directory` is **own-report replacement**. It suits a known group of users:
-administrators must provision the reporting root and a subdirectory named with each
-account's SID, for example:
-
-```text
-\\fileserver\apps\ElevenClock-reports\S-1-5-21-123-456-789-1001\
-    12345678-1234-4234-8234-123456789abc.json
-```
-
-The launcher writes only inside the submitting account's SID directory. Give that
-account the rights needed to read and replace its own reports and create/write/delete
-its staging and lock files there; retain administrator access. Other users should not
-be able to enumerate/read/write that directory. Both SMB and NTFS permissions must
-permit these operations: NTFS cannot override a read-only share. Keep the deployed
-executables and configuration read-only to users. This does not require a new share,
-local device administration, or automatic ACL changes. The launcher creates neither
-the reporting root nor SID directories. Test the actual create/read/replace/delete
-and cross-user restrictions with ordinary accounts before enabling publication.
-This model allows users to manage their own submitted files; it is not a blind drop
-or authenticated audit, and owners may be able to change their own file permissions.
-
-The local snapshot is committed first. The helper then publishes
-`<report_directory>\<SID>\<installation-ID>.json`, preserving each installation's
-version and last-seen time. SID/installation/time lookup failures prevent publication;
-no unnamed "user" report or filename-derived identity is substituted. A fixed lock
-serializes sessions for that report; a fixed `.pending` file is flushed and verified
-before same-directory atomic replacement. A failed replacement preserves the previous
-report. Unsupported locking/replacement or missing permissions cause publication to
-fail without changing launch results or the local snapshot. Older observations do
-not replace newer central reports. Malformed/unknown-schema existing reports are
-preserved for administrator review, not silently overwritten.
-
-The configuration is reread before publication and before replacement; a changed
-setting or destination aborts export of the observation collected under the old
-configuration. Publication, including blocked SMB I/O, shares the existing helper's
-three-second deadline; there is no extra worker, timer or retry service. On timeout,
-the helper is terminated. A fixed per-installation `.pending` file may remain and is
-reused on the next successful attempt; `.lock` files are also stable. This bounds
-per-installation file growth instead of leaving one orphan per attempt. An in-flight
-server operation can complete during revocation/termination; this is not a distributed
-transaction or remote cancellation guarantee.
-
-Removing/changing the destination does not delete existing reports. Administrators
-own central retention and cleanup, including old installation IDs after a reset.
-Collection remains disabled while the central configuration is unreachable, even if
-the report destination could otherwise be reached. There is no replay queue: a later
-successful launch publishes its new observation, not a backlog.
-
-#### Drop-box reports
-
-Use `"report_mode": "drop_box"` when every account may use the app and you cannot
-provision a folder per user. The launcher writes one file straight into
-`report_directory`:
+Central reports are **drop-box files**. Every account may use the app, so nothing is
+provisioned per user: the launcher writes one file straight into `report_directory`.
 
 ```text
 \fileserver\apps\ElevenClock-reports\S-1-5-21-123-456-789-1001.12345678-1234-4234-8234-123456789abc.json
@@ -425,11 +370,16 @@ provision a folder per user. The launcher writes one file straight into
 
 The name is `<SID>.<installation-ID>.json`, so a person with several PCs has one file
 per PC and the folder grows by one file per installation, never per launch. The
-launcher creates no folders, reads nothing back and uses no lock, staging or rename
-step, because users in a blind folder cannot list, read, delete or rename. It opens the
-file for writing (without truncating on open), writes the whole report and sets the
-length. A crash mid-write can leave a short or mixed file. The summary excludes
-malformed files and the next launch rewrites the report.
+local snapshot is committed first; the helper then writes the whole report in place,
+preserving each installation's version, first and last-seen time. SID, installation
+and time lookup failures prevent publication: no unnamed "user" report or
+filename-derived identity is substituted. The launcher creates no folders, reads
+nothing back and uses no lock, staging or rename step, because users in a blind folder
+cannot list, read, delete or rename. It opens the file for writing (without truncating
+on open), writes the report and sets the length. A crash mid-write can leave a short
+or mixed file. The summary excludes malformed files and the next launch rewrites the
+report. Missing permissions make publication fail without changing launch results or
+the local snapshot.
 
 Example NTFS recipe, to be checked with two ordinary accounts before enabling it:
 
@@ -443,18 +393,33 @@ icacls "\fileserver\apps\ElevenClock-reports" /grant "*S-1-3-0:(OI)(IO)(WD,AD,WA
 This gives Administrators and SYSTEM full control, Authenticated Users the right to
 create files in this folder only, and the creating account (`CREATOR OWNER`) the rights
 to rewrite its own file, but no list, read, delete or take-ownership rights for anyone
-else. The share must also allow Change. Run the `icacls` commands from an
-administrator session on a machine that can reach the share, and keep this folder
-separate from the read-only deployed executables.
+else. The share must also allow Change: NTFS cannot override a read-only share. Keep
+this folder separate from the read-only deployed executables and configuration, and do
+not create it below a folder that grants users read access. This needs no new share,
+local device administration or automatic ACL changes. Test create, rewrite, enumerate,
+read, delete and cross-user access with ordinary accounts before enabling publication.
 
-Users can overwrite, but not read, the file they created, and file owners can
-usually change their own file's permissions. Because any account can create a
-file with any name, the summary command believes a drop-box report only when the file's
-**owner is the SID written inside it**. It excludes the report and counts it in
-`unverified_owner_reports` otherwise, for example a copy made by an administrator or a
-file created by another account. Owner checks need Windows, so run the summary there.
-Reports from user-controlled clients remain operational inventory, not an
-authenticated audit.
+Users can rewrite, but not read, the file they created, and file owners can usually
+change their own file's permissions. Because any account can create a file with any
+name, the summary command believes a report only when the file's **owner is the SID
+written inside it**. It excludes the report and counts it in `unverified_owner_reports`
+otherwise, for example a copy made by an administrator or a file created by another
+account. Owner checks need Windows, so run the summary there. Reports from
+user-controlled clients remain operational inventory, not an authenticated audit.
+
+The configuration is reread before publication and before the write; a changed
+setting or destination aborts export of the observation collected under the old
+configuration. Publication, including blocked SMB I/O, shares the existing helper's
+three-second deadline; there is no extra worker, timer or retry service. On timeout,
+the helper is terminated. An in-flight server operation can complete during
+revocation/termination; this is not a distributed transaction or remote cancellation
+guarantee.
+
+Removing/changing the destination does not delete existing reports. Administrators
+own central retention and cleanup, including old installation IDs after a reset.
+Collection remains disabled while the central configuration is unreachable, even if
+the report destination could otherwise be reached. There is no replay queue: a later
+successful launch publishes its new observation, not a backlog.
 
 ### Optional clock-format popularity reporting
 
@@ -631,7 +596,7 @@ Parent loss also closes the job. Blocking share configuration reads, account res
 optional central publication stay in the helper process under the same deadline. There is no timed-out thread left running, retry service, clock
 state-machine change or periodic app timer. Reporting errors never change the launch
 exit code, display a message box, or prevent the app start attempt. If the local
-launcher could not be deployed, inventory is skipped. Optional central publication uses the own-report replacement contract below.
+launcher could not be deployed, inventory is skipped. Optional central publication uses the drop-box contract below.
 
 ### Local persistence and identity lifecycle
 
@@ -705,9 +670,15 @@ $summary.support_issues | Format-Table code, severity, installations, recent_use
 ```
 
 The optional last argument is the recent window in days (1–36,500, default 30).
-The input is the reporting root containing SID directories, or a directory containing
-local snapshots. Only `.json` files at the root and in its immediate child directories
-are read; links and deeper directories are skipped. The same library rules above
+Add `--skip-owner-check` as the last argument to accept reports regardless of file owner.
+Use it for local snapshots you copied in yourself, because copies are owned by whoever
+made them; never use it on a drop-box folder.
+
+The input is the drop-box folder, or a directory containing local snapshots. `.json`
+files at the root are read, and their owner must match their SID (see above). The
+command also reads `.json` files in immediate child directories, so reports left by an
+earlier layout still count; owner checks do not apply to those. Links and deeper
+directories are skipped. The same library rules above
 deduplicate records, exclude malformed/future records, and count unavailable values.
 The output contains overall counts, formats sorted by recent distinct-user adoption,
 support counts, excluded-report counts, and the latest snapshot for each installation.

@@ -163,14 +163,12 @@ Administrator opt-in is an optional `elevenclock-rs-launcher.json` beside the ce
 app and launcher, writable only by the deployment administrators and readable by
 users. Schema version 1 requires `local_inventory_enabled: true`. This intentionally
 extends the original "no admin config file" decision for inventory only: source,
-destination and startup rules stay as above. Optional `report_directory` selects
-own-report replacement in a separately provisioned reporting root, with existing
-per-SID directories and suitable SMB/NTFS access. The app never creates directories
-on the share or changes permissions; executable/configuration access stays read-only.
-An optional `report_mode: "drop_box"` replaces the per-SID directories with one
-`<SID>.<installation-ID>.json` file in a create-only folder, for deployments where every
-account may report and no folder can be provisioned per user. It reads nothing back, so
-the summary command trusts a drop-box file only if its owner matches the SID inside it.
+destination and startup rules stay as above. Optional `report_directory` selects a drop
+box: one `<SID>.<installation-ID>.json` file per installation, written in place into a
+create-only folder, because every account may report and no folder can be provisioned
+per user. The app never creates directories on the share or changes permissions;
+executable/configuration access stays read-only. Nothing is read back, so the summary
+command trusts a report only if its file owner matches the SID inside it.
 The configuration is not copied or cached locally. Missing/invalid/unreachable
 configuration disables collection, including offline launches; administrators can
 revoke it by setting false or removing the central file. No HKLM policy or device
@@ -183,12 +181,12 @@ and local I/O, with bounded teardown and kill-on-parent-loss. The app owns no in
 timers or resources. Existing snapshots survive revocation/uninstall until explicitly
 removed. When `report_directory` is configured, the local snapshot is committed
 first and then published as `<root>/<SID>/<installation-ID>.json` inside the same
-bounded helper. Fixed locks/staging files bound growth across timeouts. Revocation
+bounded helper. One file per installation bounds growth across timeouts. Revocation
 or a destination change aborts publication on the next configuration check; in-flight
 server operations are not guaranteed cancellable. See
 [local inventory](../managed-deployment.md#local-inventory-administrator-opt-in) for
 schema, disclosure, provisioning, offline behavior, replacement rights and retention.
-Create-only submissions and automatic permission management are not implemented.
+Per-user report directories, append history and automatic permission management are not implemented.
 
 The optional `include_clock_format` boolean, default false, extends inventory with
 committed format source only, including user-supplied literals. It shares the same

@@ -20,20 +20,6 @@ pub struct Config {
     pub include_clock_format: bool,
     #[serde(default)]
     pub report_directory: Option<PathBuf>,
-    #[serde(default)]
-    pub report_mode: ReportMode,
-}
-
-/// How reports reach `report_directory`.
-/// `PerUserDirectory` needs an administrator-provisioned folder per account SID.
-/// `DropBox` writes one `<SID>.<installation-ID>.json` file straight into the folder, for
-/// folders where users may create and overwrite their own files but not list or read.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum ReportMode {
-    #[default]
-    PerUserDirectory,
-    DropBox,
 }
 
 pub fn parse(bytes: &[u8]) -> Option<Config> {

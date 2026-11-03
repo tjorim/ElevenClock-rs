@@ -200,16 +200,18 @@ fn run() -> Exit {
         directory,
         output,
         recent_days,
+        verify_owners,
     } = &command
     {
         let result = clock_windows::inventory_facts::observed_utc()
             .ok_or_else(|| io::Error::other("summary time unavailable"))
             .and_then(|now| {
-                crate::inventory_summary::write(
+                crate::inventory_summary::write_checked(
                     directory,
                     output,
                     now,
                     u64::from(*recent_days) * 86400,
+                    *verify_owners,
                 )
             });
         if result.is_err() {

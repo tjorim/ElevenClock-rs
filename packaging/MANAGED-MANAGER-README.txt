@@ -61,11 +61,12 @@ the file to stop future collection. The helper records identity/version/outcomes
 %LOCALAPPDATA%\ElevenClock-rs\inventory\latest.json.
 Optional "report_directory" in the same JSON specifies an absolute UNC/drive path
 for central publication, e.g. "\\\\fileserver\\apps\\ElevenClock-reports".
-Provision that root and a directory for each account's SID beforehand, with rights
-to read/replace the account's own reports and staging/lock files. Users must retain
-read-only access to the executables/configuration. Publication needs suitable SMB
-and NTFS rights; the launcher creates no reporting directories and changes no ACLs.
-Reports use <report_directory>\<SID>\<installation-ID>.json. Local snapshots are
+Make that root a create-only drop box: users may create and rewrite their own file
+but not list, read or delete (docs/managed-deployment.md has an icacls recipe).
+Users must retain read-only access to the executables/configuration. Publication
+needs suitable SMB and NTFS rights; the launcher creates no folders and changes no ACLs.
+Reports use <report_directory>\<SID>.<installation-ID>.json. The summary command
+trusts a report only if its file owner is the SID inside it. Local snapshots are
 saved first; central failure never prevents startup. A bounded helper owns all I/O.
 Omit report_directory for local-only inventory. Managers own central retention/cleanup.
 Existing snapshots remain after disabling inventory or uninstalling the managed app.
@@ -98,9 +99,11 @@ files do not negotiate helper protocol support; deploy compatible app/launcher f
 together from the managed release.
 
 Manager summary (no app launch or new collection):
-  elevenclock-rs-launcher.exe --inventory-summary <report-root> <output.json> [recent-days]
+  elevenclock-rs-launcher.exe --inventory-summary <report-root> <output.json> [recent-days] [--skip-owner-check]
 Use Start-Process -Wait -PassThru in PowerShell to wait and inspect ExitCode. Default
 recent window is 30 days. Output's existing parent must be outside the report tree.
+--skip-owner-check accepts reports from any file owner; use it only for local snapshots you
+copied in yourself, never for a drop-box folder.
 The JSON includes distinct users/installations, recent counts, format adoption,
 support issues and latest snapshots. Protect it like the source identity-bearing
 reports. Invalid/future reports are excluded and counted; unreadable inputs fail

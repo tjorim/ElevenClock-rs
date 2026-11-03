@@ -200,13 +200,9 @@ pub fn collect() -> io::Result<()> {
         facts::new_installation_id,
     )?;
     if let (Some(root), Some(saved)) = (&config.report_directory, saved) {
-        crate::inventory_publish::publish_saved(
-            root,
-            config.report_mode,
-            saved,
-            &directory.join("inventory"),
-            || inventory_config::read(&source, &local_app).as_ref() == Some(&config),
-        )?;
+        crate::inventory_publish::publish_saved(root, saved, &directory.join("inventory"), || {
+            inventory_config::read(&source, &local_app).as_ref() == Some(&config)
+        })?;
     }
     Ok(())
 }

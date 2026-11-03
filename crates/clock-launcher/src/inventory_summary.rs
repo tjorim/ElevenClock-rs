@@ -10,15 +10,38 @@ use std::{
     path::Path,
 };
 
-pub fn write(directory: &Path, output: &Path, now: u64, recent_seconds: u64) -> io::Result<()> {
+#[cfg(test)]
+fn write(directory: &Path, output: &Path, now: u64, recent_seconds: u64) -> io::Result<()> {
     write_before_read(directory, output, now, recent_seconds, || {})
 }
 
+pub fn write_checked(
+    directory: &Path,
+    output: &Path,
+    now: u64,
+    recent_seconds: u64,
+    verify_owners: bool,
+) -> io::Result<()> {
+    write_with(directory, output, now, recent_seconds, verify_owners, || {})
+}
+
+#[cfg(test)]
 fn write_before_read(
     directory: &Path,
     output: &Path,
     now: u64,
     recent_seconds: u64,
+    before_read: impl FnOnce(),
+) -> io::Result<()> {
+    write_with(directory, output, now, recent_seconds, true, before_read)
+}
+
+fn write_with(
+    directory: &Path,
+    output: &Path,
+    now: u64,
+    recent_seconds: u64,
+    verify_owners: bool,
     before_read: impl FnOnce(),
 ) -> io::Result<()> {
     let root = directory.canonicalize()?;
@@ -74,7 +97,7 @@ fn write_before_read(
         // Drop-box files sit in a folder every user can write to, so the claimed SID is only
         // believed when the file is owned by that account. Unreadable or unsupported owner
         // checks count as unverified rather than failing the whole summary.
-        if child.is_none() && !owner_matches(&file, &bytes) {
+        if verify_owners && child.is_none() && !owner_matches(&file, &bytes) {
             unverified.set(unverified.get() + 1);
             bytes.clear();
         }
@@ -270,6 +293,11 @@ mod tests {
             assert_eq!(value["counts"]["installations"], 1);
             assert_eq!(value["unverified_owner_reports"], 1);
         }
+        // Copied-in local snapshots are owned by whoever copied them.
+        write_checked(&root, &output, 1_900_000_000, 31_536_000, false).unwrap();
+        let value: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+        assert_eq!(value["counts"]["installations"], 2);
+        assert_eq!(value["unverified_owner_reports"], 0);
     }
 
     #[test]
