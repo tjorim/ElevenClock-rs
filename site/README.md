@@ -8,15 +8,15 @@ framework on the client.
 
 ## Local development
 
-From the repository root, use Node **24.14.0** (`nvm use`) and npm **10.9.8**. Astro and
+From the repository root, use Node **24.14.0** (`nvm use`) and pnpm **12.16.1**. Astro and
 the Markdown processor are pinned in `package.json`; commit changes to
-`package-lock.json` together with dependency changes. CI installs the pinned npm
-version before running `npm ci`.
+`pnpm-lock.yaml` together with dependency changes. CI installs the pinned pnpm
+version before running `pnpm install --frozen-lockfile`.
 
 ```sh
-npm install --global npm@10.9.8
-npm ci
-npm run dev
+npm install --global pnpm@12.16.1
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 Open <http://127.0.0.1:4321/ElevenClock-rs/>. Markdown, layout and CSS edits refresh
@@ -24,20 +24,20 @@ in development. After adding assets, restart the command so they are copied agai
 To inspect exactly what will be published:
 
 ```sh
-npm test
-npm run build
-npm run check:site
-npm run preview
+pnpm test
+pnpm run build
+pnpm run check:site
+pnpm run preview
 ```
 
-Preview serves the same URL and repository prefix. `npm test` runs the routing,
+Preview serves the same URL and repository prefix. `pnpm test` runs the routing,
 link-rewriting and template tests, including a headless browser check of initial
 template hashes, hash navigation and draft confirmation. Install Chromium, Chrome
 or Edge first. The test detects Edge/Chrome on Windows or a browser on `PATH` on
 Linux; `CLOCK_TEST_BROWSER` can specify its executable. It uses a disposable browser
 profile and local fixture without adding a JavaScript DOM dependency.
-After `npm run build`,
-`npm run check:site` validates every output page: internal links, fragments, local
+After `pnpm run build`,
+`pnpm run check:site` validates every output page: internal links, fragments, local
 assets and redirect targets must resolve under `/ElevenClock-rs/`.
 
 ## Project structure
@@ -53,7 +53,7 @@ assets and redirect targets must resolve under `/ElevenClock-rs/`.
 - `site/src/layouts/SiteLayout.astro`: shared metadata, skip link, header and footer.
 - `site/src/pages/docs/[...slug].astro`: the documentation shell, sidebar, table of
   contents and the source and edit links on GitHub.
-- `site/lib/nav.mjs`: the documentation navigation. `npm test` fails when a published
+- `site/lib/nav.mjs`: the documentation navigation. `pnpm test` fails when a published
   page is missing from it.
 - `site/lib/paths.mjs` and `remark-links.mjs`: routing and Markdown URL rewriting
   shared by the build and the tests.
@@ -106,7 +106,7 @@ them. Astro prefixes its own generated assets. Do not add a second prefix by han
 ## CI and deployment
 
 In GitHub **Settings > Pages**, choose **GitHub Actions** as the source. The Website
-workflow (`.github/workflows/pages.yml`) installs the pinned toolchain, runs `npm ci`,
+workflow (`.github/workflows/pages.yml`) installs the pinned toolchain, runs `pnpm install --frozen-lockfile`,
 builds the site and checks the output for pull requests and for pushes to `main`. Only
 pushes to `main` (and manual runs on `main`) upload the result with
 `upload-pages-artifact` and deploy it. Its path filters include the site sources,

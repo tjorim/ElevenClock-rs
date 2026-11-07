@@ -101,9 +101,9 @@ Cross-cutting rules (details in `docs/contributing.md` and the ADRs):
 
 ## Docs and dependencies
 
-The website is an Astro build (`site/`, Node 24.14.0, npm 10.9.8) that renders the Markdown in
+The website is an Astro build (`site/`, Node 24.14.0, pnpm 12.16.1) that renders the Markdown in
 `docs/`, `README.md`, `CODE_OF_CONDUCT.md` and `FORMAT.md` as the single source. Check
-website changes with `npm ci && npm test && npm run build && npm run check:site`; new
+website changes with `pnpm install --frozen-lockfile && pnpm test && pnpm run build && pnpm run check:site`; new
 pages go into `site/lib/nav.mjs` (details in `site/README.md`).
 
 Docs describe the app as it is now; development history lives in Git. New or updated
