@@ -79,7 +79,7 @@ jobs:
       - name: Installer and portable lifecycle (disposable hosted account)
         shell: powershell
         run: ./scripts/test-rust-installer.ps1 -DisposableAccount
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: elevenclock-rs-unsigned-x64-candidate
           retention-days: 30
@@ -91,12 +91,12 @@ jobs:
             dist/candidate/SHA256SUMS.txt
             dist/candidate/payload/elevenclock-rs.exe
             dist/candidate/launcher/elevenclock-rs-launcher.exe
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: elevenclock-rs-x64-debug-symbols
           if-no-files-found: error
           path: dist/candidate/symbols/
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: windows-packaging-evidence
@@ -118,7 +118,7 @@ jobs:
       - name: Managed launcher, managed mode, startup and installer refusal (disposable hosted account)
         shell: powershell
         run: ./scripts/test-rust-managed.ps1 -DisposableAccount
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: windows-managed-evidence
