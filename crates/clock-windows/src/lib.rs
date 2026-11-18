@@ -32,6 +32,8 @@ pub mod update_check;
 
 pub mod render;
 pub mod theme;
+#[cfg(any(windows, test))]
+pub(crate) mod ui_guard;
 
 #[cfg(windows)]
 pub(crate) mod accessibility;

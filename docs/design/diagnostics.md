@@ -129,7 +129,8 @@ can happen before the old contents are replaced leaves them alone:
 `MAX_FILES`), a line is cut at 1 KiB, and rotation happens before a write could exceed
 the limit. It logs **transitions**, not repaints: a taskbar's outcome changing, a
 discovery failure or recovery, pause/resume, discovery turned off, a refresh request,
-a copy, a failed save, start and stop, and a panic message. `Runtime::transition_lines`
+a copy, a failed save, start and stop, and a panic message with its repository-relative
+`file:line` (the build machine's directories are removed). `Runtime::transition_lines`
 compares against what it last logged, so a minute of ticks writes nothing.
 
 The managed launcher ([ADR 0004](../adr/0004-managed-launcher.md)) writes the same

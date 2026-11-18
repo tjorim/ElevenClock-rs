@@ -138,7 +138,8 @@ MonitorId/TaskbarId are process-local values, never raw handles or persistence I
 Changes to shared interfaces require coordinated review before dependent work.
 
 The modal dialog manager owns HWNDs, controls, fonts and DPI layout on the calling
-UI thread. The callback stores no borrowed state and never unwinds across FFI.
+UI thread. The callback stores no borrowed state and never unwinds across FFI; wrap a
+new UI-thread callback body in `ui_guard::run` so a panic shuts the app down cleanly.
 Shared LoadIcon resources are not destroyed. Native handles/COM pointers never
 cross worker channels. Future custom owned handles need RAII, explicit disposal
 order and UI-thread affinity; UIA objects belong to the bounded discovery helper

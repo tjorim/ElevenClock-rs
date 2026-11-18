@@ -189,6 +189,25 @@ pub fn log(message: &str) {
     }
 }
 
+/// Where a panic happened, as `file:line` with the build machine's directories
+/// removed: the repository-relative path below `crates/`, the crate-relative path of
+/// a dependency, or just the file name. A source path is not user data, but a local
+/// build's absolute path can contain a user name, so none of it is kept.
+pub fn panic_location(file: &str, line: u32) -> String {
+    let file = file.replace('\\', "/");
+    let short = if let Some(position) = file.rfind("/crates/") {
+        &file[position + 1..]
+    } else if let Some(position) = file.find("crates/") {
+        &file[position..]
+    } else if let Some((_, rest)) = file.split_once("/registry/src/") {
+        // `<index>-<hash>/<crate>-<version>/src/lib.rs`: drop the index directory.
+        rest.split_once('/').map_or(rest, |(_, krate)| krate)
+    } else {
+        file.rsplit('/').next().unwrap_or(&file)
+    };
+    format!("{short}:{line}")
+}
+
 /// One log line: the UTC time, then the message on a single line and redacted.
 pub fn stamped(message: &str) -> String {
     let flat = message.replace(['\r', '\n'], " ");
@@ -338,6 +357,33 @@ mod tests {
         fs::create_dir(&target).unwrap();
         fs::write(target.join("keep"), b"x").unwrap();
         assert!(log.write_line("abcdefghij").is_err());
+    }
+
+    #[test]
+    fn a_panic_location_keeps_no_machine_specific_directory() {
+        for (file, expected) in [
+            (
+                r"crates\clock-windows\src\runtime.rs",
+                "crates/clock-windows/src/runtime.rs:42",
+            ),
+            (
+                "crates/clock-core/src/state.rs",
+                "crates/clock-core/src/state.rs:42",
+            ),
+            (
+                r"C:\Users\Jorim\work\ElevenClock-rs\crates\clock-app\src\app.rs",
+                "crates/clock-app/src/app.rs:42",
+            ),
+            (
+                "/home/jorim/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/chrono-0.4.45/src/lib.rs",
+                "chrono-0.4.45/src/lib.rs:42",
+            ),
+            (r"C:\Users\Jorim\other\main.rs", "main.rs:42"),
+        ] {
+            let text = panic_location(file, 42);
+            assert_eq!(text, expected, "{file}");
+            assert!(!text.to_lowercase().contains("jorim"), "{text}");
+        }
     }
 
     #[test]
