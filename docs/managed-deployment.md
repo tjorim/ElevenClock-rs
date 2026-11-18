@@ -19,9 +19,9 @@ instead (see the [README](../README.md#install)). Neither needs a share.
 
 Know the limits before you roll out:
 
-- Updates happen only when the launcher runs and the app is not running. A user who
-  signs in before the network or VPN is up, or who never signs out, keeps their version
-  (see [How updates reach users](#how-updates-reach-users)).
+- The running app is never replaced. A newer version is applied at the user's next start
+  of the app, and it must first reach the PC: the launcher has to run once while the
+  share is reachable (see [How updates reach users](#how-updates-reach-users)).
 - Login startup is each user's own choice (see [Login startup](#login-startup)). A user
   who never turns it on has no clock after a reboot and no update at sign-in.
 - Non-persistent and roaming profiles are not supported (see
@@ -157,15 +157,21 @@ Any other argument is passed on to the app unchanged.
   file untouched ([Downgrade safety](design/preferences.md)). Check the release notes
   before you roll back; they name any release that changes the preferences version.
 - **A running app is never replaced or restarted.** If the app is running, the launcher
-  skips the update and starts the exe, which brings the running copy's Settings to the
-  front. A user who stays signed in gets the new version at their next launch, sign-in or
-  reboot. Nobody is interrupted.
-- **Who gets updates late.** The sign-in start is usually the only chance, and it fails
-  quietly when the share is not reachable yet (Wi-Fi or VPN not connected, a 3-second
-  limit). The user then keeps the local copy, and nothing retries while the app runs.
-  Users who sign in off-network, or lock and sleep their PC instead of signing out, can
-  stay on an old version. The remedy is to exit the clock (Settings or the tray menu) and
-  start it again from the shortcut while connected.
+  starts the exe, which brings the running copy's Settings to the front, and then, if the
+  share is reachable, **stages** the central copy: it saves a verified copy beside the
+  app (`elevenclock-rs.exe.staged-<sha-256>`) and leaves the running app alone. Nobody is
+  interrupted.
+- **Staged updates are applied at the next start.** When the launcher runs with the app
+  not running, it updates from the share as usual. If the share is out of reach, it swaps
+  in the staged copy instead (after checking it against the hash in its name), so a
+  sign-in without network still gets the update. A newer central copy replaces the staged
+  one; a share rolled back to what is installed discards it.
+- **Who still gets updates late.** The launcher has to run once while the share is
+  reachable, either with the app not running or from a shortcut start while the app is
+  running. A user who signs in off-network and never starts the app from the shortcut
+  again, or whose launcher never sees the share, keeps their version. The remedy is to
+  start the clock from the shortcut while connected; no exit is needed. Sleeping or
+  locking the PC alone does not start the launcher.
 - **No update prompts.** In a managed copy the app shows no update interface and never
   checks for updates itself. The status on the Support page shows "(managed by your
   organization)" after the version.
@@ -197,8 +203,9 @@ from the share gets the same limit.
 
 | Situation | Result |
 | --- | --- |
-| Central folder reachable | Updated if different, then started |
-| Central folder unreachable, local copy exists | The local copy starts quietly |
+| Central folder reachable, app not running | Updated if different, then started |
+| Central folder reachable, app running | Started (brings Settings forward), the central copy is staged for the next start |
+| Central folder unreachable, local copy exists | A staged update, if there is one, is applied; the local copy starts quietly |
 | Central folder unreachable, no local copy (first run) | One message: the central copy cannot be reached, connect to the company network or VPN and try again |
 | Central app invalid or fails its checksum | The local copy starts if there is one; otherwise one message asking the user to contact the administrator |
 | Copying fails (full disk, locked file) | Same: the local copy starts if there is one |
@@ -230,7 +237,7 @@ The app does no detection of this, so keep to one kind of copy per user.
 
 | What | Where |
 | --- | --- |
-| App, launcher and the launcher's state file (`source.txt`) | `%LOCALAPPDATA%\Programs\ElevenClock-rs\` (the folder an installed copy uses) |
+| App, launcher, the launcher's state file (`source.txt`) and a staged update (`elevenclock-rs.exe.staged-<sha-256>`) | `%LOCALAPPDATA%\Programs\ElevenClock-rs\` (the folder an installed copy uses) |
 | Preferences | `%LOCALAPPDATA%\ElevenClock-rs\` |
 | App log | `%LOCALAPPDATA%\ElevenClock-rs\logs\elevenclock-rs.log` |
 | Launcher log | `%LOCALAPPDATA%\ElevenClock-rs\logs\launcher.log` |
@@ -248,7 +255,7 @@ Run the launcher from the **central folder** (not from the user's copy):
 ```
 
 It removes the app, the launcher, its state file, a leftover `.old` launcher and any
-staged copy (`*.tmp-*` of the app or launcher) from the user's folder, and removes the `ElevenClockRust` Run value if it starts that copy. The
+staged copy (`*.tmp-*` of the app or launcher) and a staged update from the user's folder, and removes the `ElevenClockRust` Run value if it starts that copy. The
 folder itself, **preferences and logs are kept**. It shows no window, so use the exit code
 and `launcher.log`. `--uninstall` does not combine with other arguments, and it does
 nothing while the app is running (exit code 6): the user exits the clock first, through
@@ -314,8 +321,10 @@ Useful for scripts and deployment tools.
 `%LOCALAPPDATA%\ElevenClock-rs\logs\`. It has one line per decision and no paths or user
 names. Typical lines: `updated`, `unchanged`, `skipped: running`, `source unreachable`,
 `source invalid: …`, `using the local copy`, `launcher updated`, `source recorded`,
-`refused: installed copy`, `started`, `start failed: …`. Read them in that order for one
-launch.
+`refused: installed copy`, `started`, `start failed: …`; with staging, `update staged`,
+`staging: already staged`, `staging: the local copy is current`, `staging failed: …`,
+`staged update applied` and `staged update damaged: removed`. Read them in that order for
+one launch.
 
 ### Diagnostics in the app
 
