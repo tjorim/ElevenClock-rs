@@ -355,6 +355,15 @@ impl LocalPreferencesStore {
         })
     }
 }
+#[cfg(windows)]
+impl LocalPreferencesStore {
+    /// Housekeeping for the primary instance at start; see [`sweep_data_folder`].
+    pub fn sweep_stale_files(&self) -> usize {
+        self.path.parent().map_or(0, |folder| {
+            sweep_data_folder(folder, std::time::SystemTime::now())
+        })
+    }
+}
 impl LocalPreferencesStore {
     /// Read only the committed clock format for explicitly enabled managed
     /// inventory. Missing preferences mean the built-in default; errors propagate
@@ -430,6 +439,37 @@ impl Drop for PendingFile {
         let _ = fs::remove_file(&self.0);
     }
 }
+/// A `.preserved` copy is kept for the user to recover from; only this many of the
+/// newest ones are retained.
+pub const KEEP_PRESERVED: usize = 3;
+/// A temporary file lives for milliseconds. One this old belongs to a killed process.
+const STALE_TEMPORARY: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// `preferences.<pid>.<n>.<suffix>`, exactly as `unique_file` names them.
+fn owned_file(name: &str, suffix: &str) -> bool {
+    use crate::sweep::digits;
+    name.strip_prefix("preferences.")
+        .and_then(|rest| rest.strip_suffix(suffix))
+        .and_then(|rest| rest.split_once('.'))
+        .is_some_and(|(pid, n)| digits(pid) && digits(n))
+}
+
+/// Remove stale `preferences.<pid>.<n>.tmp` files and all but the newest
+/// [`KEEP_PRESERVED`] `.preserved` copies from the app data folder. Returns how many
+/// files were removed.
+pub fn sweep_data_folder(directory: &Path, now: std::time::SystemTime) -> usize {
+    crate::sweep::remove_older_than(
+        directory,
+        &|name| owned_file(name, ".tmp"),
+        now,
+        STALE_TEMPORARY,
+    ) + crate::sweep::keep_newest(
+        directory,
+        &|name| owned_file(name, ".preserved"),
+        KEEP_PRESERVED,
+    )
+}
+
 fn unique_file(target: &Path, suffix: &str) -> io::Result<(PathBuf, File)> {
     let parent = target
         .parent()
@@ -520,6 +560,45 @@ mod tests {
         assert_eq!(
             StoreError::UnsupportedVersion(9).log_text(),
             "saved preferences use unsupported version 9"
+        );
+    }
+
+    #[test]
+    fn the_data_folder_sweep_removes_only_stale_temporaries_and_old_preserved_copies() {
+        use std::time::{Duration, SystemTime};
+        let dir = tempfile::tempdir().unwrap();
+        let now = SystemTime::now();
+        let put = |name: &str, age: u64| {
+            let file = File::create(dir.path().join(name)).unwrap();
+            file.set_modified(now - Duration::from_secs(age)).unwrap();
+        };
+        put("preferences.dat", 99_999);
+        put("preferences.1.0.tmp", 7_200); // stale
+        put("preferences.2.1.tmp", 5); // an in-flight save
+        put("preferences.x.1.tmp", 7_200); // not our pattern
+        put("preferences.1.2.tmp.bak", 7_200);
+        for (n, age) in [(1, 400), (2, 300), (3, 200), (4, 100), (5, 50)] {
+            put(&format!("preferences.9.{n}.preserved"), age);
+        }
+        put("notes.9.9.preserved", 9_999);
+        assert_eq!(sweep_data_folder(dir.path(), now), 3);
+        let mut left: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(
+            left,
+            [
+                "notes.9.9.preserved",
+                "preferences.1.2.tmp.bak",
+                "preferences.2.1.tmp",
+                "preferences.9.3.preserved",
+                "preferences.9.4.preserved",
+                "preferences.9.5.preserved",
+                "preferences.dat",
+                "preferences.x.1.tmp",
+            ]
         );
     }
 

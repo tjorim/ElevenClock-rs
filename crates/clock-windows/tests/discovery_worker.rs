@@ -212,7 +212,7 @@ fn wait_for_file(path: &PathBuf) -> u32 {
     }
 }
 fn leftover_outputs() -> usize {
-    let prefix = format!("elevenclock-rs-r08-{}-", std::process::id());
+    let prefix = format!("elevenclock-rs-discovery-{}-", std::process::id());
     std::fs::read_dir(std::env::temp_dir())
         .unwrap()
         .filter_map(Result::ok)

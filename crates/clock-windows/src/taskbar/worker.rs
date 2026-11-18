@@ -131,6 +131,34 @@ impl Drop for TempOutput {
     }
 }
 static OUTPUT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+const OUTPUT_PREFIX: &str = "elevenclock-rs-discovery-";
+/// The name earlier releases used; their leftovers are swept too.
+const LEGACY_OUTPUT_PREFIX: &str = "elevenclock-rs-r08-";
+const OUTPUT_SUFFIX: &str = ".json";
+/// An output file exists for at most the helper deadline; this old means a crash.
+const STALE_OUTPUT: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// `elevenclock-rs-discovery-<pid>-<n>.json` (or the legacy prefix).
+fn owned_output(name: &str) -> bool {
+    use crate::sweep::digits;
+    [OUTPUT_PREFIX, LEGACY_OUTPUT_PREFIX]
+        .into_iter()
+        .filter_map(|prefix| name.strip_prefix(prefix))
+        .filter_map(|rest| rest.strip_suffix(OUTPUT_SUFFIX))
+        .filter_map(|rest| rest.split_once('-'))
+        .any(|(pid, n)| digits(pid) && digits(n))
+}
+
+/// Remove discovery output files a killed or crashed run left in `directory`
+/// (normally `%TEMP%`). Returns how many were removed.
+pub fn sweep_stale_output(directory: &std::path::Path, now: std::time::SystemTime) -> usize {
+    crate::sweep::remove_older_than(directory, &owned_output, now, STALE_OUTPUT)
+}
+
+/// The same, for the real temporary folder.
+pub fn sweep_stale_output_in_temp() -> usize {
+    sweep_stale_output(&std::env::temp_dir(), std::time::SystemTime::now())
+}
 
 #[derive(Debug)]
 pub enum RunError {
@@ -172,7 +200,7 @@ pub fn run_helper(
         DiscoveryFailure::Unavailable(format!("{what}: {error}"))
     };
     let path = std::env::temp_dir().join(format!(
-        "elevenclock-rs-r08-{}-{}.json",
+        "{OUTPUT_PREFIX}{}-{}{OUTPUT_SUFFIX}",
         std::process::id(),
         OUTPUT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     ));
@@ -439,4 +467,44 @@ enum Run {
     Parsed(protocol::Parsed),
     Failed(DiscoveryFailure),
     Cancelled,
+}
+
+#[cfg(test)]
+mod sweep_tests {
+    use super::*;
+    use std::{fs::File, time::SystemTime};
+
+    #[test]
+    fn only_old_discovery_output_files_are_swept() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = SystemTime::now();
+        let old = now - Duration::from_secs(2 * 24 * 60 * 60);
+        let put = |name: &str, modified: SystemTime| {
+            File::create(dir.path().join(name))
+                .unwrap()
+                .set_modified(modified)
+                .unwrap();
+        };
+        put("elevenclock-rs-discovery-100-0.json", old);
+        put("elevenclock-rs-r08-100-1.json", old); // an earlier release's name
+        put("elevenclock-rs-discovery-100-2.json", now); // possibly live
+        put("elevenclock-rs-discovery-x-2.json", old);
+        put("elevenclock-rs-discovery-100-2.json.txt", old);
+        put("other.json", old);
+        assert_eq!(sweep_stale_output(dir.path(), now), 2);
+        let mut left: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(
+            left,
+            [
+                "elevenclock-rs-discovery-100-2.json",
+                "elevenclock-rs-discovery-100-2.json.txt",
+                "elevenclock-rs-discovery-x-2.json",
+                "other.json",
+            ]
+        );
+    }
 }

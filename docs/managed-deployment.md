@@ -247,8 +247,8 @@ Run the launcher from the **central folder** (not from the user's copy):
 \\fileserver\apps\ElevenClock-rs\elevenclock-rs-launcher.exe --uninstall
 ```
 
-It removes the app, the launcher, its state file and a leftover `.old` launcher from the
-user's folder, and removes the `ElevenClockRust` Run value if it starts that copy. The
+It removes the app, the launcher, its state file, a leftover `.old` launcher and any
+staged copy (`*.tmp-*` of the app or launcher) from the user's folder, and removes the `ElevenClockRust` Run value if it starts that copy. The
 folder itself, **preferences and logs are kept**. It shows no window, so use the exit code
 and `launcher.log`. `--uninstall` does not combine with other arguments, and it does
 nothing while the app is running (exit code 6): the user exits the clock first, through
