@@ -22,7 +22,7 @@ use clock_windows::startup::RunKey;
 use std::{
     any::Any,
     ffi::OsString,
-    io,
+    fs, io,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -243,6 +243,10 @@ pub fn observe_launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> O
             fallback: false,
         };
     }
+    // A launcher parked by an earlier self-update (`install_running`) can only be
+    // deleted once the process that held it has ended. Best effort: it stays while
+    // the old launcher is still the one running.
+    let _ = fs::remove_file(layout.launcher_old());
     // Checked before the central copy is touched: a running app means no update, so
     // there is no reason to wait for a share that may be down.
     let claim = host.claim_instance();

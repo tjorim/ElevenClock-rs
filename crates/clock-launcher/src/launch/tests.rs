@@ -1145,3 +1145,13 @@ fn refresh_source_that_is_the_local_launcher_needs_no_replacement() {
         &world.destination
     ));
 }
+
+#[test]
+fn a_launcher_parked_by_an_earlier_update_is_deleted_on_the_next_run() {
+    let world = deployed();
+    fs::write(world.layout().launcher_old(), b"parked").unwrap();
+    let mut host = FakeHost::new();
+    launch(&mut host, &world.launched_locally(), &interactive());
+    assert!(!world.layout().launcher_old().exists());
+    assert_eq!(host.started.len(), 1);
+}
