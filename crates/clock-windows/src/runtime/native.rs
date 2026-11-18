@@ -20,6 +20,7 @@ use crate::{
     events::{self, Notifications, WM_WAKE},
     instance::{HOST_CLASS, InstanceGuard, LaunchMode, WM_SHOW_SETTINGS},
     interaction::{self, CalendarOutcome, Interaction, MenuCommand, ScreenPoint, WM_INTERACTION},
+    logging,
     preferences_store::{PreferenceSession, PreferencesStore},
     render::{Fit, PaintOutcome, PaintRequest, PixelSize, RenderError, Renderer, WorstCase},
     settings::{PlatformError, SettingsWindow},
@@ -35,7 +36,7 @@ use clock_core::{
     ClockText, PhysicalRect, ShellGeneration, TaskbarKey, TaskbarSnapshot, ValidatedPreferences,
 };
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     collections::HashMap,
     sync::atomic::Ordering,
     time::{Duration, Instant},
@@ -56,6 +57,10 @@ thread_local! {
     static SHOW_SETTINGS: Cell<bool> = const { Cell::new(false) };
     static EXIT: Cell<bool> = const { Cell::new(false) };
     static PANICKED: Cell<bool> = const { Cell::new(false) };
+    /// Timers `SetTimer` refused, with the delay they were meant to have. They are
+    /// tried again after the next message so a transient failure cannot freeze the
+    /// clock or stop recovery polling.
+    static UNARMED: RefCell<HashMap<usize, Duration>> = RefCell::new(HashMap::new());
 }
 
 /// Ask the loop to quit (Settings "Exit", `WM_CLOSE` on the host; the clock/tray
@@ -515,8 +520,31 @@ fn set_timer(host: HWND, id: usize, delay: Duration) {
     // boundary-aligned wait can become.
     let millis = delay.as_millis().clamp(1, 0x7FFF_FFFF) as u32;
     // SAFETY: replaces this window's timer with the same id.
-    unsafe {
-        SetTimer(Some(host), id, millis, None);
+    let armed = unsafe { SetTimer(Some(host), id, millis, None) } != 0;
+    if armed {
+        UNARMED.with_borrow_mut(|unarmed| unarmed.remove(&id));
+        return;
+    }
+    // Without a timer no `Tick` or poll arrives: the clock would freeze unnoticed.
+    let error = windows_core::Error::from_thread();
+    let first = UNARMED.with_borrow_mut(|unarmed| unarmed.insert(id, delay).is_none());
+    if first {
+        logging::log(&format!(
+            "timer {id} could not be set ({:#010x}); trying again after the next message",
+            error.code().0
+        ));
+    }
+}
+
+/// Try the timers that `SetTimer` refused earlier. Called once per message.
+fn retry_unarmed_timers(host: HWND) {
+    let pending: Vec<_> =
+        UNARMED.with_borrow(|unarmed| unarmed.iter().map(|(&id, &d)| (id, d)).collect());
+    for (id, delay) in pending {
+        set_timer(host, id, delay);
+        if UNARMED.with_borrow(|unarmed| !unarmed.contains_key(&id)) {
+            logging::log(&format!("timer {id} set after an earlier failure"));
+        }
     }
 }
 
@@ -781,7 +809,16 @@ pub fn run<S: PreferencesStore>(
     let result = loop {
         // SAFETY: standard loop on the thread that owns every window.
         let status = unsafe { GetMessageW(&mut message, None, 0, 0) };
-        if status.0 <= 0 {
+        if status.0 == -1 {
+            // An error, not WM_QUIT: report it as a failure rather than a normal stop.
+            let error = windows_core::Error::from_thread();
+            logging::log(&format!("message loop failed ({:#010x})", error.code().0));
+            break Err(PlatformError::new(
+                "ElevenClock-rs's message loop failed",
+                error,
+            ));
+        }
+        if status.0 == 0 {
             break Ok(());
         }
         if !settings.handle_message(&mut message) {
@@ -791,6 +828,7 @@ pub fn run<S: PreferencesStore>(
                 DispatchMessageW(&message);
             }
         }
+        retry_unarmed_timers(host.hwnd);
         if let Err(error) = pump(&mut runtime, &mut settings) {
             break Err(error);
         }
