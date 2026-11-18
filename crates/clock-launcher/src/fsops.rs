@@ -30,6 +30,43 @@ pub fn read_limited(path: &Path) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// A staged copy this launcher names `<target>.tmp-<pid>-<hex>-<n>`; `target` is the
+/// app or the launcher. Nothing else matches: neighbours of ours stay.
+fn is_staged_copy(name: &str) -> bool {
+    use clock_windows::sweep::{digits, hex};
+    [crate::source::APP_EXE, crate::source::LAUNCHER_EXE]
+        .into_iter()
+        .filter_map(|target| name.strip_prefix(target)?.strip_prefix(".tmp-"))
+        .any(|rest| {
+            let mut parts = rest.split('-');
+            matches!(
+                (parts.next(), parts.next(), parts.next(), parts.next()),
+                (Some(pid), Some(nanos), Some(attempt), None)
+                    if digits(pid) && hex(nanos) && digits(attempt)
+            )
+        })
+}
+
+/// A staged copy is removed on every failure path, so one this old comes from a
+/// launcher that was killed (power loss, sign-out). Another launcher may be staging
+/// right now, so a run only touches the stale ones.
+const STALE_STAGED: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Remove staged copies of the app and the launcher that were abandoned long ago.
+pub fn sweep_stale_staged(folder: &Path) -> usize {
+    clock_windows::sweep::remove_older_than(
+        folder,
+        &is_staged_copy,
+        std::time::SystemTime::now(),
+        STALE_STAGED,
+    )
+}
+
+/// Remove every staged copy; for `--uninstall`, which is removing their owner.
+pub fn remove_staged(folder: &Path) -> usize {
+    clock_windows::sweep::remove_all(folder, &is_staged_copy)
+}
+
 /// The hash of the file at `path`, or `None` when it cannot be read.
 pub fn hash_of(path: &Path) -> Option<sha256::Digest> {
     read_limited(path).ok().map(|bytes| sha256::digest(&bytes))

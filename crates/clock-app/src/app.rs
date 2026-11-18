@@ -77,7 +77,15 @@ fn application(
             logging::start();
             // An unresolvable data folder must not stop the clock: run with defaults.
             // Every save then fails visibly in Settings rather than being lost.
-            let result = match LocalPreferencesStore::new() {
+            // Housekeeping for files an earlier killed run left behind; best effort.
+            let store = LocalPreferencesStore::new();
+            logging::swept(
+                clock_windows::taskbar::worker::sweep_stale_output_in_temp()
+                    + store
+                        .as_ref()
+                        .map_or(0, LocalPreferencesStore::sweep_stale_files),
+            );
+            let result = match store {
                 Ok(store) => start(store, launch, &guard),
                 Err(error) => {
                     logging::unavailable_store(&error);

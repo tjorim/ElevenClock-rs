@@ -1155,3 +1155,53 @@ fn a_launcher_parked_by_an_earlier_update_is_deleted_on_the_next_run() {
     assert!(!world.layout().launcher_old().exists());
     assert_eq!(host.started.len(), 1);
 }
+
+fn staged(world: &World, name: &str, age_secs: u64) {
+    let path = world.destination.join(name);
+    fs::write(&path, b"partial").unwrap();
+    let file = fs::File::options().write(true).open(&path).unwrap();
+    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(age_secs))
+        .unwrap();
+}
+
+#[test]
+fn a_run_removes_abandoned_staged_copies_and_only_those() {
+    let world = deployed();
+    let day = 24 * 60 * 60;
+    staged(&world, "elevenclock-rs.exe.tmp-100-1f-0", 2 * day);
+    staged(&world, "elevenclock-rs-launcher.exe.tmp-100-1f-1", 2 * day);
+    // Another launcher may be staging right now, and these are not our names.
+    staged(&world, "elevenclock-rs.exe.tmp-200-2a-0", 60);
+    staged(&world, "elevenclock-rs.exe.tmp-1", 2 * day);
+    staged(&world, "notes.exe.tmp-100-1f-0", 2 * day);
+
+    launch(
+        &mut FakeHost::new(),
+        &world.launched_locally(),
+        &interactive(),
+    );
+    let files = world.files();
+    assert!(!files.contains(&"elevenclock-rs.exe.tmp-100-1f-0".to_owned()));
+    assert!(!files.contains(&"elevenclock-rs-launcher.exe.tmp-100-1f-1".to_owned()));
+    for kept in [
+        "elevenclock-rs.exe.tmp-200-2a-0",
+        "elevenclock-rs.exe.tmp-1",
+        "notes.exe.tmp-100-1f-0",
+    ] {
+        assert!(files.contains(&kept.to_owned()), "{kept}");
+    }
+}
+
+#[test]
+fn uninstall_leaves_no_staged_copy_behind() {
+    let world = deployed();
+    staged(&world, "elevenclock-rs.exe.tmp-300-3c-2", 5);
+    staged(&world, "elevenclock-rs-launcher.exe.tmp-300-3c-3", 5);
+    staged(&world, "elevenclock-rs.exe.tmp-1", 5);
+    let mut host = FakeHost::new();
+    assert_eq!(
+        uninstall(&mut host, &world.launched_from_share()),
+        Exit::Done
+    );
+    assert_eq!(world.files(), ["elevenclock-rs.exe.tmp-1"]);
+}

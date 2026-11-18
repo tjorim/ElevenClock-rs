@@ -43,6 +43,13 @@ pub fn load_failed(error: &StoreError) {
     ));
 }
 
+/// Stale temporary files removed at start (nothing is logged when there were none).
+pub fn swept(count: usize) {
+    if count > 0 {
+        logging::log(&format!("removed {count} stale temporary files"));
+    }
+}
+
 /// Record a failure that is about to be shown to the user.
 pub fn failed(error: &dyn std::fmt::Display) {
     logging::log(&format!("stopped: {error}"));

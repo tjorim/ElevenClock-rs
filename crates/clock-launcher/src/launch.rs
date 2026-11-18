@@ -247,6 +247,9 @@ pub fn observe_launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> O
     // deleted once the process that held it has ended. Best effort: it stays while
     // the old launcher is still the one running.
     let _ = fs::remove_file(layout.launcher_old());
+    // Staged copies of an earlier, interrupted run (a kill or power loss skips the
+    // cleanup that normally removes them).
+    fsops::sweep_stale_staged(&ctx.destination);
     // Checked before the central copy is touched: a running app means no update, so
     // there is no reason to wait for a share that may be down.
     let claim = host.claim_instance();

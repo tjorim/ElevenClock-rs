@@ -40,12 +40,16 @@ version-specific fields, preserved and blocked from all save/recovery actions.
 Damaged/invalid data stays untouched on load and ordinary Apply. Settings must
 present an explicit recovery action calling `recover(draft)`: it validates the
 draft, copies and flushes the original into a uniquely named preservation file,
-then saves. Backups are never silently deleted. If preservation or save fails,
+then saves. The copies are named `preferences.<pid>.<n>.preserved` and stay in the data
+folder (`%LOCALAPPDATA%\ElevenClock-rs`, beside `preferences.dat`); a v1 to v2 migration
+makes one too. At start the primary instance keeps the newest three and removes older
+ones, matching the exact name pattern only. If preservation or save fails,
 the old disk data and active value remain. Recovery state clears only after
 success. `StoreError` distinguishes I/O, damaged data, invalid preference fields,
 unsupported version and required recovery. Its Display messages omit paths.
 
-Saves use create-new same-directory temporary files, write_all, sync_all and
+Saves use create-new same-directory temporary files (`preferences.<pid>.<n>.tmp`; one
+left by a killed process is removed at the next start once it is an hour old), write_all, sync_all and
 close before `MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)`. This documented
 Windows operation handles first creation and existing-target replacement on the
 same volume without a truncate-in-place window. Failures remove the temporary

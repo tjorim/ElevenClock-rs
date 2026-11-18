@@ -84,6 +84,8 @@ pub fn uninstall(host: &mut dyn Host, ctx: &Context) -> Exit {
             "template link registration removed; enable it again in Settings if the app remains",
         );
     }
+    // Staged copies left by an interrupted run belong to the app being removed.
+    crate::fsops::remove_staged(&ctx.destination);
     match remove_startup_entry(host.run_key(), &layout.app(), &layout.launcher()) {
         Ok(true) => host.log("startup entry removed"),
         Ok(false) => host.log("startup entry left alone"),
