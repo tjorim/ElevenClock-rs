@@ -1,4 +1,4 @@
-//! Settings drafts and the Apply / Cancel / Reset flow (R10).
+//! Settings drafts and the Apply / Cancel / Reset flow.
 //!
 //! The native window (`settings`) only reads and writes controls; every rule lives
 //! here so it is covered by deterministic tests on any host:

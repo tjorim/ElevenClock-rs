@@ -127,7 +127,7 @@ pub fn resolve(preference: Theme, system: SystemAppearance) -> Palette {
     }
 }
 
-/// Turns repeated platform notifications into R06's resolved appearance revision.
+/// Turns repeated platform notifications into the resolved appearance revision.
 /// Only a distinct resolved appearance produces a new revision, so unrelated
 /// `WM_SETTINGCHANGE` traffic does not repaint every overlay.
 #[derive(Clone, Debug)]

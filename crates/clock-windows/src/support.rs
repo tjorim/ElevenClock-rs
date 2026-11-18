@@ -1,4 +1,4 @@
-//! Support status and the diagnostics report (R11).
+//! Support status and the diagnostics report.
 //!
 //! Everything here is plain values and pure functions so it tests on any host: the
 //! plain-language status, the report that Settings previews and copies, redaction

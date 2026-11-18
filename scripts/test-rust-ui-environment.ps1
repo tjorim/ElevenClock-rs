@@ -287,7 +287,7 @@ try {
     $exitName = ([UiEnvironment]::Accessible([UiEnvironment]::GetDlgItem($settings, 1003))).accName(0)
     if ($exitName -notlike 'Exit*') { throw "Native Exit label failed: '$exitName'" }
     $results.accessibleLabels.exit = $exitName
-    # Closing Settings keeps the clock running (R08); a second launch reopens it.
+    # Closing Settings keeps the clock running; a second launch reopens it.
     $exe = $opened.MainModule.FileName
     [UiEnvironment]::SendMessageW($settings, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null # WM_CLOSE
     $deadline = [DateTime]::UtcNow.AddSeconds(10)

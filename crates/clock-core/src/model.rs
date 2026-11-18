@@ -1,4 +1,4 @@
-//! Contracts for R02 discovery, R04 formatting, R05 preferences and R06 state.
+//! Contracts shared by taskbar discovery, formatting, preferences and the state machine.
 use crate::GeometryError;
 use chrono::{DateTime, FixedOffset};
 use std::time::Duration;
@@ -85,7 +85,8 @@ pub enum TaskbarVisibility {
 }
 
 /// A clock rect is Some only after clock-only geometry has been proven.
-/// R02 validates monitor containment, DPI and exclusion of adjacent controls.
+/// Discovery (`clock-windows::taskbar`) validates monitor containment, DPI and
+/// exclusion of adjacent controls.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TaskbarSnapshot {
     pub key: TaskbarKey,
@@ -128,7 +129,7 @@ pub enum OverlayState {
 }
 
 /// Value-only inputs; each time event carries one OS-local snapshot for all clocks.
-/// PreferencesApplied carries R05's committed validated preferences. Theme revisions
+/// PreferencesApplied carries the committed, validated preferences. Theme revisions
 /// identify resolved platform appearance changes, including high contrast.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {

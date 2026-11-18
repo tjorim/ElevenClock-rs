@@ -4,7 +4,7 @@
 //! Everything here except `native` is portable and unit tested. Layout works in
 //! signed physical pixels: the Direct2D target always runs at 96 DPI over a
 //! physical-pixel HWND, and point sizes are converted exactly once, in
-//! `font_size_px`, using the DPI that R02 measured for that taskbar. There is no
+//! `font_size_px`, using the DPI discovery measured for that taskbar. There is no
 //! other scale factor, so mixed-DPI monitors cannot disagree about units.
 use clock_core::{ClockText, CompiledFormat, PhysicalRect};
 use std::{

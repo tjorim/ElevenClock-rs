@@ -1,5 +1,6 @@
-//! R02 discovery experiments. No selector is verified on stock Windows yet.
-//! Geometry validation is portable; HWNDs and COM objects never leave the probe.
+//! Taskbar discovery: finding each taskbar and its native clock. The probe and the
+//! UI Automation inventory run in a separate helper process (ADR 0001, ADR 0002).
+//! Geometry validation is portable; HWNDs and COM objects never leave the helper.
 pub mod candidate;
 pub mod geometry;
 #[cfg(windows)]

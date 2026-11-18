@@ -43,7 +43,7 @@ The [desktop workflow](../.github/workflows/runtime-lifecycle.yml) shares one
 runner per architecture/target between the taskbar discovery, lifecycle/UIA and
 overlay checks. All three combinations (native x64, native ARM64 and x64 on
 ARM64) are covered. The overlay checks run last because they change display
-scaling; their output is included in the `r08-lifecycle-*` artifacts. Packaging keeps
+scaling; their output is included in the `runtime-lifecycle-*` artifacts. Packaging keeps
 its separate static-runtime build and installer checks, without repeating the
 foundation checks. Run the foundation workflow as well when manually validating
 a packaging candidate.
@@ -233,7 +233,7 @@ access.
 Linux, plus the Windows-only DirectWrite/Direct2D `Renderer`/`ClockSurface`; the
 Windows tests in `crates/clock-windows/tests/render_native.rs` need a Windows
 host. `clock-windows::theme` resolves opaque palettes (high contrast first). See
-[rendering](design/rendering.md) for the API and resource ownership. `ELEVENCLOCK_RS_R07_THEME` is a development-only switch
+[rendering](design/rendering.md) for the API and resource ownership. `ELEVENCLOCK_RS_THEME` is a development-only switch
 for the overlay harness, not a user setting.
 
 ## Runtime

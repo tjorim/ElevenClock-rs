@@ -21,8 +21,8 @@ use crate::bindings::{
 use clock_core::ShellGeneration;
 use std::io::{Read, Write};
 
-const HANDSHAKE_NATIVE: &[u8] = b"r08-go:native";
-const HANDSHAKE_UIA: &[u8] = b"r08-go:uia";
+const HANDSHAKE_NATIVE: &[u8] = b"go:native";
+const HANDSHAKE_UIA: &[u8] = b"go:uia";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Mode {
@@ -146,14 +146,14 @@ mod tests {
 
     #[test]
     fn only_the_two_exact_handshakes_start_work() {
-        assert_eq!(read_handshake(&b"r08-go:native\n"[..]), Some(Mode::Native));
-        assert_eq!(read_handshake(&b"r08-go:uia\n"[..]), Some(Mode::Uia));
+        assert_eq!(read_handshake(&b"go:native\n"[..]), Some(Mode::Native));
+        assert_eq!(read_handshake(&b"go:uia\n"[..]), Some(Mode::Uia));
         // EOF (parent lost before job assignment), wrong text, overlong or no newline.
         for bad in [
             &b""[..],
-            b"r08-go:native",
+            b"go:native",
             b"r02-go\n",
-            b"r08-go:uia extra\n",
+            b"go:uia extra\n",
             b"\n",
             &[b'x'; 64],
         ] {

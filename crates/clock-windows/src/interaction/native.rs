@@ -1,4 +1,4 @@
-//! Windows side of the clock actions (R09): thread-safe interaction hand-off,
+//! Windows side of the clock actions (clock actions): thread-safe interaction hand-off,
 //! the deliberate calendar keystroke batch and the fixed popup menu.
 use super::{
     CalendarOutcome, HeldKeys, Interaction, InteractionQueue, Key, KeyEvent, MenuCommand,

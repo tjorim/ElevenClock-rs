@@ -1,4 +1,4 @@
-//! Per-user, per-session single instance and the fixed "show Settings" signal (R08).
+//! Per-user, per-session single instance and the fixed "show Settings" signal.
 //!
 //! The legacy app scanned timestamp lockfiles every two seconds. Here a named
 //! mutex (`Local\` is session scoped; the user's SID makes it user scoped) decides
@@ -59,7 +59,7 @@ impl InstanceNames {
 pub enum LaunchMode {
     /// Start menu, Explorer double-click or any launch without a marker.
     Interactive,
-    /// Login startup: run the clock quietly, no Settings window. R12 registers
+    /// Login startup: run the clock quietly, no Settings window. Startup registration writes
     /// this exact marker; changing it requires a coordinated edit of both.
     Startup,
 }

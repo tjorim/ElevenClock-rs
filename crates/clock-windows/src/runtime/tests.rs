@@ -1388,7 +1388,7 @@ fn repeated_explorer_failures_never_accumulate_overlays_or_requests() {
     assert_eq!(live.len(), 2);
 }
 
-// ---- R09: clock actions, menu, pause and tray ------------------------------
+// ---- Clock actions, menu, pause and tray ------------------------------
 
 fn shown(monitors: Monitors) -> Runtime<Fake> {
     let mut runtime = runtime(monitors);
@@ -1682,7 +1682,7 @@ fn pause_survives_explorer_restart() {
     );
 }
 
-// ---- Settings fit checks (R10) -------------------------------------------
+// ---- Settings fit checks -------------------------------------------
 
 fn fit_format() -> CompiledFormat {
     CompiledFormat::parse("%H:%M\n%g%V.%u").unwrap()
@@ -1909,7 +1909,7 @@ fn an_idle_clock_with_unchanged_observations_does_no_native_work() {
     assert!(requests(&calls).is_empty());
 }
 
-// ---- Support: Refresh status, report data and the transition log (R11) ----------
+// ---- Support: Refresh status, report data and the transition log ----------
 
 use crate::support::{Progress, REFRESH_LIMIT, RefreshWatch, Replacement};
 

@@ -1,4 +1,4 @@
-//! The real Windows clipboard (R11). These tests overwrite the clipboard text while
+//! The real Windows clipboard. These tests overwrite the clipboard text while
 //! they run (they put the previous text back), so they are ignored by default:
 //!
 //! ```text

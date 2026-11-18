@@ -1,10 +1,10 @@
-# Development-only resource sampler for R13; never part of the installed app.
+# Development-only resource sampler; never part of the installed app.
 #
 # Samples every elevenclock-rs process (the app and any helper) at a fixed interval and
 # reports, per the acceptance contract: total CPU as CPU-time delta / (wall time x logical
 # processors), private working set, handles, threads, GDI/USER objects and top-level
 # windows. Timer/discovery rates and hooks are not observable from outside the process;
-# record them from the R11 in-app diagnostics instead, and the summary lists them as gaps.
+# record them from the in-app diagnostics instead, and the summary lists them as gaps.
 # It only reads public process counters and never starts, stops or controls the app.
 #
 # Each process is tracked by PID and start time, so CPU stays correct when a helper
