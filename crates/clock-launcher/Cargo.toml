@@ -5,7 +5,6 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 license.workspace = true
-license-file.workspace = true
 
 # Ships only in the company `-managed.zip` (ADR 0004), never in the installer.
 [[bin]]

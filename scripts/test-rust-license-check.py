@@ -37,7 +37,7 @@ class LicenseCheckTests(unittest.TestCase):
         status = checker.inventory({
             "workspace_members": ["fixture-id"] if workspace else [],
             "packages": [self.package],
-        }, self.notice_root, out, err)
+        }, self.notice_root, out, err, repo_root=self.root)
         return status, out.getvalue(), err.getvalue()
 
     def test_reviewed_aliases_and_alternatives(self):
@@ -107,12 +107,14 @@ class LicenseCheckTests(unittest.TestCase):
         (self.package_dir / "LICENSE").write_text(" \n")
         self.assertIn("empty notice", self.run_inventory()[2])
 
-    def test_workspace_license_file_must_exist_and_be_readable(self):
-        self.package["license"] = None
-        self.package["license_file"] = "../LICENSE"
+    def test_workspace_crates_use_the_repository_license_file(self):
         self.assertEqual(self.run_inventory(workspace=True)[0], 1)
         (self.root / "LICENSE").write_text("Repository terms")
-        self.assertEqual(self.run_inventory(workspace=True)[0], 0)
+        status, out, _ = self.run_inventory(workspace=True)
+        self.assertEqual(status, 0)
+        self.assertIn("Repository terms", out)
+        (self.root / "LICENSE").write_text(" \n")
+        self.assertIn("empty notice", self.run_inventory(workspace=True)[2])
 
     def test_invalid_inputs_return_nonzero_without_traceback(self):
         original = checker.sys.argv
