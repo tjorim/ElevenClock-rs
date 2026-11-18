@@ -172,9 +172,15 @@ pub trait Platform {
     fn show_menu(&mut self, anchor: Option<ScreenPoint>, paused: bool) -> Option<MenuCommand>;
     /// Ask the application to open or focus Settings (R10 owns the window).
     fn open_settings(&mut self);
-    /// (Re-)register the notification-area icon. Called once at start and from the
-    /// one shell-replacement path; failure is expected while Explorer starts.
+    /// (Re-)register the notification-area icon. Called at start, from the shell
+    /// replacement path and, while [`Platform::tray_missing`], from the recovery
+    /// poll. Failure is expected while Explorer starts or is too busy to answer.
     fn restore_tray(&mut self) {}
+    /// Whether the icon should exist but is not registered, so the recovery poll
+    /// tries again. False when there is no tray at all.
+    fn tray_missing(&mut self) -> bool {
+        false
+    }
     fn arm_update_timer(&mut self, _delay: Option<Duration>) {}
     fn notify_update(&mut self, _version: &str, _url: &str) {}
     /// Replacement was paused or resumed: update anything that shows the mode.
@@ -670,7 +676,9 @@ impl<P: Platform> Runtime<P> {
                 self.dispatch(Event::TimeChanged(now));
                 self.check_shell(false);
             }
-            Signal::TaskbarCreated => self.check_shell(true),
+            Signal::TaskbarCreated => {
+                self.check_shell(true);
+            }
             Signal::Shell(ShellEvent::TaskbarChanged) => {
                 self.transition.begin();
                 self.observe_all();
@@ -712,14 +720,14 @@ impl<P: Platform> Runtime<P> {
     /// Compare the live shell identity with the last known one. `force` is for
     /// `TaskbarCreated`, which proves the taskbar was recreated even if Explorer
     /// kept its process.
-    fn check_shell(&mut self, force: bool) {
+    fn check_shell(&mut self, force: bool) -> bool {
         let current = self.platform.shell_identity();
         if force || current != self.shell {
             self.shell = current;
             self.platform.shell_changed(current);
             // Explorer's notification area was rebuilt along with its taskbar: put
             // the icon back from this same path. If the shell is not ready yet the
-            // registration fails quietly and the following `TaskbarCreated` retries.
+            // registration fails quietly and the next poll or `TaskbarCreated` retries.
             self.platform.restore_tray();
             self.snapshots.clear();
             self.reported.clear();
@@ -731,13 +739,20 @@ impl<P: Platform> Runtime<P> {
             self.retry.reset();
             self.unverified_retry.reset();
             self.dispatch(Event::ExplorerLost);
+            return true;
         }
+        false
     }
 
     // ---- timers and polling ---------------------------------------------
 
     fn poll(&mut self) {
-        self.check_shell(false);
+        let shell_replaced = self.check_shell(false);
+        // `NIM_ADD` can fail while Explorer is busy even though its identity never
+        // changes, and no `TaskbarCreated` follows. Retry on this recovery cadence.
+        if !shell_replaced && self.shell.is_some() && self.platform.tray_missing() {
+            self.platform.restore_tray();
+        }
         let now = self.platform.monotonic();
         if self.settle_due.is_some_and(|due| due <= now) {
             self.settle_due = None;

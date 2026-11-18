@@ -443,6 +443,9 @@ impl Platform for NativePlatform {
             tray.restore();
         }
     }
+    fn tray_missing(&mut self) -> bool {
+        self.tray.as_ref().is_some_and(|tray| !tray.is_registered())
+    }
     fn paused_changed(&mut self, paused: bool) {
         if let Some(tray) = &mut self.tray {
             tray.set_paused(paused);

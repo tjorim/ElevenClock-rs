@@ -90,6 +90,9 @@ struct Fake {
     /// Measuring fails (a transient native error) instead of answering.
     fit_error: bool,
     fit_calls: Vec<(PixelSize, u32, u8)>,
+    /// The tray icon is registered; a restore sets it to `tray_restore_succeeds`.
+    tray_registered: bool,
+    tray_restore_succeeds: bool,
 }
 impl Fake {
     fn new() -> Self {
@@ -113,6 +116,8 @@ impl Fake {
             fit_needs_width: None,
             fit_error: false,
             fit_calls: Vec::new(),
+            tray_registered: true,
+            tray_restore_succeeds: true,
         }
     }
 }
@@ -232,6 +237,10 @@ impl Platform for Fake {
     }
     fn restore_tray(&mut self) {
         self.calls.push(Call::RestoreTray);
+        self.tray_registered = self.tray_restore_succeeds;
+    }
+    fn tray_missing(&mut self) -> bool {
+        !self.tray_registered
     }
     fn paused_changed(&mut self, paused: bool) {
         self.calls.push(Call::PausedChanged(paused));
@@ -1608,6 +1617,51 @@ fn explorer_restart_re_registers_the_tray_from_the_existing_recovery_path_only()
     for _ in 0..5 {
         advance(&mut runtime, RECOVERY_POLL);
     }
+    assert!(!take(&mut runtime).contains(&Call::RestoreTray));
+}
+
+#[test]
+fn a_failed_tray_registration_is_retried_from_the_recovery_poll_until_it_works() {
+    let mut runtime = Runtime::new(Fake::new(), prefs(Monitors::All));
+    // The first attempt fails while Explorer's identity stays the same.
+    runtime.platform.tray_restore_succeeds = false;
+    runtime.start();
+    assert!(take(&mut runtime).contains(&Call::RestoreTray));
+
+    for _ in 0..3 {
+        advance(&mut runtime, RECOVERY_POLL);
+        let calls = take(&mut runtime);
+        assert_eq!(calls.iter().filter(|c| **c == Call::RestoreTray).count(), 1);
+    }
+
+    runtime.platform.tray_restore_succeeds = true;
+    advance(&mut runtime, RECOVERY_POLL);
+    assert!(take(&mut runtime).contains(&Call::RestoreTray));
+    // Registered now: no further attempts.
+    for _ in 0..3 {
+        advance(&mut runtime, RECOVERY_POLL);
+    }
+    assert!(!take(&mut runtime).contains(&Call::RestoreTray));
+}
+
+#[test]
+fn the_tray_is_not_retried_without_a_running_shell_or_twice_in_one_poll() {
+    let mut runtime = Runtime::new(Fake::new(), prefs(Monitors::All));
+    runtime.platform.tray_restore_succeeds = false;
+    runtime.start();
+    take(&mut runtime);
+
+    // A replaced shell restores once from the shell path, not again from the poll.
+    runtime.platform.shell = shell(11, 2);
+    advance(&mut runtime, RECOVERY_POLL);
+    let calls = take(&mut runtime);
+    assert_eq!(calls.iter().filter(|c| **c == Call::RestoreTray).count(), 1);
+
+    // No shell, nothing to register on.
+    runtime.platform.shell = None;
+    advance(&mut runtime, RECOVERY_POLL);
+    take(&mut runtime);
+    advance(&mut runtime, RECOVERY_POLL);
     assert!(!take(&mut runtime).contains(&Call::RestoreTray));
 }
 
