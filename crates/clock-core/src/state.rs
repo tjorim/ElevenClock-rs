@@ -97,10 +97,10 @@ impl State {
                 OverlayState::Unavailable
             } else if self.locked {
                 OverlayState::Hidden(HiddenReason::SessionLocked)
-            } else if self.paused
-                || (self.preferences.monitors() == Monitors::Primary && !snapshot.primary)
-            {
+            } else if self.paused {
                 OverlayState::Hidden(HiddenReason::Paused)
+            } else if self.preferences.monitors() == Monitors::Primary && !snapshot.primary {
+                OverlayState::Hidden(HiddenReason::NotSelected)
             } else if snapshot.visibility == TaskbarVisibility::Hidden {
                 OverlayState::Hidden(HiddenReason::TaskbarHidden)
             } else if bar.fullscreen {

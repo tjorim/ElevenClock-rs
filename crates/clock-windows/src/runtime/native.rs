@@ -632,12 +632,6 @@ unsafe extern "system" fn host_proc(
     })
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ExitReason {
-    /// Exit chosen by the user, a polite close, or session end.
-    Requested,
-}
-
 struct HostWindow {
     hwnd: HWND,
     instance: crate::bindings::HINSTANCE,
@@ -727,7 +721,7 @@ pub fn run<S: PreferencesStore>(
     session: PreferenceSession<S>,
     launch: LaunchMode,
     instance: &InstanceGuard,
-) -> Result<ExitReason, PlatformError> {
+) -> Result<(), PlatformError> {
     // The runtime starts from the saved value; Settings keeps the session so that
     // Apply persists through it.
     let initial = session.active().clone();
@@ -788,7 +782,7 @@ pub fn run<S: PreferencesStore>(
         // SAFETY: standard loop on the thread that owns every window.
         let status = unsafe { GetMessageW(&mut message, None, 0, 0) };
         if status.0 <= 0 {
-            break Ok(ExitReason::Requested);
+            break Ok(());
         }
         if !settings.handle_message(&mut message) {
             // SAFETY: dispatches to our window procedures on this thread.
@@ -801,7 +795,7 @@ pub fn run<S: PreferencesStore>(
             break Err(error);
         }
         if runtime.is_finished() {
-            break Ok(ExitReason::Requested);
+            break Ok(());
         }
     };
 

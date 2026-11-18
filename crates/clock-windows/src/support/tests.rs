@@ -402,7 +402,7 @@ fn a_display_left_out_in_settings_is_a_choice_not_a_partial_failure() {
         visible(1),
         bar(
             2,
-            OverlayState::Hidden(HiddenReason::Paused),
+            OverlayState::Hidden(HiddenReason::NotSelected),
             Some(Reason::NotShown),
         ),
     ]);

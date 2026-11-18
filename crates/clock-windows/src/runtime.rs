@@ -491,7 +491,7 @@ impl<P: Platform> Runtime<P> {
         let mut lines: Vec<String> = Vec::new();
         let mut seen: BTreeMap<u64, String> = BTreeMap::new();
         for bar in &diagnostics.taskbars {
-            let summary = support::taskbar_summary(bar, diagnostics.paused);
+            let summary = support::taskbar_summary(bar);
             if self.logged.taskbars.get(&bar.key.id.0) != Some(&summary) {
                 lines.push(format!(
                     "{} taskbar {}: {summary}",
