@@ -1246,7 +1246,7 @@ fn a_running_app_stages_the_central_copy_without_touching_the_local_one() {
 
 #[test]
 fn an_offline_start_applies_the_staged_update() {
-    let (world, ctx) = staged_world();
+    let (world, _) = staged_world();
     world.remove_share();
     let mut host = FakeHost::new();
     let observation = observe_launch(&mut host, &world.launched_locally(), &login());
@@ -1300,7 +1300,7 @@ fn a_newer_central_copy_replaces_the_stage_and_a_rollback_discards_it() {
 
 #[test]
 fn a_damaged_or_foreign_staged_file_is_never_applied() {
-    let (world, ctx) = staged_world();
+    let (world, _) = staged_world();
     world.remove_share();
     // Damaged after staging: the name no longer matches the content.
     fs::write(world.destination.join(staged_name(NEW)), b"truncated").unwrap();
