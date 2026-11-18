@@ -26,7 +26,7 @@ use crate::{
     },
     update_check::{self, CheckResult, Failure, UpdateRuntime, native::Worker},
 };
-use clock_core::{Monitors, Theme, format::PRESETS};
+use clock_core::{Monitors, Theme, format::PRESETS, template::TemplateError};
 use std::{cell::Cell, cell::RefCell, fmt, time::Instant};
 use windows_core::{PCWSTR, PWSTR, w};
 
@@ -760,7 +760,11 @@ impl<S: PreferencesStore> SettingsWindow<S> {
                             Err(_) => "Could not copy the link. Select and copy it from the Template link box.".into(),
                         }
                     }
-                    Err(_) => "Fix the format and font size before sharing a template.".into(),
+                    Err(TemplateError::Invalid) => {
+                        "Fix the format and font size before sharing a template.".into()
+                    }
+                    // The format is valid and applied, but not shareable as a template.
+                    Err(reason) => reason.to_string(),
                 };
             }
             ID_TEMPLATE_WEBSITE => {

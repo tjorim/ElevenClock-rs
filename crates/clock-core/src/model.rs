@@ -99,7 +99,8 @@ pub struct TaskbarSnapshot {
     pub strategy: DiscoveryStrategy,
 }
 
-/// Owned rendered lines. R04 enforces <=2 nonempty lines and <=512 scalars.
+/// Owned rendered lines. The format language caps rendered text at 512 scalars and
+/// has no line cap (`FORMAT.md`); only templates limit themselves to two lines.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClockText {
     pub lines: Vec<String>,

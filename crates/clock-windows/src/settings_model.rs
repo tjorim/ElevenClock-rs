@@ -214,7 +214,7 @@ impl<S: PreferencesStore> SettingsController<S> {
             &self.draft.format,
             self.draft
                 .font()
-                .map_err(|_| clock_core::template::TemplateError)?,
+                .map_err(|_| clock_core::template::TemplateError::Invalid)?,
             self.draft.theme,
         )
     }

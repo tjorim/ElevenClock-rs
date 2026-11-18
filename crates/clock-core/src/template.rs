@@ -14,11 +14,26 @@ pub struct ClockTemplate {
     theme: Theme,
 }
 
+/// Maximum number of nonempty lines in a template. This is a template rule: the
+/// format language itself has no line cap (see `FORMAT.md`).
+pub const MAX_LINES: usize = 2;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TemplateError;
+pub enum TemplateError {
+    /// A link or a format/font size that cannot be a template, or an unsupported version.
+    Invalid,
+    /// More than [`MAX_LINES`] lines.
+    TooManyLines,
+    /// The estimated expanded text exceeds the rendered-text limit.
+    TooLong,
+}
 impl fmt::Display for TemplateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("This template is invalid or uses an unsupported version.")
+        f.write_str(match self {
+            Self::Invalid => "This template is invalid or uses an unsupported version.",
+            Self::TooManyLines => "Templates support at most two lines.",
+            Self::TooLong => "This format expands to too much text for a template.",
+        })
     }
 }
 impl std::error::Error for TemplateError {}
@@ -32,10 +47,10 @@ impl ClockTemplate {
             ..Preferences::default()
         }
         .validate()
-        .map_err(|_| TemplateError)?;
+        .map_err(|_| TemplateError::Invalid)?;
         let source = validated.format_source();
-        if source.split('\n').count() > 2 {
-            return Err(TemplateError);
+        if source.split('\n').count() > MAX_LINES {
+            return Err(TemplateError::TooManyLines);
         }
         // Match the website's bounded English presentation expansion estimate.
         // Actual taskbar fit is still measured by the app before Apply.
@@ -43,7 +58,7 @@ impl ClockTemplate {
         let mut expanded = 0;
         while let Some(character) = chars.next() {
             expanded += if character == '%' {
-                match chars.next().ok_or(TemplateError)? {
+                match chars.next().ok_or(TemplateError::Invalid)? {
                     'A' | 'B' => 9,
                     'a' | 'b' => 3,
                     'Y' | 'G' => 4,
@@ -55,7 +70,7 @@ impl ClockTemplate {
             };
         }
         if expanded > crate::format::MAX_RENDERED_SCALARS {
-            return Err(TemplateError);
+            return Err(TemplateError::TooLong);
         }
         Ok(Self {
             format: validated.format_source().into(),
@@ -94,7 +109,7 @@ impl ClockTemplate {
 
     pub fn from_link(link: &str) -> Result<Self, TemplateError> {
         if link.len() > MAX_LINK_BYTES {
-            return Err(TemplateError);
+            return Err(TemplateError::Invalid);
         }
         let (query, version_key) = if let Some(query) = link
             .strip_prefix(APP_PREFIX)
@@ -104,35 +119,35 @@ impl ClockTemplate {
         } else if let Some(query) = link.strip_prefix(WEB_PREFIX) {
             (query, "template")
         } else {
-            return Err(TemplateError);
+            return Err(TemplateError::Invalid);
         };
         let mut version = None;
         let mut format = None;
         let mut font = None;
         let mut theme = None;
         for part in query.split('&') {
-            let (key, value) = part.split_once('=').ok_or(TemplateError)?;
+            let (key, value) = part.split_once('=').ok_or(TemplateError::Invalid)?;
             let slot = match key {
                 key if key == version_key => &mut version,
                 "format" => &mut format,
                 "font" => &mut font,
                 "theme" => &mut theme,
-                _ => return Err(TemplateError),
+                _ => return Err(TemplateError::Invalid),
             };
             if slot.replace(decode(value)?).is_some() {
-                return Err(TemplateError);
+                return Err(TemplateError::Invalid);
             }
         }
         if version.as_deref() != Some("1") {
-            return Err(TemplateError);
+            return Err(TemplateError::Invalid);
         }
         let font = font
-            .ok_or(TemplateError)?
+            .ok_or(TemplateError::Invalid)?
             .parse::<u8>()
-            .map_err(|_| TemplateError)?;
-        let theme =
-            Theme::try_from(theme.ok_or(TemplateError)?.as_str()).map_err(|_| TemplateError)?;
-        Self::new(&format.ok_or(TemplateError)?, font, theme)
+            .map_err(|_| TemplateError::Invalid)?;
+        let theme = Theme::try_from(theme.ok_or(TemplateError::Invalid)?.as_str())
+            .map_err(|_| TemplateError::Invalid)?;
+        Self::new(&format.ok_or(TemplateError::Invalid)?, font, theme)
     }
 }
 
@@ -154,20 +169,20 @@ fn decode(value: &str) -> Result<String, TemplateError> {
     while let Some(byte) = input.next() {
         bytes.push(match byte {
             b'%' => {
-                let hi = char::from(input.next().ok_or(TemplateError)?)
+                let hi = char::from(input.next().ok_or(TemplateError::Invalid)?)
                     .to_digit(16)
-                    .ok_or(TemplateError)?;
-                let lo = char::from(input.next().ok_or(TemplateError)?)
+                    .ok_or(TemplateError::Invalid)?;
+                let lo = char::from(input.next().ok_or(TemplateError::Invalid)?)
                     .to_digit(16)
-                    .ok_or(TemplateError)?;
+                    .ok_or(TemplateError::Invalid)?;
                 (hi * 16 + lo) as u8
             }
             b'+' => b' ',
             byte if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) => byte,
-            _ => return Err(TemplateError),
+            _ => return Err(TemplateError::Invalid),
         });
     }
-    String::from_utf8(bytes).map_err(|_| TemplateError)
+    String::from_utf8(bytes).map_err(|_| TemplateError::Invalid)
 }
 
 #[cfg(test)]
@@ -204,8 +219,6 @@ mod tests {
             valid.replace("%25H", "%25Q"),
             valid.replace("%25H", "%FF"),
             valid.replace("%25H", "%00"),
-            valid.replace("%25H", "%25H%0A%25M%0A%25S"),
-            valid.replace("%25H", &"%25B".repeat(128)),
             valid.replace("%25H", "%2"),
             valid.replace("template?", "other?"),
             format!("{valid}#extra"),
@@ -213,10 +226,34 @@ mod tests {
         ] {
             assert_eq!(
                 ClockTemplate::from_link(&link),
-                Err(TemplateError),
+                Err(TemplateError::Invalid),
                 "{link}"
             );
         }
+    }
+    #[test]
+    fn rejections_say_why() {
+        let valid = "elevenclock://template?v=1&format=%25H&font=9&theme=dark";
+        assert_eq!(
+            ClockTemplate::from_link(&valid.replace("%25H", "%25H%0A%25M%0A%25S")),
+            Err(TemplateError::TooManyLines)
+        );
+        assert_eq!(
+            ClockTemplate::new("%H\n%M\n%S", 12, Theme::System),
+            Err(TemplateError::TooManyLines)
+        );
+        assert_eq!(
+            ClockTemplate::from_link(&valid.replace("%25H", &"%25B".repeat(128))),
+            Err(TemplateError::TooLong)
+        );
+        assert_eq!(
+            ClockTemplate::new("%Q", 12, Theme::System),
+            Err(TemplateError::Invalid)
+        );
+        assert_eq!(
+            TemplateError::TooManyLines.to_string(),
+            "Templates support at most two lines."
+        );
     }
 }
 

@@ -20,7 +20,7 @@ pub fn template_from_args(
     if args.first().is_some_and(|arg| arg == TEMPLATE_MARKER) {
         match args {
             [_, link] => clock_core::template::ClockTemplate::from_link(link).map(Some),
-            _ => Err(clock_core::template::TemplateError),
+            _ => Err(clock_core::template::TemplateError::Invalid),
         }
     } else {
         Ok(None)
