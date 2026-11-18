@@ -22,14 +22,15 @@ ALIASES = {
     "Apache-2.0 / MIT": "Apache-2.0 OR MIT",
     "Unlicense/MIT": "Unlicense OR MIT",
 }
-NOTICE_ROOT = Path(__file__).resolve().parent.parent / "docs/dependency-notices"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+NOTICE_ROOT = REPO_ROOT / "docs/dependency-notices"
 
 
 def license_is_allowed(expression):
     return ALIASES.get(expression, expression) in ALLOWED
 
 
-def inventory(metadata, notice_root=NOTICE_ROOT, out=None, err=None):
+def inventory(metadata, notice_root=NOTICE_ROOT, out=None, err=None, repo_root=REPO_ROOT):
     out = sys.stdout if out is None else out
     err = sys.stderr if err is None else err
     workspace = set(metadata["workspace_members"])
@@ -51,6 +52,10 @@ def inventory(metadata, notice_root=NOTICE_ROOT, out=None, err=None):
         directory = Path(package["manifest_path"]).parent
         notices = sorted(p for p in directory.iterdir() if p.is_file() and
                          p.name.upper().startswith(("LICENSE", "COPYING", "NOTICE")))
+        if package["id"] in workspace:
+            # Workspace crates declare an SPDX expression only; the terms live
+            # in the repository's LICENSE file.
+            notices.append(repo_root / "LICENSE")
         if package["license_file"]:
             explicit = directory / package["license_file"]
             if explicit not in notices:
