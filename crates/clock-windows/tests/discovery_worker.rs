@@ -1,4 +1,4 @@
-//! Worker/helper lifetime tests against a real child process (R08).
+//! Worker/helper lifetime tests against a real child process.
 //!
 //! These run on every host. They check the properties the issue asks to be
 //! *proved*, not assumed: old-generation results are rejected, a fresh request
@@ -124,7 +124,7 @@ fn factory(
                 extra.to_string().into(),
             ],
             env,
-            handshake: b"r08-go:native\n".to_vec(),
+            handshake: b"go:native\n".to_vec(),
         }
     })
 }

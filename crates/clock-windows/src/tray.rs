@@ -1,4 +1,4 @@
-//! The app's notification-area icon (R09).
+//! The app's notification-area icon.
 //!
 //! The icon exists so the fixed menu stays reachable without a pointer: the
 //! notification area is keyboard navigable (Win+B), and keyboard activation,

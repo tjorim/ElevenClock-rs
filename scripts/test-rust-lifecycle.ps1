@@ -1,4 +1,4 @@
-# Development-only hosted lifecycle harness for R08; never part of the installed app.
+# Development-only hosted lifecycle harness; never part of the installed app.
 #
 # Exercises the real elevenclock-rs.exe the way a user's session does: quiet login-style
 # start, second launch, close-to-background, Exit, and (optionally) Explorer

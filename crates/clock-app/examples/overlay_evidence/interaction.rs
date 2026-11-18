@@ -1,4 +1,4 @@
-//! R03 helper-only UIA experiment. No COM object or HWND leaves this process.
+//! Helper-only UIA experiment. No COM object or HWND leaves this process.
 use crate::overlay::ExperimentSlot;
 use clock_core::ShellGeneration;
 use clock_windows::bindings::POINT;
@@ -61,12 +61,12 @@ unsafe fn clock_at(
 }
 
 /// Dense independent UIA hit sampling is experimental evidence on this exact
-/// desktop, not authorization for R02's production selector.
+/// desktop, not authorization for the production selector.
 pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
     let records = probe::collect(ShellGeneration(generation)).map_err(|error| {
         windows_core::Error::new(
             windows_core::HRESULT(0x80004005u32 as i32),
-            format!("R03 native/UIA inventory: {error}"),
+            format!("native/UIA inventory: {error}"),
         )
     })?;
     unsafe {
@@ -148,7 +148,7 @@ pub fn discover(generation: u64, all: bool) -> Result<Vec<ExperimentSlot>> {
                 clock_at(&automation, POINT { x, y }, &slot).map_err(|error| {
                     windows_core::Error::new(
                         windows_core::HRESULT(0x80004005u32 as i32),
-                        format!("R03 clock hit at ({x}, {y}): {error}"),
+                        format!("clock hit at ({x}, {y}): {error}"),
                     )
                 })?;
             }

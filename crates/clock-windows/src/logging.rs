@@ -1,4 +1,4 @@
-//! Bounded local transition log (R11).
+//! Bounded local transition log.
 //!
 //! Plain text lines, one per state transition (never per repaint), written to the
 //! app's own per-user folder. At most [`MAX_FILES`] files of [`MAX_FILE_BYTES`] each

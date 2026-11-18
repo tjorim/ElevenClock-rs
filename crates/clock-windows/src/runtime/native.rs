@@ -1,4 +1,4 @@
-//! Windows platform layer and the single UI message loop (R08).
+//! Windows platform layer and the single UI message loop.
 //!
 //! Everything native lives on one thread: the hidden host window, the overlay
 //! windows, Direct2D, timers, WinEvent hooks, session notifications and the
@@ -433,7 +433,7 @@ impl Platform for NativePlatform {
         )
     }
     fn open_calendar(&mut self, _key: TaskbarKey) -> CalendarOutcome {
-        // One keystroke batch on the UI thread, no COM, no retry (R03 evidence).
+        // One keystroke batch on the UI thread, no COM, no retry (hosted-desktop evidence).
         interaction::send_win_n()
     }
     fn show_menu(&mut self, anchor: Option<ScreenPoint>, paused: bool) -> Option<MenuCommand> {

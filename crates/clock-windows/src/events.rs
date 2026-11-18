@@ -1,4 +1,4 @@
-//! Platform notifications reduced to a small value vocabulary (R08).
+//! Platform notifications reduced to a small value vocabulary.
 //!
 //! Window procedures and WinEvent callbacks only classify a notification and
 //! enqueue a [`Signal`]; they never touch runtime state, discovery or rendering.

@@ -1,4 +1,4 @@
-//! Bounded, supervised discovery worker (R08).
+//! Bounded, supervised discovery worker.
 //!
 //! One persistent worker thread runs at most one helper process at a time. A
 //! helper is the only place blocking shell/UIA calls happen, so nothing the UI
@@ -66,7 +66,7 @@ pub fn same_executable() -> std::io::Result<SpecFactory> {
             generation.0.to_string().into(),
         ],
         env: Vec::new(),
-        handshake: b"r08-go:uia\n".to_vec(),
+        handshake: b"go:uia\n".to_vec(),
     }))
 }
 

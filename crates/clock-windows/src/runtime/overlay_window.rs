@@ -3,7 +3,7 @@
 //! The window is a borderless, non-activating tool window sized to the verified
 //! clock rectangle. It is never parented into Explorer, never changes Explorer's
 //! styles and never uses an unconditional global topmost: z-order mirrors the
-//! visible taskbar's own band, immediately above it (R03 strategy). It is created
+//! visible taskbar's own band, immediately above it (the shipped overlay strategy). It is created
 //! in that band and keeps it while hidden; see `overlay::band_action` (#23).
 use crate::bindings::*;
 use crate::{

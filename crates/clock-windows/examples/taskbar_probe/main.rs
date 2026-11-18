@@ -129,8 +129,8 @@ mod windows_probe {
             }
             // Developer-only fault injection: prove Windows process teardown
             // with a confirmed blocked helper. This is not a simulated UIA result.
-            if std::env::var_os("ELEVENCLOCK_RS_R02_SIMULATE_STALL").is_some() {
-                if let Some(path) = std::env::var_os("ELEVENCLOCK_RS_R02_STALL_READY") {
+            if std::env::var_os("ELEVENCLOCK_RS_SIMULATE_STALL").is_some() {
+                if let Some(path) = std::env::var_os("ELEVENCLOCK_RS_STALL_READY") {
                     fs::write(path, std::process::id().to_string())?;
                 }
                 std::thread::sleep(Duration::from_secs(60));

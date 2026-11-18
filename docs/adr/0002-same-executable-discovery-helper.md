@@ -20,7 +20,7 @@ in the process list and cannot be inherited by accident into unrelated children.
 1. The role is chosen before any single-instance or UI work, so a helper never takes
    the instance mutex, opens Settings, or touches preferences.
 2. The helper does nothing until it reads one of two exact handshake lines
-   (`r08-go:native`, `r08-go:uia`) from stdin. The parent writes it only **after**
+   (`go:native`, `go:uia`) from stdin. The parent writes it only **after**
    assigning the process to a kill-on-close, one-process Windows job. Parent loss
    before assignment is EOF, and EOF exits without native work. Running the marker by
    hand (it is not a user command, is not documented for users and prints nothing)
@@ -47,8 +47,8 @@ in the process list and cannot be inherited by accident into unrelated children.
 ## Discovery mode
 
 The handshake also selects the helper's discovery mode. The parent always requests
-`r08-go:uia`, so the UIA inventory runs and the clock candidate may supply a
-clock rectangle after geometric validation; the parent decides, never the helper. The `r08-go:native` mode (no UIA, no COM) remains for supervision tests whose
+`go:uia`, so the UIA inventory runs and the clock candidate may supply a
+clock rectangle after geometric validation; the parent decides, never the helper. The `go:native` mode (no UIA, no COM) remains for supervision tests whose
 fixture process cannot run UIA. There is no build flag or runtime gate.
 
 ## Residual risks and review points

@@ -1,4 +1,4 @@
-//! Opt-in login startup (R12).
+//! Opt-in login startup.
 //!
 //! The registration is a single per-user value under
 //! `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, owned by this app and named

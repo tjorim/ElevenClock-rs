@@ -1,6 +1,6 @@
-//! One fresh OS-local time snapshot per update (R08).
+//! One fresh OS-local time snapshot per update.
 //!
-//! R06 requires each time event to carry a `DateTime<FixedOffset>` taken from the
+//! The state machine requires each time event to carry a `DateTime<FixedOffset>` taken from the
 //! operating system's current zone and DST rules *at that instant*; the runtime
 //! never infers rules from an offset or extrapolates a previous reading. Windows
 //! gives the UTC instant and the zone-resolved civil time for that same instant;

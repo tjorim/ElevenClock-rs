@@ -185,7 +185,7 @@ $templatesBackup = if (Test-Path -LiteralPath $templatesFile) { [IO.File]::ReadA
 
 # Processes of this executable that exist before the run (other tests, helpers).
 $baseline = @(Get-Process -Name elevenclock-rs -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-# --- R12: the real per-user startup registration is saved, cleared and restored ---
+# --- Startup: the real per-user startup registration is saved, cleared and restored ---
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $approvedKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
 $startupName = 'ElevenClockRust'
@@ -356,7 +356,7 @@ try {
     Assert ((Get-Content $preferences -Raw) -match '"update_check_enabled"\s*:\s*false') 'Disabled consent was not persisted'
     $steps.consent = 'Automatic-check consent persisted when enabled, survived a reopen and was switched back off'
 
-    # 8a. Startup (R12): the checkbox is the real HKCU Run registration, read back from
+    # 8a. Startup: the checkbox is the real HKCU Run registration, read back from
     #     Windows after every action. Off by default; only the dedicated value changes.
     Foreground $window
     $exe = $app.MainModule.FileName
@@ -435,7 +435,7 @@ try {
     Press 0x21 0x11; Press 0x21 0x11           # back to Date and time
     $steps.startupRepair = 'A stale entry is reported and repaired only on request; an entry switched off in Windows is shown as off and turned back on by the checkbox'
 
-    # 8b. Support (R11): status, a bounded Refresh status, the previewed report, Copy
+    # 8b. Support: status, a bounded Refresh status, the previewed report, Copy
     #     diagnostics to the real clipboard, redaction and the bounded local log.
     Foreground $window
     1..3 | ForEach-Object { Press 0x22 0x11 }   # Ctrl+PageDown: Appearance, Startup, Support
@@ -497,7 +497,7 @@ try {
     Assert (([SettingsNative]::AlertsFrom($feedback) - $alertsBefore) -ge 2) 'Refresh status must announce that it started and finished'
     # Copy diagnostics writes exactly the previewed text, only because it was clicked.
     $clipboardBefore = Get-Clipboard -Raw
-    $sentinel = "R11 sentinel $([Guid]::NewGuid())"
+    $sentinel = "Support sentinel $([Guid]::NewGuid())"
     Set-Clipboard -Value $sentinel
     Start-Sleep -Milliseconds 300
     Assert ((Get-Clipboard -Raw).Trim() -eq $sentinel) 'Opening and refreshing Support must not touch the clipboard'
@@ -668,7 +668,7 @@ try {
         'Enter' { [SettingsNative]::KeyStroke(13, 0) } # OK is the default button: it applies the staged reset, then closes
         'Mnemonic' { [SettingsNative]::KeyStroke(67, 18) } # Alt+C: Cancel
     }
-    # Closing Settings closes only the window: the clock keeps running (R08).
+    # Closing Settings closes only the window: the clock keeps running.
     Wait-Settings $false 'Settings to close'
     Start-Sleep -Milliseconds 500
     $app.Refresh()

@@ -1,4 +1,4 @@
-# R03 development-only evidence on an ephemeral Windows desktop. Not installed.
+# Development-only overlay evidence on an ephemeral Windows desktop. Not installed.
 param(
     [string]$Executable = 'target/x86_64-pc-windows-msvc/debug/examples/overlay_evidence.exe',
     [string]$OutputDirectory = 'native-evidence/r03',
@@ -21,9 +21,9 @@ public static class OverlayEvidence {
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr FindWindowExW(IntPtr parent,IntPtr after,string cls,string title);
     public static IntPtr FindOverlay() {
         var found=IntPtr.Zero;
-        EnumWindows((window,param)=> {var text=new System.Text.StringBuilder(256);GetClassNameW(window,text,256);if(text.ToString()=="ElevenClock-rs.R03.Overlay") {found=window;return false;}return true;},IntPtr.Zero);
+        EnumWindows((window,param)=> {var text=new System.Text.StringBuilder(256);GetClassNameW(window,text,256);if(text.ToString()=="ElevenClock-rs.Evidence.Overlay") {found=window;return false;}return true;},IntPtr.Zero);
         if(found!=IntPtr.Zero) return found;
-        return FindWindowExW(IntPtr.Zero,IntPtr.Zero,"ElevenClock-rs.R03.Overlay",null);
+        return FindWindowExW(IntPtr.Zero,IntPtr.Zero,"ElevenClock-rs.Evidence.Overlay",null);
     }
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
@@ -45,7 +45,7 @@ public static class OverlayEvidence {
         var window=WindowFromPoint(new Point{X=x,Y=y});uint process;
         GetWindowThreadProcessId(window,out process);
         var text=new System.Text.StringBuilder(256);GetClassNameW(window,text,256);
-        return process==expectedProcess && text.ToString()=="ElevenClock-rs.R03.Overlay" && IsWindowVisible(window);
+        return process==expectedProcess && text.ToString()=="ElevenClock-rs.Evidence.Overlay" && IsWindowVisible(window);
     }
     public static void Press() {
         var down=new Input { Mouse=new Mouse { Flags=2 } };var up=new Input { Mouse=new Mouse { Flags=4 } };
@@ -180,11 +180,11 @@ function Clock-Point($h) {
     if (![OverlayEvidence]::GetWindowRect($h,[ref]$r)) {throw 'Missing overlay rectangle'}
     return @([int](($r.Left+$r.Right)/2),[int](($r.Top+$r.Bottom)/2))
 }
-$p=$null;$fixture=$null;$originalScale=$null;$settings=$null;$oldState=[OverlayEvidence]::TaskbarState();$oldReject=$env:ELEVENCLOCK_RS_R03_REJECT_DISCOVERY
+$p=$null;$fixture=$null;$originalScale=$null;$settings=$null;$oldState=[OverlayEvidence]::TaskbarState();$oldReject=$env:ELEVENCLOCK_RS_REJECT_DISCOVERY
 try {
     Capture 'native-baseline'
     $fixture=New-Object Windows.Forms.Form
-    $fixture.Text='R03 foreground fixture';$fixture.StartPosition='Manual';$fixture.Bounds=New-Object Drawing.Rectangle(100,100,480,320)
+    $fixture.Text='Overlay foreground fixture';$fixture.StartPosition='Manual';$fixture.Bounds=New-Object Drawing.Rectangle(100,100,480,320)
     $fixture.Show();[Windows.Forms.Application]::DoEvents();[OverlayEvidence]::SetForegroundWindow($fixture.Handle)|Out-Null
     # Establish foreground with a real title-bar click outside the hosted Start
     # menu's bounds. SetForegroundWindow can be denied by the foreground lock.
@@ -382,7 +382,7 @@ try {
         Stop-Evidence $p;$p=$null
     }
     if ($context.results.failedCriteria.Count) {
-        $context.status='measured_no_go';throw ('R03 NO-GO: '+($context.results.failedCriteria -join ', '))
+        $context.status='measured_no_go';throw ('Overlay NO-GO: '+($context.results.failedCriteria -join ', '))
     }
     $context.status='hosted_checks_passed_visual_review_and_desktop_variants_pending'
 } catch {
@@ -393,6 +393,6 @@ try {
     if ($settings) {$settings.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern).Close()}
     [OverlayEvidence]::State($oldState)|Out-Null
     if ($fixture) {$fixture.Close();$fixture.Dispose()}
-    [Environment]::SetEnvironmentVariable('ELEVENCLOCK_RS_R03_REJECT_DISCOVERY',$oldReject,'Process')
+    [Environment]::SetEnvironmentVariable('ELEVENCLOCK_RS_REJECT_DISCOVERY',$oldReject,'Process')
     Save-Context
 }

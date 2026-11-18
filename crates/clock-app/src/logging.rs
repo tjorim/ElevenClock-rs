@@ -1,4 +1,4 @@
-//! Application-side logging set-up (R11). The bounded writer, redaction and the
+//! Application-side logging set-up. The bounded writer, redaction and the
 //! transition lines themselves live in `clock-windows`, next to the runtime that
 //! produces them; this only turns logging on and records the outer lifecycle.
 //!

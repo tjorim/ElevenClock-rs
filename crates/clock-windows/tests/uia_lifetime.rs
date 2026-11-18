@@ -1,4 +1,4 @@
-//! UI Automation lifetime and failure evidence (R08, #9). Windows only.
+//! UI Automation lifetime and failure evidence (#9). Windows only.
 //!
 //! What this target is, precisely:
 //! * **Controlled provider** scenarios: a fixture process owns a real top-level

@@ -1,4 +1,4 @@
-//! Application lifecycle (R08): which role this process plays, single instance,
+//! Application lifecycle: which role this process plays, single instance,
 //! quiet versus interactive start, and hand-off to the runtime.
 //!
 //! There is no console, no public command suite and no usage text. Explorer

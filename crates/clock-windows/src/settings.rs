@@ -1,4 +1,4 @@
-//! The native Settings window (R10).
+//! The native Settings window.
 //!
 //! A standard Win32 dialog (`settings.rc`) with a tab strip and four page dialogs:
 //! Date and time, Appearance, Startup and Support. The dialog manager owns fonts,

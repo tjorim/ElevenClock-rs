@@ -1,4 +1,4 @@
-//! Minimal UI Automation provider for the clock overlay (R09, Windows only).
+//! Minimal UI Automation provider for the clock overlay (Windows only).
 //!
 //! The overlay is a plain HWND whose pixels no assistive technology can read, so
 //! it exposes one element:

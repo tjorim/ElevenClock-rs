@@ -1,4 +1,4 @@
-//! Clock actions, the fixed app menu and click pairing (R09).
+//! Clock actions, the fixed app menu and click pairing.
 //!
 //! Everything here is portable value logic that tests on any host: which
 //! commands exist, when a mouse press becomes one activation, how repeated
@@ -22,7 +22,7 @@
 //!
 //! ## Calendar strategy
 //!
-//! The R03 hosted captures showed UI Automation `Invoke` on the native clock
+//! Hosted-desktop captures showed UI Automation `Invoke` on the native clock
 //! returning success without opening the flyout, while one deliberate Win+N
 //! opened it. The production action is therefore a single four-event `SendInput`
 //! batch on the UI thread. It never calls COM/UIA from the message loop, never

@@ -1,10 +1,10 @@
-//! Wire contract between the app and its private discovery helper (R08).
+//! Wire contract between the app and its private discovery helper.
 //!
 //! The helper owns every HWND-adjacent blocking call and COM interface; only this
 //! value-only JSON crosses the process boundary. The parent trusts none of it:
 //! the envelope must match the requested generation, sizes are bounded, rectangles
 //! are re-validated through `PhysicalRect::new`, and a clock rectangle is only
-//! accepted after the same geometric validation as R02.
+//! accepted after the same geometric validation as the native discovery.
 use crate::runtime::{DiscoveryFailure, ShellIdentity};
 use clock_core::{
     DiscoveryStrategy, MonitorId, PhysicalRect, ShellGeneration, TaskbarId, TaskbarKey,

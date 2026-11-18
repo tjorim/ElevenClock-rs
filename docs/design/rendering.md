@@ -39,7 +39,7 @@ the window procedure only bumps an epoch counter and validates the rectangle).
   palette), worst-case verdict (by font, region, padding, format fingerprint) and
   the last painted state. Resize reuses the target; failures drop it.
 - The `overlay_evidence` development example paints fixed black/white (its
-  harness checks pure-black corners) unless `ELEVENCLOCK_R07_THEME=system|light|dark`
+  harness checks pure-black corners) unless `ELEVENCLOCK_RS_THEME=system|light|dark`
   is set, which uses the live theme/high-contrast resolution.
 
 ## Resource ownership

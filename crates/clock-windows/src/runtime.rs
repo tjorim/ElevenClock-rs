@@ -1,6 +1,6 @@
-//! Event-driven runtime coordinator (R08).
+//! Event-driven runtime coordinator.
 //!
-//! `Runtime<P>` is the one place that connects R06's pure reducer to the world:
+//! `Runtime<P>` is the one place that connects the pure reducer in `clock-core` (`state.rs`) to the world:
 //! it turns platform [`Signal`]s, timers and discovery reports into core
 //! [`Event`]s, then applies the resulting [`Effect`]s through a [`Platform`].
 //! There is no second state machine: visibility, fullscreen, lock, theme,
@@ -16,7 +16,7 @@
 //!   identity (PID + creation time), and old-generation results are discarded;
 //! * auto-hide, relocation and fullscreen are observed from events and a slow
 //!   recovery poll, with short bounded polling while a taskbar is animating;
-//! * user actions (R09) arrive as [`Input::Action`]: one calendar action per
+//! * user actions arrive as [`Input::Action`]: one calendar action per
 //!   click, the fixed menu, Pause/Resume (a core event, so the reducer hides every
 //!   overlay), Settings and Exit. The tray icon is re-registered from the same
 //!   shell-replacement path as everything else, not from a second recovery loop.
@@ -62,7 +62,7 @@ pub const RETRY_CAP: Duration = Duration::from_secs(60);
 pub const UNVERIFIED_RETRIES: u32 = 4;
 
 /// Explorer process identity. A PID alone can be reused, so creation time is part
-/// of the identity, exactly as in R02/R03's native epoch checks.
+/// of the identity, as in the discovery epoch checks.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ShellIdentity {
     pub pid: u32,
@@ -170,7 +170,7 @@ pub trait Platform {
     /// Show the fixed menu (modal) and return the chosen command. `paused` selects
     /// the Pause/Resume label.
     fn show_menu(&mut self, anchor: Option<ScreenPoint>, paused: bool) -> Option<MenuCommand>;
-    /// Ask the application to open or focus Settings (R10 owns the window).
+    /// Ask the application to open or focus Settings (Settings owns the window).
     fn open_settings(&mut self);
     /// (Re-)register the notification-area icon. Called at start, from the shell
     /// replacement path and, while [`Platform::tray_missing`], from the recovery
@@ -209,7 +209,7 @@ pub enum Input {
     /// The shell poll timer fired.
     Poll,
     Discovery(DiscoveryReport),
-    /// A click, screen-reader Invoke or menu request (R09).
+    /// A click, screen-reader Invoke or menu request.
     Action(UserAction),
     /// Settings committed new preferences (already validated and persisted).
     Preferences(ValidatedPreferences),

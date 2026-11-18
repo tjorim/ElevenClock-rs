@@ -78,7 +78,7 @@ fn request<'a>(case: &'a Case, dpi: u32, font_pt: u8) -> PaintRequest<'a> {
         palette: Palette::DARK,
     }
 }
-/// Typical Windows 11 clock-only region: 74 x 48 at 96 DPI (R03 hosted evidence).
+/// Typical Windows 11 clock-only region: 74 x 48 at 96 DPI (hosted-desktop evidence).
 fn region(dpi: u32) -> (i32, i32) {
     (
         clock_windows::render::scale_dip(74, dpi),
@@ -414,7 +414,7 @@ fn device_loss_recreation_and_surface_churn_do_not_leak_handles() {
 }
 #[test]
 fn fit_is_exposed_for_layout_planning() {
-    // The pure planner is public so R08 can size decisions without painting.
+    // The pure planner is public so the runtime can size decisions without painting.
     let fit = Fit::Overflow(clock_windows::render::Overflow {
         required: PixelSize {
             width: 10,
