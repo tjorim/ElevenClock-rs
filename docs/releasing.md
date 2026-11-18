@@ -38,6 +38,7 @@ the cap (32 KiB). If you edit the notes by hand later, check the size yourself:
 ```sh
 gh api repos/tjorim/ElevenClock-rs/releases/latest | wc -c
 ```
+
 Release artifacts are named `ElevenClock-rs-<version>-x64-*`; development builds add
 the commit and `-dev`.
 
