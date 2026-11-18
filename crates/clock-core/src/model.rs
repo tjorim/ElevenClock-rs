@@ -111,23 +111,14 @@ pub enum Cadence {
     Minute,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MonitorSelection {
-    Primary,
-    All,
-}
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Theme {
-    System,
-    Light,
-    Dark,
-}
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HiddenReason {
     TaskbarHidden,
     Fullscreen,
     SessionLocked,
+    /// The user paused replacement.
     Paused,
-    InvalidLayout,
+    /// This display is not selected in Settings (Appearance).
+    NotSelected,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OverlayState {

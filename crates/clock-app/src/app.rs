@@ -92,5 +92,5 @@ fn start<S: PreferencesStore>(
     launch: LaunchMode,
     guard: &instance::InstanceGuard,
 ) -> Result<(), PlatformError> {
-    run(PreferenceSession::open(store), launch, guard).map(|_| ())
+    run(PreferenceSession::open(store), launch, guard)
 }

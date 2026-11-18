@@ -286,7 +286,7 @@ enum Outcome {
     Unselected,
 }
 
-fn outcome(bar: &TaskbarDiagnostic, paused: bool) -> Outcome {
+fn outcome(bar: &TaskbarDiagnostic) -> Outcome {
     let native = |text: &str| Outcome::Native(text.to_owned());
     match &bar.reason {
         None if bar.state == OverlayState::Visible => Outcome::Replaced,
@@ -326,21 +326,19 @@ fn outcome(bar: &TaskbarDiagnostic, paused: bool) -> Outcome {
             OverlayState::Hidden(HiddenReason::SessionLocked) => {
                 Outcome::Waiting("the PC is locked".to_owned())
             }
-            OverlayState::Hidden(HiddenReason::Paused) if paused => {
+            OverlayState::Hidden(HiddenReason::Paused) => {
                 Outcome::Waiting("replacement is paused".to_owned())
             }
-            OverlayState::Hidden(HiddenReason::Paused) => Outcome::Unselected,
-            OverlayState::Hidden(HiddenReason::InvalidLayout) | OverlayState::Unavailable => {
-                native("the taskbar layout could not be used")
-            }
+            OverlayState::Hidden(HiddenReason::NotSelected) => Outcome::Unselected,
+            OverlayState::Unavailable => native("the taskbar layout could not be used"),
             OverlayState::Visible => Outcome::Waiting("not shown right now".to_owned()),
         },
     }
 }
 
 /// One short phrase for what a taskbar is doing, for the report and the log.
-pub fn taskbar_summary(bar: &TaskbarDiagnostic, paused: bool) -> String {
-    match outcome(bar, paused) {
+pub fn taskbar_summary(bar: &TaskbarDiagnostic) -> String {
+    match outcome(bar) {
         Outcome::Replaced => "clock replaced".to_owned(),
         Outcome::Waiting(why) => format!("clock hidden for now: {why}"),
         Outcome::Native(why) => format!("Windows clock in use: {why}"),
@@ -383,11 +381,7 @@ pub fn status(diagnostics: &Diagnostics) -> Status {
     }
     // Displays the user left out in Settings are a choice, not a problem: they are
     // mentioned, but never count as "some taskbars" failing.
-    let all: Vec<Outcome> = diagnostics
-        .taskbars
-        .iter()
-        .map(|bar| outcome(bar, diagnostics.paused))
-        .collect();
+    let all: Vec<Outcome> = diagnostics.taskbars.iter().map(outcome).collect();
     let unselected = all
         .iter()
         .filter(|outcome| matches!(outcome, Outcome::Unselected))
@@ -619,7 +613,7 @@ pub fn report(
     line(String::new());
     line(format!("Taskbars: {}", diagnostics.taskbars.len()));
     for (index, bar) in diagnostics.taskbars.iter().enumerate() {
-        let result = taskbar_summary(bar, diagnostics.paused);
+        let result = taskbar_summary(bar);
         line(format!(
             "{}. {} taskbar: {result}",
             index + 1,

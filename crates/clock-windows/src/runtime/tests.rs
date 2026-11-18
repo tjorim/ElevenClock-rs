@@ -342,7 +342,7 @@ fn primary_mode_paints_only_the_primary_and_explains_the_other() {
     let secondary = &runtime.diagnostics().taskbars[1];
     assert_eq!(
         secondary.state,
-        OverlayState::Hidden(clock_core::HiddenReason::Paused)
+        OverlayState::Hidden(clock_core::HiddenReason::NotSelected)
     );
     assert_eq!(secondary.reason, Some(Reason::NotShown));
 }
@@ -1027,7 +1027,7 @@ fn a_dpi_change_or_unplugged_monitor_rediscovers() {
     );
     assert_eq!(
         runtime.state().overlay_state(key(0, 1)),
-        OverlayState::Hidden(clock_core::HiddenReason::Paused)
+        OverlayState::Hidden(clock_core::HiddenReason::NotSelected)
     );
 }
 
