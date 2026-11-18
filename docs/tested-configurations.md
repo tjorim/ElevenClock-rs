@@ -60,8 +60,9 @@ The script cannot see timer-wake or discovery rates.
   loopback SMB; this does not verify another server or per-user share/NTFS isolation.
   Not tried: a remote file share, domain-account resolution, the Local intranet zone setup, a VPN or
   offline start, AppLocker or Software Restriction Policies, or Group Policy or Intune
-  deployment. The [managed deployment guide](managed-deployment.md) says where it relies
-  on this.
+  deployment. Non-persistent and roaming profiles are also untried (the startup entry
+  roams, the files do not). The [managed deployment guide](managed-deployment.md) says
+  where it relies on this.
 - **Actual sign-out/sign-in startup** and a clean first-run machine without developer
   runtimes.
 - **Secondary taskbars** have no `TrayNotifyWnd`, so a tray re-layout there waits for the

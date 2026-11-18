@@ -17,6 +17,16 @@ copy follows at their next launch or sign-in.
 If users look after their own machines, point them to the installer or the portable ZIP
 instead (see the [README](../README.md#install)). Neither needs a share.
 
+Know the limits before you roll out:
+
+- Updates happen only when the launcher runs and the app is not running. A user who
+  signs in before the network or VPN is up, or who never signs out, keeps their version
+  (see [How updates reach users](#how-updates-reach-users)).
+- Login startup is each user's own choice (see [Login startup](#login-startup)). A user
+  who never turns it on has no clock after a reboot and no update at sign-in.
+- Non-persistent and roaming profiles are not supported (see
+  [Profiles and virtual desktops](#profiles-and-virtual-desktops)).
+
 ## How it works
 
 The app never runs from the share. `elevenclock-rs-launcher.exe` does four things and
@@ -76,13 +86,17 @@ Extract the ZIP's files to a folder on the share, for example:
   copy. Extracting the whole ZIP always gives a matching pair.
 - **The launcher checks the app before copying it:** it must be an x64 program whose
   version information names ElevenClock-rs. Anything else is refused.
+- **These checks are not a security boundary.** `SHA256SUMS.txt` sits on the same share as
+  the app, and the version-information check only reads names. Together they catch
+  corruption and mixed-up files, not tampering by someone who can write to the share.
+  See Permissions below.
 
 ### Permissions
 
 Give users **read-only** access to the folder (read and execute on the share and the NTFS
 folder). Users never write to it, and only the people who maintain the app need write
 access. Anyone who can write there can change what every user runs, so keep that group
-small.
+small. The checksum list and the version check do not protect against such a person.
 
 ### Trust for unsigned files
 
@@ -137,10 +151,21 @@ Any other argument is passed on to the app unchanged.
   with the local one by SHA-256 and copies the central one if they differ.
 - **Always the central version:** there are no user options and no "newer than" test. To
   roll back, put the older build on the share; users follow at their next launch.
+  **Rolling back can cost users their settings.** If the newer build raised the
+  preferences file version (v1 to v2 did), the older app cannot read the file: it runs on
+  defaults and refuses to save until the newer build returns, and it leaves the user's
+  file untouched ([Downgrade safety](design/preferences.md)). Check the release notes
+  before you roll back; they name any release that changes the preferences version.
 - **A running app is never replaced or restarted.** If the app is running, the launcher
   skips the update and starts the exe, which brings the running copy's Settings to the
   front. A user who stays signed in gets the new version at their next launch, sign-in or
   reboot. Nobody is interrupted.
+- **Who gets updates late.** The sign-in start is usually the only chance, and it fails
+  quietly when the share is not reachable yet (Wi-Fi or VPN not connected, a 3-second
+  limit). The user then keeps the local copy, and nothing retries while the app runs.
+  Users who sign in off-network, or lock and sleep their PC instead of signing out, can
+  stay on an old version. The remedy is to exit the clock (Settings or the tray menu) and
+  start it again from the shortcut while connected.
 - **No update prompts.** In a managed copy the app shows no update interface and never
   checks for updates itself. The status on the Support page shows "(managed by your
   organization)" after the version.
@@ -156,7 +181,9 @@ Any other argument is passed on to the app unchanged.
 ## Login startup
 
 Users turn this on themselves in **Settings > Startup**, as with the normal app. It is off
-until they do, and there is no admin switch or Group Policy.
+until they do, and there is no admin switch or Group Policy. A user who never enables it
+has no clock after a reboot until they start it, and gets no update at sign-in. Tell users
+to turn it on, or deploy the shortcut so that starting it is easy.
 
 In a managed copy the app registers the **local launcher** (`elevenclock-rs-launcher.exe
 --startup`) in its `ElevenClockRust` Run value, so every sign-in also checks for an update.
@@ -175,6 +202,16 @@ from the share gets the same limit.
 | Central folder unreachable, no local copy (first run) | One message: the central copy cannot be reached, connect to the company network or VPN and try again |
 | Central app invalid or fails its checksum | The local copy starts if there is one; otherwise one message asking the user to contact the administrator |
 | Copying fails (full disk, locked file) | Same: the local copy starts if there is one |
+
+## Profiles and virtual desktops
+
+The Run value for login startup lives in the registry, which roams with a roaming
+profile. The app and the launcher live in `%LOCALAPPDATA%`, which does not. On a second
+PC, or on a virtual desktop whose profile is not persistent, the Run value can point at
+a launcher that is not there, and nothing deploys it again. These setups are not
+supported and have not been tried (see [Tested configurations](tested-configurations.md)).
+If you must use one, start the launcher from the share at every sign-in, for example
+with a logon script, and do not rely on login startup from Settings.
 
 ## Do not mix installs
 
@@ -218,7 +255,12 @@ nothing while the app is running (exit code 6): the user exits the clock first, 
 Settings or the tray menu.
 
 The launcher cannot delete itself while it runs. If the local launcher started the
-uninstall, run it from the share to remove that file too.
+uninstall, it removes everything else, then reports exit code 6 and leaves
+`elevenclock-rs-launcher.exe` in the folder. Run `--uninstall` from the central copy
+instead. If it is too late for that, delete `elevenclock-rs-launcher.exe` from
+`%LOCALAPPDATA%\Programs\ElevenClock-rs` by hand, once the clock and the launcher have
+exited. A leftover launcher keeps any app copy in that folder in managed mode (see
+[Do not mix installs](#do-not-mix-installs)): it shows no update controls.
 
 ## AppLocker and Software Restriction Policies
 

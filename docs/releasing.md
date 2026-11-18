@@ -22,6 +22,11 @@ are in [product name](product-name.md).
    tag and push it again.
 
 Before tagging, install and use the exact build on a clean Windows 11 x64 account.
+
+Call out in the release notes any release that raises the preferences file version.
+An older app cannot read the newer file, so rolling back (including a managed
+deployment that puts an older build on the share) leaves users on defaults, unable to
+save, until they return to the newer build.
 Release artifacts are named `ElevenClock-rs-<version>-x64-*`; development builds add
 the commit and `-dev`.
 
