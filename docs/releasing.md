@@ -27,6 +27,18 @@ Call out in the release notes any release that raises the preferences file versi
 An older app cannot read the newer file, so rolling back (including a managed
 deployment that puts an older build on the share) leaves users on defaults, unable to
 save, until they return to the newer build.
+
+Keep the release notes and the asset list short. The app's update check reads at most
+64 KiB of the `releases/latest` response, which includes the full notes and one JSON
+object per asset; a larger response is a silent "Couldn't check for updates" on every
+installed copy ([ADR 0003](adr/0003-update-checks.md)). `v0.3.0` is about 11.5 KB.
+`rust-release.yml` fails the publish job when the response for the new tag exceeds half
+the cap (32 KiB). If you edit the notes by hand later, check the size yourself:
+
+```sh
+gh api repos/tjorim/ElevenClock-rs/releases/latest | wc -c
+```
+
 Release artifacts are named `ElevenClock-rs-<version>-x64-*`; development builds add
 the commit and `-dev`.
 

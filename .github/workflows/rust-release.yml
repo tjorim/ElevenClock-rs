@@ -164,3 +164,20 @@ jobs:
             --title "ElevenClock-rs ${TAG#v}" --notes-file notes.md \
             "release/$name-setup.exe" "release/$name-portable.zip" \
             "release/$name-managed.zip" release/SHA256SUMS.txt
+      # The app reads at most 64 KiB of this response for its update check (ADR 0003).
+      # A larger one fails every installed copy silently, so fail here at half the cap.
+      - name: Check the update-check response size
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          limit=32768
+          size=$(gh api -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" | wc -c)
+          echo "Release response: $size bytes (limit $limit)"
+          if [ "$size" -gt "$limit" ]; then
+            echo "::error::The release response is $size bytes. The app's update check reads at most 64 KiB (ADR 0003); shorten the release notes or assets."
+            exit 1
+          fi
