@@ -43,8 +43,16 @@ source, refreshes the local copy when that is safe, starts the app and exits.
 * **The app is never restarted to apply an update** while it runs. A machine that stays
   signed in keeps its version until the next launch or login. This was chosen over
   in-session restarts so users are not interrupted.
-* If the app is already running when the launcher runs, the launcher skips the update
-  and just starts the exe, which brings the running copy's Settings to the front.
+* If the app is already running when the launcher runs, the launcher does not replace
+  it: it starts the exe, which brings the running copy's Settings to the front, and
+  then, if the central copy is reachable and valid, **stages** it as
+  `elevenclock-rs.exe.staged-<sha-256>` beside the app (hash-verified, never touching
+  the running exe). At the next launcher run with the app not running, the normal
+  refresh happens and obsoletes the stage; if the share cannot be reached, the staged
+  file is verified against the hash in its name and as an app, and swapped in, so an
+  off-network sign-in still gets the update. A changed central copy replaces the stage,
+  a central copy equal to the local one discards it, and `--uninstall` removes it. Both
+  rules above hold: the running exe is never replaced and the app is never restarted.
 * **Always the central version, no options:** if the central copy differs from the
   local one, it is copied. There is no user-facing switch. The comparison is by
   SHA-256, not "newer", so admins can roll back by deploying an older build.

@@ -1205,3 +1205,143 @@ fn uninstall_leaves_no_staged_copy_behind() {
     );
     assert_eq!(world.files(), ["elevenclock-rs.exe.tmp-1"]);
 }
+
+// ---- Staging an update while the app runs ----------------------------------
+
+fn staged_files(world: &World) -> Vec<String> {
+    world
+        .files()
+        .into_iter()
+        .filter(|name| name.starts_with("elevenclock-rs.exe.staged-"))
+        .collect()
+}
+fn staged_name(build: &str) -> String {
+    format!(
+        "elevenclock-rs.exe.staged-{}",
+        crate::sha256::to_hex(&crate::sha256::digest(&app(build)))
+    )
+}
+/// Deploys `OLD`, publishes `NEW`, and runs once with the app running.
+fn staged_world() -> (World, Context) {
+    let world = World::with_app(OLD);
+    let ctx = world.launched_from_share();
+    launch(&mut FakeHost::new(), &ctx, &interactive());
+    world.publish(NEW);
+    let mut host = FakeHost::new();
+    host.instance = Instance::Running;
+    assert_eq!(launch(&mut host, &ctx, &interactive()), Exit::Done);
+    (world, ctx)
+}
+
+#[test]
+fn a_running_app_stages_the_central_copy_without_touching_the_local_one() {
+    let (world, _) = staged_world();
+    assert_eq!(world.local_app().unwrap(), app(OLD));
+    assert_eq!(staged_files(&world), [staged_name(NEW)]);
+    assert_eq!(
+        fs::read(world.destination.join(staged_name(NEW))).unwrap(),
+        app(NEW)
+    );
+}
+
+#[test]
+fn an_offline_start_applies_the_staged_update() {
+    let (world, ctx) = staged_world();
+    world.remove_share();
+    let mut host = FakeHost::new();
+    let observation = observe_launch(&mut host, &world.launched_locally(), &login());
+    assert_eq!(observation.exit, Exit::Done);
+    assert_eq!(observation.refresh, RefreshOutcome::SourceUnreachable);
+    assert!(observation.fallback);
+    assert_eq!(world.local_app().unwrap(), app(NEW));
+    assert!(staged_files(&world).is_empty());
+    assert!(
+        host.logs.iter().any(|l| l == "staged update applied"),
+        "{:?}",
+        host.logs
+    );
+    assert_eq!(host.started.len(), 1);
+}
+
+#[test]
+fn a_reachable_start_updates_normally_and_drops_the_stage() {
+    let (world, ctx) = staged_world();
+    let mut host = FakeHost::new();
+    launch(&mut host, &ctx, &interactive());
+    assert_eq!(world.local_app().unwrap(), app(NEW));
+    assert!(staged_files(&world).is_empty());
+}
+
+#[test]
+fn a_newer_central_copy_replaces_the_stage_and_a_rollback_discards_it() {
+    let (world, ctx) = staged_world();
+    let mut running = FakeHost::new();
+    running.instance = Instance::Running;
+
+    world.publish("build-3");
+    launch(&mut running, &ctx, &interactive());
+    assert_eq!(staged_files(&world), [staged_name("build-3")]);
+
+    // The same copy again changes nothing.
+    let mut again = FakeHost::new();
+    again.instance = Instance::Running;
+    launch(&mut again, &ctx, &interactive());
+    assert!(again.logs.iter().any(|l| l == "staging: already staged"));
+    assert_eq!(staged_files(&world), [staged_name("build-3")]);
+
+    // The share goes back to what is installed.
+    world.publish(OLD);
+    let mut back = FakeHost::new();
+    back.instance = Instance::Running;
+    launch(&mut back, &ctx, &interactive());
+    assert!(staged_files(&world).is_empty());
+    assert_eq!(world.local_app().unwrap(), app(OLD));
+}
+
+#[test]
+fn a_damaged_or_foreign_staged_file_is_never_applied() {
+    let (world, ctx) = staged_world();
+    world.remove_share();
+    // Damaged after staging: the name no longer matches the content.
+    fs::write(world.destination.join(staged_name(NEW)), b"truncated").unwrap();
+    // A file that is a valid app under the wrong name is not accepted either.
+    fs::write(
+        world
+            .destination
+            .join(format!("elevenclock-rs.exe.staged-{}", "0".repeat(64))),
+        app("build-9"),
+    )
+    .unwrap();
+    let mut host = FakeHost::new();
+    launch(&mut host, &world.launched_locally(), &login());
+    assert_eq!(world.local_app().unwrap(), app(OLD));
+    assert!(staged_files(&world).is_empty());
+    assert_eq!(host.started.len(), 1);
+}
+
+#[test]
+fn a_missing_share_stages_nothing_and_does_not_delay_the_start() {
+    let world = World::with_app(OLD);
+    let ctx = world.launched_from_share();
+    launch(&mut FakeHost::new(), &ctx, &interactive());
+    world.remove_share();
+    let mut host = FakeHost::new();
+    host.instance = Instance::Running;
+    assert_eq!(
+        launch(&mut host, &world.launched_locally(), &interactive()),
+        Exit::Done
+    );
+    assert_eq!(host.started.len(), 1);
+    assert!(host.errors.is_empty());
+    assert!(staged_files(&world).is_empty());
+    assert_eq!(world.local_app().unwrap(), app(OLD));
+}
+
+#[test]
+fn uninstall_removes_a_staged_update_too() {
+    let (world, ctx) = staged_world();
+    assert_eq!(staged_files(&world).len(), 1);
+    let mut host = FakeHost::new();
+    assert_eq!(uninstall(&mut host, &ctx), Exit::Done);
+    assert!(world.files().is_empty(), "{:?}", world.files());
+}

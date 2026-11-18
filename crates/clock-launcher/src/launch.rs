@@ -265,11 +265,22 @@ pub fn observe_launch(host: &mut dyn Host, ctx: &Context, request: &Launch) -> O
             RefreshOutcome::SkippedCheckFailed
         };
         drop(claim);
-        return started(host, request, &layout, refresh, false, false);
+        // The running app is already on screen: bring Settings forward first, and only
+        // then look at the share, so a slow or absent share never delays the user.
+        let observation = started(host, request, &layout, refresh, false, false);
+        if refresh == RefreshOutcome::SkippedRunning {
+            stage_update(host, ctx, request, &layout);
+        }
+        return observation;
     }
     let (refresh, fallback, local_launcher_current) = match refresh(host, ctx, request, &layout) {
         Ok((outcome, current)) => (outcome, false, current),
         Err(problem) if local_copy => {
+            // The share is not there, but an update fetched while the app was running
+            // is. The claim is still held, so the app cannot start mid-replace.
+            if matches!(problem, Problem::Unreachable) {
+                apply_staged_update(host, ctx, &layout);
+            }
             host.log("using the local copy");
             (problem.outcome(), true, false)
         }
@@ -337,14 +348,20 @@ fn start(host: &mut dyn Host, request: &Launch, layout: &Layout) -> Exit {
     }
 }
 
-/// Brings the local app up to the central copy, then the launcher and the record of
-/// where the source is. Logs what it decides.
-fn refresh(
+/// The central copy of the app, read and checked.
+struct Central {
+    folder: PathBuf,
+    bytes: Vec<u8>,
+    digest: sha256::Digest,
+}
+
+/// Finds, reads and validates the central copy of the app. Logs what it decides.
+fn fetch_central(
     host: &mut dyn Host,
     ctx: &Context,
     request: &Launch,
     layout: &Layout,
-) -> Result<(RefreshOutcome, bool), Problem> {
+) -> Result<Central, Problem> {
     let own_folder = ctx.own_exe.parent().unwrap_or(Path::new(""));
     let state = fsops::read_limited(&layout.state())
         .ok()
@@ -395,7 +412,26 @@ fn refresh(
         host.log("source invalid: does not match its checksum list");
         return Err(Problem::Invalid);
     }
+    Ok(Central {
+        folder,
+        bytes,
+        digest,
+    })
+}
 
+/// Brings the local app up to the central copy, then the launcher and the record of
+/// where the source is. Logs what it decides.
+fn refresh(
+    host: &mut dyn Host,
+    ctx: &Context,
+    request: &Launch,
+    layout: &Layout,
+) -> Result<(RefreshOutcome, bool), Problem> {
+    let Central {
+        folder,
+        bytes,
+        digest,
+    } = fetch_central(host, ctx, request, layout)?;
     let app = layout.app();
     let outcome = if fsops::hash_of(&app) == Some(digest) {
         host.log("unchanged");
@@ -412,11 +448,78 @@ fn refresh(
             }
         }
     };
+    // The local copy now matches the share, so anything staged earlier is obsolete.
+    fsops::discard_staged_updates(&ctx.destination, None);
     let local_launcher_current = refresh_launcher(host, ctx, layout, &folder);
     if !remember_source(host, layout, &folder) && !request.quiet {
         host.show_error(NOT_RECORDED);
     }
     Ok((outcome, local_launcher_current))
+}
+
+/// While the app runs it cannot be replaced, but the share may be reachable right now
+/// and may not be at the next sign-in. Keep a verified copy beside the app, to be
+/// swapped in at the next start (see [`apply_staged_update`]). Never touches the
+/// running app; every failure is only logged.
+fn stage_update(host: &mut dyn Host, ctx: &Context, request: &Launch, layout: &Layout) {
+    let Ok(central) = fetch_central(host, ctx, request, layout) else {
+        return;
+    };
+    let folder = &ctx.destination;
+    if fsops::hash_of(&layout.app()) == Some(central.digest) {
+        // Back to what is installed (a rollback on the share): nothing to apply.
+        fsops::discard_staged_updates(folder, None);
+        host.log("staging: the local copy is current");
+        return;
+    }
+    let staged = fsops::staged_update_path(folder, &central.digest);
+    if fsops::hash_of(&staged) == Some(central.digest) {
+        fsops::discard_staged_updates(folder, Some(&central.digest));
+        host.log("staging: already staged");
+        return;
+    }
+    match install(&staged, &central.bytes, || host.before_replace(&staged)) {
+        Ok(()) => {
+            fsops::discard_staged_updates(folder, Some(&central.digest));
+            host.log("update staged");
+        }
+        Err(error) => host.log(&format!("staging failed: {}", describe(&error))),
+    }
+}
+
+/// With the app not running and the share out of reach, swap in an update staged by an
+/// earlier run. The staged file is checked against the hash in its name and as an app
+/// before it is used; a damaged one is removed. Call with the instance claimed.
+fn apply_staged_update(host: &mut dyn Host, ctx: &Context, layout: &Layout) {
+    let folder = &ctx.destination;
+    let app = layout.app();
+    let local = fsops::hash_of(&app);
+    for (path, digest) in fsops::staged_updates(folder) {
+        let bytes = fsops::read_limited(&path).ok();
+        let usable = bytes.as_deref().is_some_and(|bytes| {
+            sha256::digest(bytes) == digest && pe::validate(bytes, APP_EXE).is_ok()
+        });
+        let Some(bytes) = bytes.filter(|_| usable) else {
+            host.log("staged update damaged: removed");
+            let _ = fs::remove_file(&path);
+            continue;
+        };
+        if local == Some(digest) {
+            let _ = fs::remove_file(&path);
+            continue;
+        }
+        match install(&app, &bytes, || host.before_replace(&app)) {
+            Ok(()) => {
+                host.log("staged update applied");
+                fsops::discard_staged_updates(folder, None);
+                return;
+            }
+            Err(error) => {
+                host.log(&format!("staged update failed: {}", describe(&error)));
+                return;
+            }
+        }
+    }
 }
 
 /// Best effort: a launcher that cannot be refreshed never keeps the app from starting.

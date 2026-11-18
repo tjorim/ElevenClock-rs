@@ -30,21 +30,70 @@ pub fn read_limited(path: &Path) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// A staged copy this launcher names `<target>.tmp-<pid>-<hex>-<n>`; `target` is the
-/// app or the launcher. Nothing else matches: neighbours of ours stay.
+/// A temporary file this launcher names `<target>.tmp-<pid>-<hex>-<n>`; `target` is
+/// the app, the launcher or a staged update. Nothing else matches: neighbours of
+/// ours stay.
 fn is_staged_copy(name: &str) -> bool {
     use clock_windows::sweep::{digits, hex};
-    [crate::source::APP_EXE, crate::source::LAUNCHER_EXE]
-        .into_iter()
-        .filter_map(|target| name.strip_prefix(target)?.strip_prefix(".tmp-"))
-        .any(|rest| {
-            let mut parts = rest.split('-');
-            matches!(
-                (parts.next(), parts.next(), parts.next(), parts.next()),
-                (Some(pid), Some(nanos), Some(attempt), None)
-                    if digits(pid) && hex(nanos) && digits(attempt)
-            )
+    let Some((target, rest)) = name.rsplit_once(".tmp-") else {
+        return false;
+    };
+    let mut parts = rest.split('-');
+    let well_formed = matches!(
+        (parts.next(), parts.next(), parts.next(), parts.next()),
+        (Some(pid), Some(nanos), Some(attempt), None)
+            if digits(pid) && hex(nanos) && digits(attempt)
+    );
+    well_formed
+        && (target == crate::source::APP_EXE
+            || target == crate::source::LAUNCHER_EXE
+            || staged_update_digest(target).is_some())
+}
+
+/// A downloaded-but-not-yet-applied app: `elevenclock-rs.exe.staged-<sha-256>`. The
+/// name carries the hash, so a copy that was damaged later is recognized without the
+/// share. (It is not the `.exe` name, so nothing can start it by mistake.)
+const STAGED_UPDATE_PREFIX: &str = "elevenclock-rs.exe.staged-";
+
+/// The digest in a staged update's file name, when `name` is exactly such a name.
+fn staged_update_digest(name: &str) -> Option<sha256::Digest> {
+    let hex = name.strip_prefix(STAGED_UPDATE_PREFIX)?;
+    // Lowercase only, as `to_hex` writes it: one spelling per file.
+    if hex.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return None;
+    }
+    sha256::from_hex(hex)
+}
+
+pub fn staged_update_path(folder: &Path, digest: &sha256::Digest) -> PathBuf {
+    folder.join(format!("{STAGED_UPDATE_PREFIX}{}", sha256::to_hex(digest)))
+}
+
+/// Every staged update in `folder` with the digest its name claims.
+pub fn staged_updates(folder: &Path) -> Vec<(PathBuf, sha256::Digest)> {
+    let Ok(entries) = fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    let mut found: Vec<_> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let digest = staged_update_digest(entry.file_name().to_str()?)?;
+            // Regular files only; a link or folder with this name is not ours.
+            let metadata = fs::symlink_metadata(entry.path()).ok()?;
+            metadata.is_file().then(|| (entry.path(), digest))
         })
+        .collect();
+    found.sort();
+    found
+}
+
+/// Removes every staged update except the one with digest `keep`. Best effort.
+pub fn discard_staged_updates(folder: &Path, keep: Option<&sha256::Digest>) {
+    for (path, digest) in staged_updates(folder) {
+        if keep != Some(&digest) {
+            let _ = fs::remove_file(path);
+        }
+    }
 }
 
 /// A staged copy is removed on every failure path, so one this old comes from a
@@ -62,9 +111,12 @@ pub fn sweep_stale_staged(folder: &Path) -> usize {
     )
 }
 
-/// Remove every staged copy; for `--uninstall`, which is removing their owner.
+/// Remove every staged copy and staged update; for `--uninstall`, which is removing
+/// their owner.
 pub fn remove_staged(folder: &Path) -> usize {
-    clock_windows::sweep::remove_all(folder, &is_staged_copy)
+    clock_windows::sweep::remove_all(folder, &|name| {
+        is_staged_copy(name) || staged_update_digest(name).is_some()
+    })
 }
 
 /// The hash of the file at `path`, or `None` when it cannot be read.
