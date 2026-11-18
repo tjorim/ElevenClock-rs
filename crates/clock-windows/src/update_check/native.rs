@@ -225,7 +225,7 @@ fn request_to(
         .encode_utf16()
         .collect();
     // SAFETY: all strings/buffers live through their calls; handles stay on this
-    // worker. No proxy auto-discovery, cookies, auth, redirects or TLS overrides.
+    // worker. No proxy (documented in ADR 0003), cookies, auth, redirects or TLS overrides.
     unsafe {
         let session = Handle::new(WinHttpOpen(
             PCWSTR(agent.as_ptr()),

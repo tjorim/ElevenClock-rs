@@ -135,8 +135,10 @@ repository's GitHub Actions workflow, and each release is approved by hand.
 **Privacy policy:** The app makes no network requests except when you click
 **Check now** in Settings or enable **Check for updates automatically** (off by
 default). These checks contact GitHub Releases with your IP address and
-app version ([details and GitHub retention](docs/adr/0003-update-checks.md)). Managed
-copies never check GitHub. There is no telemetry, upload or crash reporter;
+app version ([details and GitHub retention](docs/adr/0003-update-checks.md)). The check
+connects directly and does not use a system proxy, so behind a proxy it reports
+“Couldn't check for updates.” (the **GitHub Releases** button still works in your browser).
+Managed copies never check GitHub. There is no telemetry, upload or crash reporter;
 Copy diagnostics only copies local text to your clipboard.
 
 ## License
