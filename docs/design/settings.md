@@ -19,7 +19,8 @@ Cargo workspace version as the executable's file properties. **GitHub Releases**
 default browser. **Check now** makes one bounded GitHub request on a worker, only
 when clicked. The disabled button shows “Checking…” while Settings remains usable.
 The status says “You have the latest version.”, “Version X.Y.Z is available”, or
-“Couldn't check for updates.” An available result makes GitHub Releases open that release's
+“Couldn't check for updates.” (also the result behind a proxy: the check connects directly
+and ignores the system proxy; see [ADR 0003](../adr/0003-update-checks.md)). An available result makes GitHub Releases open that release's
 validated page, and explains updating: run the new setup, or exit and replace the
 portable exe. Nothing is downloaded or installed.
 

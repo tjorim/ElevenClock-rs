@@ -56,6 +56,16 @@ account credentials, cookies, telemetry, query parameters or preference data. Di
 cookies, automatic authentication and redirects; retain normal TLS certificate
 validation. Do not probe another endpoint or fall back to HTTP.
 
+The request connects directly (`WINHTTP_ACCESS_TYPE_NO_PROXY`): it ignores the system
+proxy settings and does no proxy auto-discovery, so it never sends traffic, or
+credentials, to a proxy the user did not choose for this app. Consequence: on a network
+that reaches the internet only through a proxy, every check ends in “Couldn't check”,
+which the user cannot tell apart from being offline. The **GitHub Releases** button
+opens the browser, which uses the proxy. Following the system proxy
+(`WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY`, authentication still disabled so an
+authenticating proxy fails closed) was considered and left out; it needs a new decision
+here first.
+
 GitHub controls processing and retention of its request records. Its
 [privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement#security-and-retention)
 describes purpose-based retention, rather than a fixed retention period for these
