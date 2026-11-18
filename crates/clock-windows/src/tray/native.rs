@@ -58,7 +58,8 @@ impl Tray {
 
     /// Add the icon, or re-add it after Explorer recreated the notification area.
     /// Returns whether the icon is now registered; failure is expected while
-    /// Explorer is still starting, and the next `TaskbarCreated` tries again.
+    /// Explorer is still starting or busy, and the runtime's recovery poll (or the
+    /// next `TaskbarCreated`) tries again.
     pub fn restore(&mut self) -> bool {
         let mut data = self.data();
         // SAFETY: `data` is a fully initialized structure of the advertised size.
