@@ -221,6 +221,7 @@ pub fn run_helper(
             Ok(None) => {}
             Err(error) => {
                 terminate(&mut child)?;
+                stats.exited_observed.fetch_add(1, Ordering::Relaxed);
                 return Err(unavailable("wait", &error).into());
             }
         }

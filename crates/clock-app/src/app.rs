@@ -79,7 +79,10 @@ fn application(
             // Every save then fails visibly in Settings rather than being lost.
             let result = match LocalPreferencesStore::new() {
                 Ok(store) => start(store, launch, &guard),
-                Err(_) => start(UnavailableStore, launch, &guard),
+                Err(error) => {
+                    logging::unavailable_store(&error);
+                    start(UnavailableStore, launch, &guard)
+                }
             };
             logging::stopped();
             result
@@ -92,5 +95,9 @@ fn start<S: PreferencesStore>(
     launch: LaunchMode,
     guard: &instance::InstanceGuard,
 ) -> Result<(), PlatformError> {
-    run(PreferenceSession::open(store), launch, guard)
+    let session = PreferenceSession::open(store);
+    if let Some(error) = session.load_error() {
+        logging::load_failed(error);
+    }
+    run(session, launch, guard)
 }

@@ -319,7 +319,10 @@ impl<S: PreferencesStore> SettingsController<S> {
             Err(StoreError::InvalidPreferences(PreferencesError::FontSizeOutOfRange(_))) => {
                 ApplyOutcome::NotSaved(FONT_MESSAGE.to_owned())
             }
-            Err(error) => ApplyOutcome::NotSaved(error.to_string()),
+            Err(error) => {
+                crate::logging::log(&format!("preferences not saved: {}", error.log_text()));
+                ApplyOutcome::NotSaved(error.to_string())
+            }
         }
     }
 }

@@ -41,6 +41,24 @@ impl std::error::Error for StoreError {
         }
     }
 }
+impl StoreError {
+    /// What to write to the log: the underlying I/O kind and OS code, never a path
+    /// (the user-facing text is a fixed sentence and hides the cause).
+    pub fn log_text(&self) -> String {
+        match self {
+            Self::Io(error) => match error.raw_os_error() {
+                Some(code) => format!("storage error {:?} (os error {code})", error.kind()),
+                None => format!("storage error {:?}", error.kind()),
+            },
+            Self::DamagedData => "saved preferences are damaged".to_owned(),
+            Self::InvalidPreferences(_) => "preferences are invalid".to_owned(),
+            Self::UnsupportedVersion(version) => {
+                format!("saved preferences use unsupported version {version}")
+            }
+            Self::RecoveryRequired => "recovery of damaged preferences not confirmed".to_owned(),
+        }
+    }
+}
 impl From<io::Error> for StoreError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
@@ -492,6 +510,19 @@ pub fn replace(source: &Path, target: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn log_text_names_the_io_cause_without_a_path() {
+        let denied = StoreError::Io(io::Error::from_raw_os_error(5));
+        assert!(denied.log_text().starts_with("storage error "));
+        assert!(denied.log_text().contains("(os error 5)"));
+        let custom = StoreError::Io(io::Error::new(io::ErrorKind::NotFound, r"C:\Users\x\a"));
+        assert_eq!(custom.log_text(), "storage error NotFound");
+        assert_eq!(
+            StoreError::UnsupportedVersion(9).log_text(),
+            "saved preferences use unsupported version 9"
+        );
+    }
+
     fn temporary() -> (tempfile::TempDir, LocalPreferencesStore) {
         let dir = tempfile::tempdir().unwrap();
         let store =
