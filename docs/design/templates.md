@@ -45,6 +45,14 @@ accepts exactly one link argument; extra arguments cannot activate a private rol
 Windows may normalize the app URL to `elevenclock://template/?…`; the parser accepts
 that single optional trailing slash too, without decoding the payload twice.
 
+Templates are stricter than the format language: they hold at most two nonempty
+lines and a format whose estimated expansion fits the rendered-text limit. The
+format language itself has no line cap (`crates/clock-core/FORMAT.md`), so a
+three-line format can be applied locally but not shared. Settings then says
+"Templates support at most two lines." instead of asking the user to fix a valid
+format. The website editor enforces the same limits, and
+`crates/clock-core/tests/fixtures/template-vectors.json` keeps both in step.
+
 A link received while the app is running is sent to its existing per-user/session
 host using synchronous, system-marshalled `WM_COPYDATA` with a one-second send
 timeout. The callback bounds and validates the bytes and retains only an owned
