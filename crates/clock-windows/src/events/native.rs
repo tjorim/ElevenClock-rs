@@ -86,6 +86,10 @@ unsafe extern "system" fn win_event(
     _thread: u32,
     _time: u32,
 ) {
+    // A panic must not abort the process: the loop shuts down cleanly instead.
+    crate::ui_guard::run((), || win_event_body(event, hwnd, object, child));
+}
+fn win_event_body(event: u32, hwnd: HWND, object: i32, child: i32) {
     let kind = match event as i32 {
         EVENT_SYSTEM_FOREGROUND => WinEventKind::Foreground,
         EVENT_SYSTEM_MINIMIZEEND => WinEventKind::MinimizeEnd,

@@ -17,7 +17,13 @@ pub fn start() {
             .map(|text| (*text).to_owned())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "no message".to_owned());
-        logging::log(&format!("internal error: {message}"));
+        let place = info
+            .location()
+            .map(|location| logging::panic_location(location.file(), location.line()));
+        logging::log(&match place {
+            Some(place) => format!("internal error at {place}: {message}"),
+            None => format!("internal error: {message}"),
+        });
         previous(info);
     }));
     logging::log(&format!(

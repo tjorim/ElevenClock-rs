@@ -30,6 +30,7 @@ use crate::{
     },
     theme::{self, SystemAppearance},
     tray::{Tray, WM_TRAYICON, interaction_for_message},
+    ui_guard,
 };
 use chrono::{DateTime, FixedOffset};
 use clock_core::{
@@ -56,7 +57,6 @@ thread_local! {
     static DISCOVERY_READY: Cell<bool> = const { Cell::new(false) };
     static SHOW_SETTINGS: Cell<bool> = const { Cell::new(false) };
     static EXIT: Cell<bool> = const { Cell::new(false) };
-    static PANICKED: Cell<bool> = const { Cell::new(false) };
     /// Timers `SetTimer` refused, with the delay they were meant to have. They are
     /// tried again after the next message so a transient failure cannot freeze the
     /// clock or stop recovery polling.
@@ -654,10 +654,7 @@ unsafe extern "system" fn host_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     // Never unwind through the system's frames: a panic becomes a clean shutdown.
-    std::panic::catch_unwind(|| guard(hwnd, message, wparam, lparam)).unwrap_or_else(|_| {
-        PANICKED.set(true);
-        LRESULT(0)
-    })
+    ui_guard::run(LRESULT(0), || guard(hwnd, message, wparam, lparam))
 }
 
 struct HostWindow {
@@ -853,7 +850,7 @@ fn pump<S: PreferencesStore>(
     runtime: &mut Runtime<NativePlatform>,
     settings: &mut SettingsWindow<S>,
 ) -> Result<(), PlatformError> {
-    if PANICKED.take() {
+    if ui_guard::take_panic() {
         // Fail closed: the clock overlay is removed, the native clock remains.
         request_exit();
         return Err(start_error(windows_core::Error::new(

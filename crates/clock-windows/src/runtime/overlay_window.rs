@@ -400,7 +400,17 @@ impl Overlay {
 }
 
 unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    // A panic must not abort the process: the loop shuts down cleanly instead.
     // SAFETY: called by the system for our own windows on the UI thread.
+    crate::ui_guard::run(LRESULT(0), || unsafe {
+        window_proc_body(hwnd, message, wp, lp)
+    })
+}
+
+/// # Safety
+/// As for `window_proc`: our own window, on the UI thread.
+unsafe fn window_proc_body(hwnd: HWND, message: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    // SAFETY: the contract above.
     unsafe {
         match message as i32 {
             WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),

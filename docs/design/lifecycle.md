@@ -53,7 +53,12 @@ untouched.
 `Quit` destroys every overlay (reducer effects), cancels both timers, unhooks every
 WinEvent hook, unregisters session notifications, terminates and reaps any helper,
 joins the worker (bounded), destroys the host window and unregisters classes. A panic
-in a window procedure or hook becomes a clean shutdown with an error box. A crash
+in a UI-thread callback (the host and overlay window procedures, the Settings dialog
+and page procedures, the WinEvent hook) is caught by `ui_guard::run`, which sets one
+flag, and the loop then shuts down cleanly with an error box. Callbacks on foreign
+threads (WinHTTP, UI Automation) and the window enumerations are not wrapped, so a
+panic there aborts the process after the panic hook has logged it; the enumerations
+also run in the discovery helper, where aborting fails closed. A crash
 removes all windows and (via the kill-on-close job) any helper. Explorer is never
 modified, injected into or parented to, so the native clock is always usable.
 

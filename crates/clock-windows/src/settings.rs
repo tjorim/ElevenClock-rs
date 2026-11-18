@@ -336,14 +336,18 @@ fn queue_command(wparam: WPARAM) {
 }
 
 // SAFETY contract for both procedures: called synchronously by the dialog manager
-// for live windows on the UI thread. They never unwind, allocate fallibly, block
-// or keep borrowed state; they only queue values for `SettingsWindow::service`.
+// for live windows on the UI thread. They do not block or keep borrowed state; they
+// only queue values for `SettingsWindow::service`. A panic never unwinds into the
+// dialog manager: `ui_guard` catches it and the message loop shuts down cleanly.
 unsafe extern "system" fn dialog_proc(
     hwnd: HWND,
     message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> isize {
+    crate::ui_guard::run(0, || dialog_proc_body(hwnd, message, wparam, lparam))
+}
+fn dialog_proc_body(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> isize {
     match message as i32 {
         WM_INITDIALOG => {
             OPEN.set(hwnd.0 as isize);
@@ -411,6 +415,9 @@ unsafe extern "system" fn page_proc(
     wparam: WPARAM,
     _lparam: LPARAM,
 ) -> isize {
+    crate::ui_guard::run(0, || page_proc_body(message, wparam))
+}
+fn page_proc_body(message: u32, wparam: WPARAM) -> isize {
     match message as i32 {
         // Not handled: focus stays where the user left it.
         WM_INITDIALOG => 0,
