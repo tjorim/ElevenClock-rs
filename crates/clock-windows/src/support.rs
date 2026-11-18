@@ -381,11 +381,7 @@ pub fn status(diagnostics: &Diagnostics) -> Status {
     }
     // Displays the user left out in Settings are a choice, not a problem: they are
     // mentioned, but never count as "some taskbars" failing.
-    let all: Vec<Outcome> = diagnostics
-        .taskbars
-        .iter()
-        .map(outcome)
-        .collect();
+    let all: Vec<Outcome> = diagnostics.taskbars.iter().map(outcome).collect();
     let unselected = all
         .iter()
         .filter(|outcome| matches!(outcome, Outcome::Unselected))
