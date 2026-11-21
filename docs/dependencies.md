@@ -86,6 +86,14 @@ publish no license files; their original notices are supplemented under
 MSVC toolchain for `x86_64-pc-windows-msvc`, the Windows-target clippy runs on
 the Windows CI runner instead of cross-checking from Linux.
 
+## Advisory exceptions
+
+Exceptions live in `.cargo/audit.toml`, each with a dated rationale.
+
+| Advisory | Crate | Since | Rationale |
+| --- | --- | --- | --- |
+| [RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543) | `chrono` | 2026-11-21 | Informational "unmaintained" notice for all versions, no patched release and no known vulnerability. chrono is the date/time type of the format language and clock state. Remove the exception when upstream resumes maintenance or after migrating to `jiff` or `time` ([#177](https://github.com/tjorim/ElevenClock-rs/issues/177)). |
+
 ## What each dependency is for
 
 - **`windows-core`** and **`windows-numerics`**: the runtime for the generated Win32
