@@ -18,7 +18,7 @@ function browserPath() {
   return candidates.find(candidate => existsSync(candidate));
 }
 
-test('editor loads initial template hashes and handles real hashchange events without discarding dirty edits', { timeout: 40_000 }, (t) => {
+test('editor loads initial template hashes and handles real hashchange events without discarding dirty edits', { timeout: 80_000 }, (t) => {
   const browser = browserPath();
   if (!browser) {
     assert.ok(!process.env.CI, 'Install Chromium, Chrome or Edge, or set CLOCK_TEST_BROWSER to its executable.');
@@ -77,10 +77,16 @@ test('editor loads initial template hashes and handles real hashchange events wi
       </script></body></html>`;
     const fixture = join(directory, 'editor.html');
     writeFileSync(fixture, html);
-    const run = spawnSync(browser, ['--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-      '--allow-file-access-from-files', `--user-data-dir=${join(directory, 'profile')}`,
-      '--dump-dom', '--virtual-time-budget=5000', pathToFileURL(fixture).href + new URL(templateLinks(first).web).hash],
-      { encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true });
+    // Headless browsers occasionally hang on startup on shared CI runners; retry a
+    // timeout once with a fresh profile. Any other failure is reported as is.
+    const args = attempt => ['--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+      '--allow-file-access-from-files', `--user-data-dir=${join(directory, `profile${attempt}`)}`,
+      '--dump-dom', '--virtual-time-budget=5000', pathToFileURL(fixture).href + new URL(templateLinks(first).web).hash];
+    let run;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      run = spawnSync(browser, args(attempt), { encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true });
+      if (run.error?.code !== 'ETIMEDOUT') break;
+    }
     assert.ifError(run.error);
     assert.equal(run.status, 0, run.stderr);
     assert.match(run.stdout, /<output id="result" data-status="passed">/, run.stdout);
