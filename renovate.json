@@ -18,6 +18,16 @@
         "windows-*"
       ],
       "groupName": "windows"
+    },
+    {
+      "description": [
+        ".python-version selects the 3.13 series so setup-python resolves the newest patch each runner OS offers.",
+        "Renovate rewrote it to an exact patch (3.13.18) that has no Windows build in actions/python-versions and broke the package job."
+      ],
+      "matchManagers": [
+        "pyenv"
+      ],
+      "enabled": false
     }
   ]
 }
