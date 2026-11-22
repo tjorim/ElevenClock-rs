@@ -1,7 +1,7 @@
 # Clock format strings
 
-`clock_core::CompiledFormat::parse(&str)` validates and owns chrono tokens.
-`render(DateTime<FixedOffset>)` returns `Result<ClockText, FormatError>`;
+`clock_core::CompiledFormat::parse(&str)` validates and owns its tokens.
+`render(time::OffsetDateTime)` returns `Result<ClockText, FormatError>`;
 `cadence()` returns `Second` when `%S` occurs, otherwise `Minute` (including
 literal `%%S` and date-only formats). No mutable time, OS queries, shell, HTML
 interpretation, arithmetic or offset-expression compatibility is involved.
@@ -31,8 +31,11 @@ unlisted directive are rejected. Spaces are literal content, not trimmed.
 Input is at most 256 Unicode scalars **before** normalization. Output is at
 most 512 scalars **including** the normalized separator. A single checked
 formatting pass produces all lines from the supplied snapshot. Overflow
-returns an error, never truncated text. An offset that moves a chrono endpoint
-outside the representable local-date range returns `SnapshotOutOfRange`.
+returns an error, never truncated text. Each directive is rendered by this crate
+from the snapshot's calendar fields, not by a library formatter
+([ADR 0005](../../docs/adr/0005-date-time-library.md)). Years outside 0–9999
+keep an explicit sign and at least four digits (`-0001`); `%y` and `%g` are the
+Euclidean remainder (`99` for year −1).
 
 Error spans are half-open **original-input Unicode scalar indices**, not byte
 indices or normalized-string indices. CRLF counts as two source scalars.

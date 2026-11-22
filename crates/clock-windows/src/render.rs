@@ -154,7 +154,7 @@ impl WorstCase {
     const FIRST_YEAR: i32 = 2026;
     const LAST_YEAR: i32 = 2028;
     /// Digit-rich and AM/PM-spanning wall times.
-    const TIMES: [(u32, u32, u32); 5] = [
+    const TIMES: [(u8, u8, u8); 5] = [
         (0, 0, 0),
         (8, 8, 8),
         (11, 11, 11),
@@ -163,21 +163,21 @@ impl WorstCase {
     ];
 
     pub fn for_format(format: &CompiledFormat) -> Self {
-        use chrono::{FixedOffset, NaiveDate, TimeZone};
+        use time::{Date, Month, Time};
         #[cfg(test)]
         BUILDS.with(|builds| builds.set(builds.get() + 1));
-        let offset = FixedOffset::east_opt(0).expect("zero offset");
-        let first = NaiveDate::from_ymd_opt(Self::FIRST_YEAR, 1, 1).expect("valid date");
-        let last = NaiveDate::from_ymd_opt(Self::LAST_YEAR, 12, 31).expect("valid date");
+        let first =
+            Date::from_calendar_date(Self::FIRST_YEAR, Month::January, 1).expect("valid date");
+        let last =
+            Date::from_calendar_date(Self::LAST_YEAR, Month::December, 31).expect("valid date");
         let mut lines: Vec<BTreeSet<String>> = Vec::new();
-        for date in first.iter_days().take_while(|date| *date <= last) {
+        let days = std::iter::successors(Some(first), |date| date.next_day());
+        for date in days.take_while(|date| *date <= last) {
             for (hour, minute, second) in Self::TIMES {
-                let Some(naive) = date.and_hms_opt(hour, minute, second) else {
+                let Ok(time) = Time::from_hms(hour, minute, second) else {
                     continue;
                 };
-                let Some(snapshot) = offset.from_local_datetime(&naive).single() else {
-                    continue;
-                };
+                let snapshot = date.with_time(time).assume_utc();
                 let Ok(text) = format.render(snapshot) else {
                     continue;
                 };

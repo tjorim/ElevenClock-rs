@@ -13,9 +13,9 @@ use crate::{
     runtime::{Diagnostics, Reason, TaskbarDiagnostic},
     startup::StartupKind,
 };
-use chrono::{DateTime, Utc};
 use clock_core::{DiscoveryStrategy, HiddenReason, OverlayState};
 use std::{sync::OnceLock, time::Duration};
+use time::OffsetDateTime;
 
 #[cfg(windows)]
 mod native;
@@ -114,14 +114,14 @@ impl Redactor {
 }
 
 /// The current time in UTC, for the report header.
-pub fn now_utc() -> DateTime<Utc> {
+pub fn now_utc() -> OffsetDateTime {
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
     i64::try_from(seconds)
         .ok()
-        .and_then(|seconds| DateTime::from_timestamp(seconds, 0))
-        .unwrap_or_default()
+        .and_then(|seconds| OffsetDateTime::from_unix_timestamp(seconds).ok())
+        .unwrap_or(OffsetDateTime::UNIX_EPOCH)
 }
 
 /// Redact with the current user's name and profile folder.
@@ -539,7 +539,7 @@ fn dpi_text(dpi: u32) -> String {
 pub fn report(
     environment: &Environment,
     diagnostics: &Diagnostics,
-    generated: DateTime<Utc>,
+    generated: OffsetDateTime,
 ) -> String {
     let status = status(diagnostics);
     let mut out = String::new();
@@ -548,9 +548,15 @@ pub fn report(
         out.push('\n');
     };
     line("ElevenClock-rs diagnostics".to_owned());
+    let generated = generated.to_offset(time::UtcOffset::UTC);
     line(format!(
-        "Generated (UTC): {}",
-        generated.format("%Y-%m-%d %H:%M:%S")
+        "Generated (UTC): {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        generated.year(),
+        generated.month() as u8,
+        generated.day(),
+        generated.hour(),
+        generated.minute(),
+        generated.second()
     ));
     line(
         "Contains no user name, file paths or window titles. Nothing is sent anywhere; \

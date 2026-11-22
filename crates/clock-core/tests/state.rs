@@ -1,9 +1,9 @@
-use chrono::{DateTime, FixedOffset};
 use clock_core::*;
 use std::time::Duration;
+use time::{OffsetDateTime, PrimitiveDateTime, UtcOffset, format_description::well_known::Rfc3339};
 
-fn wall(value: &str) -> DateTime<FixedOffset> {
-    DateTime::parse_from_rfc3339(value).unwrap()
+fn wall(value: &str) -> OffsetDateTime {
+    OffsetDateTime::parse(value, &Rfc3339).unwrap()
 }
 fn prefs(format: &str) -> ValidatedPreferences {
     Preferences {
@@ -232,12 +232,11 @@ fn explorer_loss_stale_batches_and_quit() {
 proptest::proptest! {
     #[test]
     fn monotonic_wait_is_positive_and_bounded(second in 0u32..60, nanos in 0u32..1_000_000_000) {
-        use chrono::Timelike;
-        let time = wall("2026-10-14T12:00:00+00:00").with_second(second).unwrap().with_nanosecond(nanos).unwrap();
+        let time = wall("2026-10-14T12:00:00+00:00").replace_second(second as u8).unwrap().replace_nanosecond(nanos).unwrap();
         for (cadence, bound) in [(Cadence::Second, 1), (Cadence::Minute, 60)] {
             let delay = next_delay(time, cadence);
             proptest::prop_assert!(delay > Duration::ZERO && delay <= Duration::from_secs(bound));
-            let after = time + chrono::TimeDelta::from_std(delay).unwrap();
+            let after = time + delay;
             proptest::prop_assert_eq!(after.nanosecond(), 0);
             if cadence == Cadence::Minute { proptest::prop_assert_eq!(after.second(), 0); }
         }
@@ -357,17 +356,30 @@ fn hiding_one_monitor_does_not_hide_the_other() {
 }
 
 #[test]
-fn out_of_range_local_snapshot_removes_overlay_without_panicking() {
-    let offset = FixedOffset::east_opt(3600).unwrap();
-    let extreme = DateTime::from_naive_utc_and_offset(chrono::NaiveDateTime::MAX, offset);
-    let (state, effects) = reduce(ready(), Event::TimeChanged(extreme));
+fn render_failure_removes_overlay_without_panicking() {
+    // 128 month names exceed the rendered-text bound for every date.
+    let (state, effects) = reduce(ready(), Event::PreferencesApplied(prefs(&"%B".repeat(128))));
     assert_eq!(
         state.overlay_state(snapshot_key()),
         OverlayState::Unavailable
     );
     assert!(effects.contains(&Effect::DestroyOverlay(snapshot_key())));
     assert_eq!(paints(&effects), 0);
-    assert!(next_delay(extreme, Cadence::Minute) > Duration::ZERO);
+}
+
+#[test]
+fn extreme_local_snapshots_paint_without_panicking() {
+    for local in [PrimitiveDateTime::MIN, PrimitiveDateTime::MAX] {
+        for offset in [
+            UtcOffset::from_hms(-23, -59, -59),
+            UtcOffset::from_hms(23, 59, 59),
+        ] {
+            let extreme = local.assume_offset(offset.unwrap());
+            let (state, _) = reduce(ready(), Event::TimeChanged(extreme));
+            assert_eq!(state.overlay_state(snapshot_key()), OverlayState::Visible);
+            assert!(next_delay(extreme, Cadence::Minute) > Duration::ZERO);
+        }
+    }
 }
 
 #[test]

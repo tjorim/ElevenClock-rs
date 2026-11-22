@@ -88,11 +88,9 @@ the Windows CI runner instead of cross-checking from Linux.
 
 ## Advisory exceptions
 
-Exceptions live in `.cargo/audit.toml`, each with a dated rationale.
-
-| Advisory | Crate | Since | Rationale |
-| --- | --- | --- | --- |
-| [RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543) | `chrono` | 2026-11-21 | Informational "unmaintained" notice for all versions, no patched release and no known vulnerability. chrono is the date/time type of the format language and clock state. Remove the exception when upstream resumes maintenance or after migrating to `jiff` or `time` ([#177](https://github.com/tjorim/ElevenClock-rs/issues/177)). |
+There are none. An exception goes in the `[advisories] ignore` list of a
+`.cargo/audit.toml` at the repository root, with a dated rationale there, a row here
+(advisory, crate, date and rationale) and a remediation issue.
 
 ## What each dependency is for
 
@@ -103,7 +101,11 @@ Exceptions live in `.cargo/audit.toml`, each with a dated rationale.
   `clock-windows/bindings.txt`.
 - **`windows-bindgen`**, development only (`clock-bindgen`): regenerates those bindings
   from the Windows metadata it bundles. It is not a dependency of the app.
-- **`chrono`** 0.4, `std` only: datetime values in `clock-core`.
+- **`time`** 0.3, default features off (`std`; `parsing` in `clock-windows` for RFC 2822
+  `Date:` headers): datetime values in `clock-core` and `clock-windows`
+  ([ADR 0005](adr/0005-date-time-library.md)). The format language renders its own
+  tokens and does not use `time`'s formatter. It brings `deranged`, `num-conv`,
+  `powerfmt` and `time-core`, all by `time`'s maintainer and MIT/Apache-2.0.
 - **`serde`** 1.0 (derive) and **`serde_json`** 1.0: the private, versioned preference
   encoding and the discovery helper's report, behind `clock-windows`. `clock-core`
   stays free of persistence dependencies.

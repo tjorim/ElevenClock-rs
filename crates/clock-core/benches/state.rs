@@ -1,18 +1,18 @@
 //! Informative reducer timings for a four-display setup. Nothing gates on these:
 //! the operation-count guards in the tests are the regression checks, and this
 //! shows how large the per-event cost is when you change the reducer.
-use chrono::{DateTime, FixedOffset};
 use clock_core::{
     DiscoveryStrategy, Event, MonitorId, Monitors, PhysicalRect, Preferences, ShellGeneration,
     State, TaskbarId, TaskbarKey, TaskbarSnapshot, TaskbarVisibility, reduce,
 };
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 const DISPLAYS: u64 = 4;
 
-fn wall(value: &str) -> DateTime<FixedOffset> {
-    DateTime::parse_from_rfc3339(value).unwrap()
+fn wall(value: &str) -> OffsetDateTime {
+    OffsetDateTime::parse(value, &Rfc3339).unwrap()
 }
 fn preferences(format: &str) -> clock_core::ValidatedPreferences {
     Preferences {

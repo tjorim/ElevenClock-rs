@@ -32,7 +32,6 @@ use crate::{
     support,
     theme::{AppearanceTracker, SystemAppearance},
 };
-use chrono::{DateTime, FixedOffset};
 use clock_core::{
     ClockText, CompiledFormat, DiscoveryStrategy, Effect, Event, Monitors, OverlayState,
     PhysicalRect, ShellGeneration, State, TaskbarKey, TaskbarSnapshot, TaskbarVisibility,
@@ -43,6 +42,7 @@ use std::{
     fmt,
     time::Duration,
 };
+use time::OffsetDateTime;
 
 pub mod shell;
 pub use shell::{Observation, Placement};
@@ -129,7 +129,7 @@ pub enum PaintResult {
 pub trait Platform {
     fn monotonic(&mut self) -> Duration;
     /// One fresh OS-local snapshot (zone and DST resolved by the OS).
-    fn local_now(&mut self) -> DateTime<FixedOffset>;
+    fn local_now(&mut self) -> OffsetDateTime;
     fn system_appearance(&mut self) -> SystemAppearance;
     /// Re-read the system UI font; true if it changed.
     fn refresh_fonts(&mut self) -> bool;
@@ -407,7 +407,7 @@ impl<P: Platform> Runtime<P> {
                 && !self.state().is_locked()
                 && !self.state().is_paused(),
             epoch: self.update_epoch,
-            wall: self.platform.local_now().timestamp().max(0) as u64,
+            wall: self.platform.local_now().unix_timestamp().max(0) as u64,
             monotonic: self.platform.monotonic(),
         }
     }
@@ -1245,7 +1245,7 @@ impl<P: Platform> LayoutCheck for Runtime<P> {
         format: &CompiledFormat,
         font_pt: u8,
         monitors: Monitors,
-        now: DateTime<FixedOffset>,
+        now: OffsetDateTime,
     ) -> Vec<FitProblem> {
         let targets = self.fit_targets(monitors);
         let Ok(current) = format.render(now) else {
