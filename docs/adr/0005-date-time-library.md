@@ -24,13 +24,13 @@ were `jiff`, `time`, or an in-house implementation of the calendar arithmetic.
   same semantics the reducer relied on. It parses RFC 3339 and RFC 2822 behind the
   `parsing` feature, and its default range (years −9999 to 9999) covers every clock.
   It adds four small crates (`deranged`, `num-conv`, `powerfmt`, `time-core`).
+* **In-house calendar code** would add date arithmetic (ISO weeks, leap years,
+  offset conversion) to maintain without a reason to own it.
 
 Both libraries have the same range and cover every field the format language needs.
 The deciding difference is the value type: `time` already has the one this clock
 uses, while jiff would need one written here. Three more small dependency crates were
 judged cheaper than that.
-* **In-house calendar code** would add date arithmetic (ISO weeks, leap years,
-  offset conversion) to maintain without a reason to own it.
 
 ## Decision
 
