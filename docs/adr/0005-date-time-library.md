@@ -14,13 +14,21 @@ strftime-style directives plus `%%`, with English names and no modifiers.
 The previous library was flagged unmaintained, with no patched release. The candidates
 were `jiff`, `time`, or an in-house implementation of the calendar arithmetic.
 
-* **`jiff`** is maintained and dependency-free, but its offset-carrying value
-  (`Zoned`) holds a time zone and is not `Copy`; the closest `Copy` form is a
-  timestamp/offset pair that every event, effect and test would have to assemble.
-* **`time`** is maintained, MIT/Apache-2.0, and its `OffsetDateTime` is a `Copy`
-  instant-plus-offset whose equality and ordering compare the instant, the same
-  semantics the reducer relied on. It parses RFC 3339 and RFC 2822 behind the
-  `parsing` feature. Its default range (years −9999 to 9999) covers every clock.
+* **`jiff`** (1.x, Unlicense OR MIT) is maintained, parses RFC 3339 and RFC 2822,
+  and with only `std` adds a single crate (`jiff-core`). Its offset-carrying value,
+  `Zoned`, holds a time zone and is not `Copy`. Using jiff would mean either cloning
+  `Zoned` values that imply zone rules the clock never has, or adding a project
+  type that pairs a `Timestamp` with an `Offset` for every event, effect and test.
+* **`time`** (0.3, MIT OR Apache-2.0) is maintained, and its `OffsetDateTime` is a
+  `Copy` instant plus offset whose equality and ordering compare the instant, the
+  same semantics the reducer relied on. It parses RFC 3339 and RFC 2822 behind the
+  `parsing` feature, and its default range (years −9999 to 9999) covers every clock.
+  It adds four small crates (`deranged`, `num-conv`, `powerfmt`, `time-core`).
+
+Both libraries have the same range and cover every field the format language needs.
+The deciding difference is the value type: `time` already has the one this clock
+uses, while jiff would need one written here. Three more small dependency crates were
+judged cheaper than that.
 * **In-house calendar code** would add date arithmetic (ISO weeks, leap years,
   offset conversion) to maintain without a reason to own it.
 
