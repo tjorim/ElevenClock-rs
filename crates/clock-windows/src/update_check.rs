@@ -168,9 +168,9 @@ pub fn backoff(now: u64, retry: Option<&str>, reset: Option<&str>) -> u64 {
             .ok()
             .map(|v| now.saturating_add(v))
             .or_else(|| {
-                chrono::DateTime::parse_from_rfc2822(s)
+                time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc2822)
                     .ok()
-                    .and_then(|v| u64::try_from(v.timestamp()).ok())
+                    .and_then(|v| u64::try_from(v.unix_timestamp()).ok())
             })
     });
     retry

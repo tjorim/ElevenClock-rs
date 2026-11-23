@@ -3,8 +3,8 @@ use crate::{
     ClockText, Effect, Event, HiddenReason, Monitors, OverlayState, PhysicalRect, ShellGeneration,
     TaskbarKey, TaskbarSnapshot, TaskbarVisibility, ValidatedPreferences, next_delay,
 };
-use chrono::{DateTime, FixedOffset};
 use std::collections::BTreeMap;
+use time::OffsetDateTime;
 
 #[derive(Clone, Debug)]
 struct Taskbar {
@@ -23,7 +23,7 @@ pub struct State {
     generation: ShellGeneration,
     taskbars: BTreeMap<u64, Taskbar>,
     preferences: ValidatedPreferences,
-    wall: Option<DateTime<FixedOffset>>,
+    wall: Option<OffsetDateTime>,
     theme_revision: u64,
     locked: bool,
     paused: bool,

@@ -6,12 +6,12 @@ use crate::{
     interaction::{ACTIVATION_COOLDOWN, CalendarOutcome, MenuCommand, ScreenPoint},
     render::PixelSize,
 };
-use chrono::DateTime;
 use clock_core::{DiscoveryStrategy, MonitorId, Monitors, Preferences, TaskbarId, Theme};
 use std::collections::{BTreeMap, HashSet};
+use time::format_description::well_known::Rfc3339;
 
-fn wall(value: &str) -> DateTime<FixedOffset> {
-    DateTime::parse_from_rfc3339(value).unwrap()
+fn wall(value: &str) -> OffsetDateTime {
+    OffsetDateTime::parse(value, &Rfc3339).unwrap()
 }
 fn rect(l: i32, t: i32, w: i32, h: i32) -> PhysicalRect {
     PhysicalRect::new(l, t, w, h).unwrap()
@@ -71,7 +71,7 @@ enum Call {
 struct Fake {
     calls: Vec<Call>,
     mono: Duration,
-    now: DateTime<FixedOffset>,
+    now: OffsetDateTime,
     appearance: SystemAppearance,
     font_changed: bool,
     inventory_changed: bool,
@@ -125,7 +125,7 @@ impl Platform for Fake {
     fn monotonic(&mut self) -> Duration {
         self.mono
     }
-    fn local_now(&mut self) -> DateTime<FixedOffset> {
+    fn local_now(&mut self) -> OffsetDateTime {
         self.now
     }
     fn system_appearance(&mut self) -> SystemAppearance {
@@ -1793,7 +1793,7 @@ fn settings_fit_checks_on_several_displays_sample_and_measure_only_what_changed(
     assert_eq!(WorstCase::builds(), builds + 1, "one sampling sweep");
     // Every Settings refresh and the Apply after it repeat the same question.
     for seconds in [0, 1, 30, 45] {
-        let later = now + chrono::TimeDelta::seconds(seconds);
+        let later = now + time::Duration::seconds(seconds);
         assert_eq!(runtime.check(&format, 9, Monitors::All, later), first);
     }
     assert_eq!(measured(&runtime), 2);
@@ -2078,7 +2078,7 @@ fn only_state_transitions_are_logged_never_repaints_or_ticks() {
     );
     // A minute of ticks, repaints and a repeat of the same state: silence.
     for _ in 0..5 {
-        runtime.platform.now += chrono::Duration::seconds(1);
+        runtime.platform.now += time::Duration::seconds(1);
         runtime.handle(Input::Timer);
         assert!(runtime.transition_lines().is_empty());
     }
@@ -2233,7 +2233,7 @@ fn settings_fit_cache_reuses_measurements_and_invalidates_changed_inputs() {
     assert_eq!(check(&mut runtime, 9, now).len(), 1);
     assert_eq!(runtime.platform.fit_calls.len(), 1);
     // Seconds do not change this format's rendered text.
-    check(&mut runtime, 9, now + chrono::TimeDelta::seconds(1));
+    check(&mut runtime, 9, now + time::Duration::seconds(1));
     assert_eq!(runtime.platform.fit_calls.len(), 1);
     check(&mut runtime, 10, now);
     assert_eq!(runtime.platform.fit_calls.len(), 2);
@@ -2247,7 +2247,7 @@ fn settings_fit_cache_reuses_measurements_and_invalidates_changed_inputs() {
     runtime.snapshots.get_mut(&1).unwrap().clock_rect = Some(rect(1800, 1032, 120, 48));
     assert!(check(&mut runtime, 10, now).is_empty());
     assert_eq!(runtime.platform.fit_calls.len(), 5);
-    check(&mut runtime, 10, now + chrono::TimeDelta::minutes(1));
+    check(&mut runtime, 10, now + time::Duration::minutes(1));
     assert_eq!(runtime.platform.fit_calls.len(), 6);
     runtime.check(
         &CompiledFormat::parse("%S").unwrap(),

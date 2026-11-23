@@ -42,6 +42,7 @@ renders them, with relative links rewritten to the published pages, and
 | The discovery helper is the app's own executable | [`0002-same-executable-discovery-helper.md`](adr/0002-same-executable-discovery-helper.md) |
 | Optional update checks against GitHub Releases | [`0003-update-checks.md`](adr/0003-update-checks.md) |
 | Managed launcher that deploys a local copy from a central source | [`0004-managed-launcher.md`](adr/0004-managed-launcher.md) |
+| `time` for date/time values, with in-house format tokens | [`0005-date-time-library.md`](adr/0005-date-time-library.md) |
 
 Screenshots used by a design file live next to it, in [`design/images/`](design/images).
 Docs describe the app as it is now. Verification logs, screenshots and dated run records

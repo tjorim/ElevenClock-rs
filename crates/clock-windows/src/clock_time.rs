@@ -1,11 +1,11 @@
 //! One fresh OS-local time snapshot per update.
 //!
-//! The state machine requires each time event to carry a `DateTime<FixedOffset>` taken from the
+//! The state machine requires each time event to carry an `OffsetDateTime` taken from the
 //! operating system's current zone and DST rules *at that instant*; the runtime
 //! never infers rules from an offset or extrapolates a previous reading. Windows
 //! gives the UTC instant and the zone-resolved civil time for that same instant;
 //! the offset is their difference, so DST and zone edits are honoured exactly.
-use chrono::{DateTime, FixedOffset, NaiveDate};
+use time::{Date, Month, OffsetDateTime, Time, UtcOffset};
 
 /// Civil (calendar) fields as Windows reports them in a `SYSTEMTIME`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -20,10 +20,22 @@ pub struct Civil {
 impl Civil {
     fn seconds(self) -> Option<i64> {
         Some(
-            NaiveDate::from_ymd_opt(self.year, self.month, self.day)?
-                .and_hms_opt(self.hour, self.minute, self.second.min(59))?
-                .and_utc()
-                .timestamp(),
+            Date::from_calendar_date(
+                self.year,
+                Month::try_from(u8::try_from(self.month).ok()?).ok()?,
+                u8::try_from(self.day).ok()?,
+            )
+            .ok()?
+            .with_time(
+                Time::from_hms(
+                    u8::try_from(self.hour).ok()?,
+                    u8::try_from(self.minute).ok()?,
+                    u8::try_from(self.second.min(59)).ok()?,
+                )
+                .ok()?,
+            )
+            .assume_utc()
+            .unix_timestamp(),
         )
     }
 }
@@ -34,17 +46,21 @@ pub const FILETIME_UNIX_EPOCH: i64 = 116_444_736_000_000_000;
 /// Build the snapshot. `filetime` is the UTC instant in 100 ns ticks since 1601;
 /// `utc` and `local` are that same instant as civil fields before/after the
 /// zone conversion. Returns `None` for impossible inputs (never guesses).
-pub fn local_snapshot(filetime: i64, utc: Civil, local: Civil) -> Option<DateTime<FixedOffset>> {
+pub fn local_snapshot(filetime: i64, utc: Civil, local: Civil) -> Option<OffsetDateTime> {
     let offset = local.seconds()?.checked_sub(utc.seconds()?)?;
-    let zone = FixedOffset::east_opt(i32::try_from(offset).ok()?)?;
+    // Real zones stay strictly within a day of UTC.
+    if offset.abs() >= 86_400 {
+        return None;
+    }
+    let zone = UtcOffset::from_whole_seconds(i32::try_from(offset).ok()?).ok()?;
     let unix = filetime.checked_sub(FILETIME_UNIX_EPOCH)?;
-    let seconds = unix.div_euclid(10_000_000);
-    let nanos = u32::try_from(unix.rem_euclid(10_000_000) * 100).ok()?;
-    Some(DateTime::from_timestamp(seconds, nanos)?.with_timezone(&zone))
+    OffsetDateTime::from_unix_timestamp_nanos(i128::from(unix) * 100)
+        .ok()?
+        .checked_to_offset(zone)
 }
 
 #[cfg(windows)]
-pub fn local_now() -> DateTime<FixedOffset> {
+pub fn local_now() -> OffsetDateTime {
     use crate::bindings::{
         FILETIME, FileTimeToSystemTime, GetSystemTimePreciseAsFileTime, SYSTEMTIME,
         SystemTimeToTzSpecificLocalTime,
@@ -69,20 +85,17 @@ pub fn local_now() -> DateTime<FixedOffset> {
         .flatten()
     };
     // A failing zone conversion degrades to UTC rather than a wrong local time.
-    converted.unwrap_or_else(|| {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default();
-        DateTime::from_timestamp(now.as_secs() as i64, now.subsec_nanos())
-            .unwrap_or_default()
-            .fixed_offset()
-    })
+    converted.unwrap_or_else(OffsetDateTime::now_utc)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Datelike, Timelike};
+    use time::format_description::well_known::Rfc3339;
+
+    fn utc_instant(value: &str) -> OffsetDateTime {
+        OffsetDateTime::parse(value, &Rfc3339).unwrap()
+    }
 
     fn civil(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> Civil {
         Civil {
@@ -101,63 +114,67 @@ mod tests {
     #[test]
     fn offset_is_the_difference_between_the_two_civil_readings() {
         // 2026-07-14 10:00:00 UTC is 12:00 in Amsterdam (CEST, +02:00).
-        let utc = DateTime::parse_from_rfc3339("2026-07-14T10:00:00+00:00").unwrap();
+        let utc = utc_instant("2026-07-14T10:00:00+00:00");
         let snapshot = local_snapshot(
-            ticks(utc.timestamp(), 2_500_000),
+            ticks(utc.unix_timestamp(), 2_500_000),
             civil(2026, 7, 14, 10, 0, 0),
             civil(2026, 7, 14, 12, 0, 0),
         )
         .unwrap();
-        assert_eq!(snapshot.offset().local_minus_utc(), 7200);
+        assert_eq!(snapshot.offset().whole_seconds(), 7200);
         assert_eq!(
             (snapshot.hour(), snapshot.minute(), snapshot.second()),
             (12, 0, 0)
         );
         assert_eq!(snapshot.nanosecond(), 250_000_000);
-        assert_eq!(snapshot.timestamp(), utc.timestamp());
+        assert_eq!(snapshot.unix_timestamp(), utc.unix_timestamp());
     }
 
     #[test]
     fn dst_transitions_use_the_zone_rules_in_force_at_that_instant() {
         // Spring forward in New York: 06:59:59 UTC is 01:59:59 EST, 07:00:00 UTC is 03:00:00 EDT.
-        let before = DateTime::parse_from_rfc3339("2026-03-08T06:59:59+00:00").unwrap();
-        let after = DateTime::parse_from_rfc3339("2026-03-08T07:00:00+00:00").unwrap();
+        let before = utc_instant("2026-03-08T06:59:59+00:00");
+        let after = utc_instant("2026-03-08T07:00:00+00:00");
         let a = local_snapshot(
-            ticks(before.timestamp(), 0),
+            ticks(before.unix_timestamp(), 0),
             civil(2026, 3, 8, 6, 59, 59),
             civil(2026, 3, 8, 1, 59, 59),
         )
         .unwrap();
         let b = local_snapshot(
-            ticks(after.timestamp(), 0),
+            ticks(after.unix_timestamp(), 0),
             civil(2026, 3, 8, 7, 0, 0),
             civil(2026, 3, 8, 3, 0, 0),
         )
         .unwrap();
-        assert_eq!(a.offset().local_minus_utc(), -5 * 3600);
-        assert_eq!(b.offset().local_minus_utc(), -4 * 3600);
-        assert_eq!(b.timestamp() - a.timestamp(), 1, "one real second passed");
+        assert_eq!(a.offset().whole_seconds(), -5 * 3600);
+        assert_eq!(b.offset().whole_seconds(), -4 * 3600);
+        assert_eq!(
+            b.unix_timestamp() - a.unix_timestamp(),
+            1,
+            "one real second passed"
+        );
     }
 
     #[test]
     fn fractional_and_negative_offsets_and_date_rollover() {
         // India (+05:30) at 20:00 UTC is already the next local day.
-        let utc = DateTime::parse_from_rfc3339("2026-12-31T20:00:00+00:00").unwrap();
+        let utc = utc_instant("2026-12-31T20:00:00+00:00");
         let s = local_snapshot(
-            ticks(utc.timestamp(), 0),
+            ticks(utc.unix_timestamp(), 0),
             civil(2026, 12, 31, 20, 0, 0),
             civil(2027, 1, 1, 1, 30, 0),
         )
         .unwrap();
-        assert_eq!(s.offset().local_minus_utc(), 19_800);
-        assert_eq!((s.year(), s.month(), s.day()), (2027, 1, 1));
+        assert_eq!(s.offset().whole_seconds(), 19_800);
+        assert_eq!((s.year(), s.month(), s.day()), (2027, Month::January, 1));
         let west = local_snapshot(
-            ticks(utc.timestamp(), 0),
+            ticks(utc.unix_timestamp(), 0),
             civil(2026, 12, 31, 20, 0, 0),
             civil(2026, 12, 31, 11, 30, 0),
         )
         .unwrap();
-        assert_eq!(west.offset().local_minus_utc(), -8 * 3600 - 1800);
+        assert_eq!(west.offset().whole_seconds(), -8 * 3600 - 1800);
     }
 
     #[test]

@@ -1575,7 +1575,7 @@ impl<S: PreferencesStore> SettingsWindow<S> {
         &mut self,
         dialog: HWND,
         runtime: &mut Runtime<P>,
-        now: chrono::DateTime<chrono::FixedOffset>,
+        now: time::OffsetDateTime,
     ) {
         let problems = self.controller.evaluate(runtime, now).problems;
         let (page_id, id) = match problems.first() {

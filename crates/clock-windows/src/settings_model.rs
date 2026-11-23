@@ -17,12 +17,13 @@ use crate::{
     preferences_store::{PreferenceSession, PreferencesStore, StoreError},
     render::Overflow,
 };
-use chrono::{DateTime, Datelike, FixedOffset, TimeZone};
+use clock_core::format::{month_abbreviation, weekday_abbreviation};
 use clock_core::{
     CompiledFormat, FormatError, FormatErrorKind, Monitors, Preferences, PreferencesError, Theme,
     ValidatedPreferences, format::PRESETS,
 };
 use std::ops::Range;
+use time::{Date, Month, OffsetDateTime, UtcOffset};
 
 pub const FONT_MIN: u8 = 6;
 pub const FONT_MAX: u8 = 24;
@@ -106,7 +107,7 @@ pub trait LayoutCheck {
         format: &CompiledFormat,
         font_pt: u8,
         monitors: Monitors,
-        now: DateTime<FixedOffset>,
+        now: OffsetDateTime,
     ) -> Vec<FitProblem>;
 }
 
@@ -260,7 +261,7 @@ impl<S: PreferencesStore> SettingsController<S> {
         }
     }
 
-    pub fn evaluate(&self, layout: &mut dyn LayoutCheck, now: DateTime<FixedOffset>) -> Evaluation {
+    pub fn evaluate(&self, layout: &mut dyn LayoutCheck, now: OffsetDateTime) -> Evaluation {
         let mut problems = Problems::default();
         let font = self.draft.font();
         if let Err(message) = &font {
@@ -295,7 +296,7 @@ impl<S: PreferencesStore> SettingsController<S> {
     pub fn apply(
         &mut self,
         layout: &mut dyn LayoutCheck,
-        now: DateTime<FixedOffset>,
+        now: OffsetDateTime,
         recover: bool,
     ) -> ApplyOutcome {
         if !self.evaluate(layout, now).problems.is_empty() {
@@ -327,33 +328,38 @@ impl<S: PreferencesStore> SettingsController<S> {
     }
 }
 
-fn sample(year: i32, month: u32, day: u32, offset_hours: i32) -> Option<DateTime<FixedOffset>> {
-    FixedOffset::east_opt(offset_hours * 3600)?
-        .with_ymd_and_hms(year, month, day, 12, 34, 56)
-        .single()
+fn sample(year: i32, month: Month, day: u8, offset_hours: i8) -> Option<OffsetDateTime> {
+    Some(
+        Date::from_calendar_date(year, month, day)
+            .ok()?
+            .with_hms(12, 34, 56)
+            .ok()?
+            .assume_offset(UtcOffset::from_hms(offset_hours, 0, 0).ok()?),
+    )
 }
 
 /// The documented examples, with the ISO week-year each one belongs to so the
 /// difference from the calendar year is visible rather than implied.
-fn examples() -> Vec<DateTime<FixedOffset>> {
+fn examples() -> Vec<OffsetDateTime> {
     [
-        (2026, 10, 13, 2),
-        (2025, 12, 29, 1),
-        (2027, 1, 1, 1),
-        (2027, 1, 4, 1),
+        (2026, Month::October, 13, 2),
+        (2025, Month::December, 29, 1),
+        (2027, Month::January, 1, 1),
+        (2027, Month::January, 4, 1),
     ]
     .into_iter()
     .filter_map(|(year, month, day, hours)| sample(year, month, day, hours))
     .collect()
 }
 
-fn describe(when: DateTime<FixedOffset>) -> String {
-    let week = when.iso_week();
+fn describe(when: OffsetDateTime) -> String {
+    let (week_year, week, _) = when.to_iso_week_date();
     format!(
-        "{} (ISO week-year {}, week {})",
-        when.format("%a %-d %b %Y"),
-        week.year(),
-        week.week()
+        "{} {} {} {} (ISO week-year {week_year}, week {week})",
+        weekday_abbreviation(when.weekday()),
+        when.day(),
+        month_abbreviation(when.month()),
+        when.year(),
     )
 }
 
@@ -361,7 +367,7 @@ fn lines_text(lines: &[String]) -> String {
     lines.join(" \u{21b5} ")
 }
 
-fn preview_text(format: &CompiledFormat, now: DateTime<FixedOffset>) -> String {
+fn preview_text(format: &CompiledFormat, now: OffsetDateTime) -> String {
     std::iter::once(("Now".to_owned(), now))
         .chain(examples().into_iter().map(|when| (describe(when), when)))
         .map(|(label, when)| match format.render(when) {
@@ -406,7 +412,6 @@ fn format_problem(text: &str, error: &FormatError) -> FormatProblem {
         FormatErrorKind::OutputTooLong => {
             "The result would be longer than 512 characters.".to_owned()
         }
-        FormatErrorKind::SnapshotOutOfRange => "That date cannot be shown.".to_owned(),
     };
     // Whole-input errors have no useful place to select.
     let selection = matches!(
@@ -486,8 +491,12 @@ mod tests {
         rc::Rc,
     };
 
-    fn now() -> DateTime<FixedOffset> {
-        DateTime::parse_from_rfc3339("2026-10-13T09:15:00+02:00").unwrap()
+    fn now() -> OffsetDateTime {
+        OffsetDateTime::parse(
+            "2026-10-13T09:15:00+02:00",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap()
     }
 
     #[derive(Default)]
@@ -501,7 +510,7 @@ mod tests {
             format: &CompiledFormat,
             font_pt: u8,
             monitors: Monitors,
-            _: DateTime<FixedOffset>,
+            _: OffsetDateTime,
         ) -> Vec<FitProblem> {
             let text = format.render(now()).unwrap().lines.join("\n");
             self.calls.push((text, font_pt, monitors));

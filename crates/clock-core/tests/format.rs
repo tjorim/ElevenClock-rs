@@ -1,9 +1,12 @@
-use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use clock_core::{Cadence, CompiledFormat, FormatErrorKind, format::*};
 use proptest::prelude::*;
+use time::{
+    Date, Month, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset,
+    format_description::well_known::Rfc3339,
+};
 
-fn snapshot(value: &str) -> DateTime<FixedOffset> {
-    DateTime::parse_from_rfc3339(value).unwrap()
+fn snapshot(value: &str) -> OffsetDateTime {
+    OffsetDateTime::parse(value, &Rfc3339).unwrap()
 }
 fn render(format: &str, value: &str) -> Vec<String> {
     CompiledFormat::parse(format)
@@ -161,30 +164,68 @@ fn exact_input_and_output_bounds() {
 }
 
 #[test]
-fn chrono_extreme_offset_is_an_error_not_a_panic() {
+fn extreme_dates_and_offsets_render_every_token() {
     let all_tokens: String = DIRECTIVES.chars().map(|c| format!("%{c}")).collect();
-    for endpoint in [NaiveDateTime::MIN, NaiveDateTime::MAX] {
-        let sample =
-            DateTime::from_naive_utc_and_offset(endpoint, FixedOffset::east_opt(0).unwrap());
-        assert!(
-            CompiledFormat::parse(&all_tokens)
-                .unwrap()
-                .render(sample)
-                .is_ok()
+    let compiled = CompiledFormat::parse(&all_tokens).unwrap();
+    for local in [PrimitiveDateTime::MIN, PrimitiveDateTime::MAX] {
+        for offset in [-86399, 0, 86399] {
+            let sample = local.assume_offset(UtcOffset::from_whole_seconds(offset).unwrap());
+            assert!(compiled.render(sample).is_ok(), "{sample}");
+        }
+    }
+}
+
+/// Years outside 0..=9999 keep the established strftime form: an explicit sign
+/// and at least four digits; two-digit years are the Euclidean remainder.
+#[test]
+fn years_outside_four_digits_keep_their_sign() {
+    let render_date = |year, month, day| {
+        let date = Date::from_calendar_date(year, month, day).unwrap();
+        CompiledFormat::parse("%Y %y %G %g %V %u %a")
+            .unwrap()
+            .render(PrimitiveDateTime::new(date, Time::MIDNIGHT).assume_utc())
+            .unwrap()
+            .lines
+    };
+    for (year, month, day, expected) in [
+        (-9999, Month::January, 1, "-9999 01 -9999 01 01 1 Mon"),
+        (-1, Month::December, 31, "-0001 99 -0001 99 52 5 Fri"),
+        (0, Month::January, 1, "0000 00 -0001 99 52 6 Sat"),
+        (1, Month::January, 1, "0001 01 0001 01 01 1 Mon"),
+        (999, Month::December, 31, "0999 99 1000 00 01 2 Tue"),
+        (9999, Month::December, 31, "9999 99 9999 99 52 5 Fri"),
+    ] {
+        assert_eq!(
+            render_date(year, month, day),
+            [expected],
+            "{year}-{month}-{day}"
         );
     }
-    let sample = DateTime::from_naive_utc_and_offset(
-        NaiveDateTime::MAX,
-        FixedOffset::east_opt(3600).unwrap(),
-    );
-    assert_eq!(
-        CompiledFormat::parse("%Y")
-            .unwrap()
-            .render(sample)
-            .unwrap_err()
-            .kind,
-        FormatErrorKind::SnapshotOutOfRange
-    );
+}
+
+/// An independent rendering of each token by `time`'s own formatter.
+fn oracle(token: char) -> &'static str {
+    match token {
+        'Y' => "[year]",
+        'y' => "[year repr:last_two]",
+        'G' => "[year base:iso_week]",
+        'g' => "[year repr:last_two base:iso_week]",
+        'm' => "[month]",
+        'd' => "[day]",
+        'H' => "[hour]",
+        'I' => "[hour repr:12]",
+        'M' => "[minute]",
+        'S' => "[second]",
+        'p' => "[period]",
+        'V' => "[week_number repr:iso]",
+        'u' => "[weekday repr:monday]",
+        'a' => "[weekday repr:short]",
+        'A' => "[weekday]",
+        'b' => "[month repr:short]",
+        'B' => "[month repr:long]",
+        '%' => "%",
+        other => panic!("no oracle for %{other}"),
+    }
 }
 
 proptest! {
@@ -208,14 +249,15 @@ proptest! {
         }
     }
     #[test]
-    fn generated_allowed_tokens_match_chrono(
+    fn generated_allowed_tokens_match_reference(
         tokens in prop::collection::vec(prop::sample::select(DIRECTIVES.chars().collect::<Vec<_>>()), 1..129),
         seconds in -2_000_000_000i64..2_000_000_000,
         offset in -86399i32..86400,
     ) {
         let input: String = tokens.iter().map(|c| format!("%{c}")).collect();
-        let sample = DateTime::from_timestamp(seconds, 0).unwrap().with_timezone(&FixedOffset::east_opt(offset).unwrap());
-        let expected = sample.format(&input).to_string();
+        let sample = OffsetDateTime::from_unix_timestamp(seconds).unwrap().to_offset(UtcOffset::from_whole_seconds(offset).unwrap());
+        let description: String = tokens.iter().map(|c| oracle(*c)).collect();
+        let expected = sample.format(&time::format_description::parse_borrowed::<2>(&description).unwrap()).unwrap();
         let compiled = CompiledFormat::parse(&input).unwrap();
         match compiled.render(sample) {
             Ok(text) => prop_assert_eq!(&text.lines[0], &expected),

@@ -17,8 +17,8 @@ fn environment() -> Environment {
         startup: StartupKind::Off,
     }
 }
-fn generated() -> DateTime<Utc> {
-    DateTime::from_timestamp(1_792_000_000, 0).unwrap()
+fn generated() -> time::OffsetDateTime {
+    time::OffsetDateTime::from_unix_timestamp(1_792_000_000).unwrap()
 }
 fn rect(l: i32, t: i32, w: i32, h: i32) -> PhysicalRect {
     PhysicalRect::new(l, t, w, h).unwrap()

@@ -2,7 +2,11 @@ use clock_core::format::{CompiledFormat, PRESETS};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 fn benchmark(c: &mut Criterion) {
-    let sample = chrono::DateTime::parse_from_rfc3339("2027-01-01T12:34:56+01:00").unwrap();
+    let sample = time::OffsetDateTime::parse(
+        "2027-01-01T12:34:56+01:00",
+        &time::format_description::well_known::Rfc3339,
+    )
+    .unwrap();
     let input = PRESETS[2].format;
     let compiled = CompiledFormat::parse(input).unwrap();
     c.bench_function("format/parse", |b| {

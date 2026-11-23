@@ -32,7 +32,6 @@ use crate::{
     tray::{Tray, WM_TRAYICON, interaction_for_message},
     ui_guard,
 };
-use chrono::{DateTime, FixedOffset};
 use clock_core::{
     ClockText, PhysicalRect, ShellGeneration, TaskbarKey, TaskbarSnapshot, ValidatedPreferences,
 };
@@ -42,6 +41,7 @@ use std::{
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
+use time::OffsetDateTime;
 use windows_core::{HSTRING, PCWSTR, PWSTR, w};
 
 const WM_DISCOVERY: u32 = WM_APP as u32 + 3;
@@ -273,7 +273,7 @@ impl Platform for NativePlatform {
     fn monotonic(&mut self) -> Duration {
         self.started.elapsed()
     }
-    fn local_now(&mut self) -> DateTime<FixedOffset> {
+    fn local_now(&mut self) -> OffsetDateTime {
         clock_time::local_now()
     }
     fn system_appearance(&mut self) -> SystemAppearance {

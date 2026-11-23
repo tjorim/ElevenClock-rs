@@ -1,7 +1,7 @@
 //! Contracts shared by taskbar discovery, formatting, preferences and the state machine.
 use crate::GeometryError;
-use chrono::{DateTime, FixedOffset};
 use std::time::Duration;
+use time::OffsetDateTime;
 
 /// Physical pixels, including negative coordinates on secondary monitors.
 /// Private edges ensure construction always validates positive dimensions.
@@ -142,8 +142,8 @@ pub enum Event {
         key: TaskbarKey,
         visibility: TaskbarVisibility,
     },
-    Tick(DateTime<FixedOffset>),
-    TimeChanged(DateTime<FixedOffset>),
+    Tick(OffsetDateTime),
+    TimeChanged(OffsetDateTime),
     FullscreenChanged {
         key: TaskbarKey,
         fullscreen: bool,

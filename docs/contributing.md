@@ -114,7 +114,7 @@ disposable-account lifecycle harness, see [releasing.md](releasing.md).
 
 Dependency direction: app → windows → core and app → core; the managed launcher
 (`clock-launcher`, [ADR 0004](adr/0004-managed-launcher.md)) sits beside the app: launcher → windows → core. Core has only
-platform-independent chrono datetime values; its graph contains no Windows crate.
+platform-independent `time` datetime values ([ADR 0005](adr/0005-date-time-library.md)); its graph contains no Windows crate.
 App/core forbid unsafe. `clock-windows` compiles native code only on Windows and
 owns FFI. On Linux the app is a no-op build stub, not a supported product.
 
@@ -131,7 +131,7 @@ The reducer owns clock state; PreferencesApplied carries committed validated pre
 carries a resolved appearance revision;
 FullscreenChanged carries a generation-scoped taskbar key and boolean. See
 [state and scheduling](design/state-and-scheduling.md) for integration and timer semantics.
-Time events use one DateTime<FixedOffset> snapshot per update; it is not a stored
+Time events use one `OffsetDateTime` snapshot per update; it is not a stored
 timezone rule. Discovery responses and all overlay effects carry ShellGeneration;
 the reducer discards stale responses and destroys old-generation overlays on loss.
 MonitorId/TaskbarId are process-local values, never raw handles or persistence IDs.

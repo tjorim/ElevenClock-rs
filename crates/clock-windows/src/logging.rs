@@ -10,7 +10,6 @@
 //! write that fails is simply dropped. Callers pass text that is already free of
 //! personal data; [`log`] additionally runs everything through [`support::redact`].
 use crate::support;
-use chrono::DateTime;
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, Write},
@@ -220,10 +219,20 @@ fn timestamp() -> String {
         .map_or(0, |elapsed| elapsed.as_secs());
     i64::try_from(seconds)
         .ok()
-        .and_then(|seconds| DateTime::from_timestamp(seconds, 0))
+        .and_then(|seconds| time::OffsetDateTime::from_unix_timestamp(seconds).ok())
         .map_or_else(
             || "unknown-time".to_owned(),
-            |time| time.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            |time| {
+                format!(
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+                    time.year(),
+                    time.month() as u8,
+                    time.day(),
+                    time.hour(),
+                    time.minute(),
+                    time.second()
+                )
+            },
         )
 }
 
@@ -375,8 +384,8 @@ mod tests {
                 "crates/clock-app/src/app.rs:42",
             ),
             (
-                "/home/jorim/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/chrono-0.4.45/src/lib.rs",
-                "chrono-0.4.45/src/lib.rs:42",
+                "/home/jorim/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/time-0.3.55/src/lib.rs",
+                "time-0.3.55/src/lib.rs:42",
             ),
             (r"C:\Users\Jorim\other\main.rs", "main.rs:42"),
         ] {

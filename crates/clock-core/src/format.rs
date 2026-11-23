@@ -1,8 +1,8 @@
 //! Validated, owned datetime formats. Names are English; offsets are snapshots,
 //! not timezone rules. No clock access or expression evaluation is performed.
 use crate::{Cadence, ClockText};
-use chrono::{DateTime, FixedOffset, TimeDelta, format::Item, format::StrftimeItems};
-use std::{fmt, ops::Range};
+use std::{fmt, fmt::Write as _, ops::Range};
+use time::OffsetDateTime;
 
 pub const MAX_INPUT_SCALARS: usize = 256;
 pub const MAX_RENDERED_SCALARS: usize = 512;
@@ -17,7 +17,6 @@ pub enum FormatErrorKind {
     IncompleteDirective,
     UnsupportedDirective,
     OutputTooLong,
-    SnapshotOutOfRange,
 }
 
 /// Half-open Unicode scalar indices in the ORIGINAL input (not UTF-8 bytes).
@@ -39,9 +38,137 @@ impl fmt::Display for FormatError {
 }
 impl std::error::Error for FormatError {}
 
-#[derive(Clone, Debug, PartialEq)]
+/// One supported directive. `%%` compiles to a literal.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Directive {
+    Year,
+    YearMod100,
+    IsoYear,
+    IsoYearMod100,
+    Month,
+    Day,
+    Hour,
+    Hour12,
+    Minute,
+    Second,
+    AmPm,
+    IsoWeek,
+    WeekdayFromMonday,
+    WeekdayShort,
+    WeekdayLong,
+    MonthShort,
+    MonthLong,
+}
+impl Directive {
+    const fn from_char(c: char) -> Option<Self> {
+        Some(match c {
+            'Y' => Self::Year,
+            'y' => Self::YearMod100,
+            'G' => Self::IsoYear,
+            'g' => Self::IsoYearMod100,
+            'm' => Self::Month,
+            'd' => Self::Day,
+            'H' => Self::Hour,
+            'I' => Self::Hour12,
+            'M' => Self::Minute,
+            'S' => Self::Second,
+            'p' => Self::AmPm,
+            'V' => Self::IsoWeek,
+            'u' => Self::WeekdayFromMonday,
+            'a' => Self::WeekdayShort,
+            'A' => Self::WeekdayLong,
+            'b' => Self::MonthShort,
+            'B' => Self::MonthLong,
+            _ => return None,
+        })
+    }
+
+    fn write(self, out: &mut dyn fmt::Write, at: &OffsetDateTime) -> fmt::Result {
+        let two = |out: &mut dyn fmt::Write, value: u8| write!(out, "{value:02}");
+        match self {
+            Self::Year => write_year(out, at.year()),
+            Self::YearMod100 => two(out, at.year().rem_euclid(100) as u8),
+            Self::IsoYear => write_year(out, at.to_iso_week_date().0),
+            Self::IsoYearMod100 => two(out, at.to_iso_week_date().0.rem_euclid(100) as u8),
+            Self::Month => two(out, at.month() as u8),
+            Self::Day => two(out, at.day()),
+            Self::Hour => two(out, at.hour()),
+            Self::Hour12 => two(out, (at.hour() + 11) % 12 + 1),
+            Self::Minute => two(out, at.minute()),
+            Self::Second => two(out, at.second()),
+            Self::AmPm => out.write_str(if at.hour() < 12 { "AM" } else { "PM" }),
+            Self::IsoWeek => two(out, at.iso_week()),
+            Self::WeekdayFromMonday => write!(out, "{}", at.weekday().number_from_monday()),
+            Self::WeekdayShort => out.write_str(weekday_abbreviation(at.weekday())),
+            Self::WeekdayLong => out.write_str(WEEKDAYS[weekday_index(at.weekday())]),
+            Self::MonthShort => out.write_str(month_abbreviation(at.month())),
+            Self::MonthLong => out.write_str(MONTHS[at.month() as usize - 1]),
+        }
+    }
+}
+
+/// Four digits, zero padded, for years 0 to 9999; otherwise an explicit sign
+/// and at least four digits (`-0001`), the established strftime form.
+fn write_year(out: &mut dyn fmt::Write, year: i32) -> fmt::Result {
+    if (0..=9999).contains(&year) {
+        write!(out, "{year:04}")
+    } else {
+        write!(out, "{year:+05}")
+    }
+}
+
+const WEEKDAYS: [&str; 7] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+];
+const MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+fn weekday_index(weekday: time::Weekday) -> usize {
+    usize::from(weekday.number_days_from_monday())
+}
+/// English three-letter weekday name, as `%a` renders it.
+pub fn weekday_abbreviation(weekday: time::Weekday) -> &'static str {
+    &WEEKDAYS[weekday_index(weekday)][..3]
+}
+/// English three-letter month name, as `%b` renders it.
+pub fn month_abbreviation(month: time::Month) -> &'static str {
+    &MONTHS[month as usize - 1][..3]
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum Piece {
+    Literal(String),
+    Directive(Directive),
+}
+
+/// Append a literal scalar, extending the previous literal run.
+fn literal(pieces: &mut Vec<Piece>, c: char) {
+    match pieces.last_mut() {
+        Some(Piece::Literal(text)) => text.push(c),
+        _ => pieces.push(Piece::Literal(c.into())),
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompiledFormat {
-    items: Vec<Item<'static>>,
+    pieces: Vec<Piece>,
     cadence: Cadence,
     input_len: usize,
 }
@@ -53,7 +180,7 @@ impl CompiledFormat {
         if chars.len() > MAX_INPUT_SCALARS {
             return Err(fail(FormatErrorKind::InputTooLong, 256..257));
         }
-        let mut items = Vec::new();
+        let mut pieces = Vec::new();
         let mut cadence = Cadence::Minute;
         let mut i = 0;
         let mut line_start = 0;
@@ -66,7 +193,7 @@ impl CompiledFormat {
                 if !has_content {
                     return Err(fail(FormatErrorKind::EmptyLine, line_start..i));
                 }
-                items.push(Item::OwnedLiteral("\n".into()));
+                literal(&mut pieces, '\n');
                 has_content = false;
                 line_start = end;
                 i = end;
@@ -79,18 +206,22 @@ impl CompiledFormat {
                 let Some(&directive) = chars.get(i + 1) else {
                     return Err(fail(FormatErrorKind::IncompleteDirective, i..i + 1));
                 };
-                if !DIRECTIVES.contains(directive) {
-                    return Err(fail(FormatErrorKind::UnsupportedDirective, i..i + 2));
+                match Directive::from_char(directive) {
+                    Some(directive) => {
+                        if directive == Directive::Second {
+                            cadence = Cadence::Second;
+                        }
+                        pieces.push(Piece::Directive(directive));
+                    }
+                    None if directive == '%' => literal(&mut pieces, '%'),
+                    None => {
+                        return Err(fail(FormatErrorKind::UnsupportedDirective, i..i + 2));
+                    }
                 }
-                if directive == 'S' {
-                    cadence = Cadence::Second;
-                }
-                let token = format!("%{directive}");
-                items.extend(StrftimeItems::new(&token).map(|item| item.to_owned()));
                 i += 2;
             } else {
                 // Always literals, even if they resemble HTML or expressions.
-                items.push(Item::OwnedLiteral(c.to_string().into()));
+                literal(&mut pieces, c);
                 i += 1;
             }
             has_content = true;
@@ -99,7 +230,7 @@ impl CompiledFormat {
             return Err(fail(FormatErrorKind::EmptyLine, line_start..chars.len()));
         }
         Ok(Self {
-            items,
+            pieces,
             cadence,
             input_len: chars.len(),
         })
@@ -111,36 +242,27 @@ impl CompiledFormat {
 
     /// All lines use exactly this supplied snapshot. Output bounds include the
     /// normalized newline. Failure returns no partial/truncated clock text.
-    pub fn render(&self, snapshot: DateTime<FixedOffset>) -> Result<ClockText, FormatError> {
-        let fail = |kind| FormatError {
-            kind,
-            span: 0..self.input_len,
-        };
-        // DateTime::naive_local can panic at chrono's range endpoints. Check it.
-        let local = snapshot
-            .naive_utc()
-            .checked_add_signed(TimeDelta::seconds(i64::from(
-                snapshot.offset().local_minus_utc(),
-            )))
-            .ok_or_else(|| fail(FormatErrorKind::SnapshotOutOfRange))?;
+    pub fn render(&self, snapshot: OffsetDateTime) -> Result<ClockText, FormatError> {
         let mut output = BoundedOutput::default();
-        use std::fmt::Write;
-        write!(
-            &mut output,
-            "{}",
-            local.format_with_items(self.items.iter())
-        )
-        .map_err(|_| fail(FormatErrorKind::OutputTooLong))?;
+        // The snapshot's civil fields are always valid, so the only failure is
+        // exceeding the output bound.
+        for piece in &self.pieces {
+            match piece {
+                Piece::Literal(text) => output.write_str(text),
+                Piece::Directive(directive) => directive.write(&mut output, &snapshot),
+            }
+            .map_err(|_| FormatError {
+                kind: FormatErrorKind::OutputTooLong,
+                span: 0..self.input_len,
+            })?;
+        }
         Ok(ClockText {
             lines: output.text.split('\n').map(str::to_owned).collect(),
         })
     }
 
     /// Preview user-supplied samples without reading system time or zone rules.
-    pub fn preview(
-        &self,
-        snapshots: &[DateTime<FixedOffset>],
-    ) -> Vec<Result<ClockText, FormatError>> {
+    pub fn preview(&self, snapshots: &[OffsetDateTime]) -> Vec<Result<ClockText, FormatError>> {
         snapshots
             .iter()
             .map(|snapshot| self.render(*snapshot))
@@ -171,12 +293,13 @@ pub const PRESETS: [FormatPreset; 3] = [
 /// Parse and preview an editor value using caller-selected timestamps.
 /// ```
 /// use clock_core::format::preview;
-/// let sample = chrono::DateTime::parse_from_rfc3339("2027-01-01T12:34:00+01:00").unwrap();
+/// use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+/// let sample = OffsetDateTime::parse("2027-01-01T12:34:00+01:00", &Rfc3339).unwrap();
 /// assert_eq!(preview("%g%V.%u", &[sample]).unwrap()[0].as_ref().unwrap().lines, ["2653.5"]);
 /// ```
 pub fn preview(
     input: &str,
-    snapshots: &[DateTime<FixedOffset>],
+    snapshots: &[OffsetDateTime],
 ) -> Result<Vec<Result<ClockText, FormatError>>, FormatError> {
     Ok(CompiledFormat::parse(input)?.preview(snapshots))
 }

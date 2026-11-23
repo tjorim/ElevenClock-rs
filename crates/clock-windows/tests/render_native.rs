@@ -2,7 +2,6 @@
 //! CI; they do not replace the interactive DPI/theme screenshot matrix.
 #![cfg(windows)]
 
-use chrono::{FixedOffset, TimeZone};
 use clock_core::{ClockText, Preferences};
 use clock_windows::bindings::{
     CheckHandle, CreateWindowExW, DestroyWindow, GR_GDIOBJECTS, GR_USEROBJECTS, GetCurrentProcess,
@@ -12,6 +11,7 @@ use clock_windows::{
     render::{ClockSurface, Fit, PaintOutcome, PaintRequest, PixelSize, Renderer, WorstCase},
     theme::Palette,
 };
+use time::{Date, Month, OffsetDateTime, Time};
 use windows_core::w;
 
 /// A hidden, never-shown window of exact physical size standing in for an overlay.
@@ -53,6 +53,12 @@ struct Case {
     text: ClockText,
     worst_case: WorstCase,
 }
+fn utc(year: i32, month: Month, day: u8, hour: u8, minute: u8) -> OffsetDateTime {
+    Date::from_calendar_date(year, month, day)
+        .unwrap()
+        .with_time(Time::from_hms(hour, minute, 0).unwrap())
+        .assume_utc()
+}
 fn case(format: &str) -> Case {
     let prefs = Preferences {
         format: format.into(),
@@ -60,10 +66,7 @@ fn case(format: &str) -> Case {
     }
     .validate()
     .unwrap();
-    let wall = FixedOffset::east_opt(0)
-        .unwrap()
-        .with_ymd_and_hms(2026, 9, 30, 14, 35, 0)
-        .unwrap();
+    let wall = utc(2026, Month::September, 30, 14, 35);
     Case {
         text: prefs.format().render(wall).unwrap(),
         worst_case: WorstCase::for_format(prefs.format()),
@@ -272,10 +275,7 @@ fn future_month_names_overflow_even_when_today_fits() {
     }
     .validate()
     .unwrap();
-    let may = FixedOffset::east_opt(0)
-        .unwrap()
-        .with_ymd_and_hms(2026, 5, 4, 9, 0, 0)
-        .unwrap();
+    let may = utc(2026, Month::May, 4, 9, 0);
     let text = prefs.format().render(may).unwrap();
     let today_only = Case {
         text: text.clone(),

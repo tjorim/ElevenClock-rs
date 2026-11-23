@@ -57,7 +57,7 @@ invalid geometry/unknown visibility, shell loss or quit.
   reads a fresh OS-local snapshot once and dispatches Tick. Time-change/resume
   notifications read a fresh snapshot and dispatch TimeChanged; unlock also needs
   discovery. Never advance wall time by the wait, assume 24-hour days, or infer DST
-  rules from a FixedOffset. Quit cancels timers outside core.
+  rules from a fixed UTC offset. Quit cancels timers outside core.
 
 `next_delay(snapshot, cadence)` returns a strictly positive duration to the next
 local second/minute boundary. Date-only formats recheck every minute. Leap-second
